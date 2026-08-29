@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PokeScan">
+<title>PokeScan — batch IV scanner</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root{--bg:#0e1420;--card:#182234;--ink:#e8eef8;--dim:#8fa0b8;--acc:#39c98e;--warn:#e8b23c;--bad:#e05a5a}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:14px;padding-top:calc(14px + env(safe-area-inset-top))}
+h1{font-size:20px;margin-bottom:2px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;margin:10px 0}
+label{font-size:14px;color:var(--dim)}
+input[type=number]{width:70px;background:var(--card);border:1px solid #2a3850;border-radius:8px;color:var(--ink);padding:8px;font-size:16px}
+.btn{display:block;width:100%;text-align:center;background:var(--acc);color:#08251a;font-weight:700;border:none;border-radius:12px;padding:14px;font-size:16px;margin:8px 0}
+.btn.sec{background:var(--card);color:var(--ink);border:1px solid #2a3850}
+#prog{display:none;margin:12px 0}
+.bar{height:8px;background:var(--card);border-radius:4px;overflow:hidden}
+.bar>div{height:100%;background:var(--acc);width:0%}
+#stat{font-size:13px;color:var(--dim);margin-top:6px}
+.mon{background:var(--card);border-radius:14px;padding:12px;margin:10px 0}
+.mon h3{font-size:16px;display:flex;justify-content:space-between}
+.mon .pct{font-weight:800}
+.g .pct{color:var(--acc)}.m .pct{color:var(--warn)}.b .pct{color:var(--bad)}
+.meta{font-size:13px;color:var(--dim);margin:4px 0}
+.ivs{font-size:13px;font-family:ui-monospace,monospace;margin-top:6px;white-space:pre-wrap}
+.flag{font-size:12px;color:var(--warn)}
+.fix{margin-top:8px;display:none;gap:6px;flex-wrap:wrap}
+.mon.editing .fix{display:flex}
+.fix input{width:76px;background:#0e1420;border:1px solid #2a3850;border-radius:8px;color:var(--ink);padding:6px;font-size:14px}
+.fix button{background:var(--acc);border:none;border-radius:8px;padding:6px 12px;font-weight:700;color:#08251a}
+video,canvas{display:none}
+</style>
+</head>
+<body>
+<h1>PokeScan</h1>
+<div class="sub">On-device batch IV scanner — nothing leaves your phone</div>
+
+<div class="row">
+  <label>Trainer level</label>
+  <input type="number" id="trainer" min="1" max="80" value="40">
+</div>
+
+<input type="file" id="file" accept="video/*,image/*" multiple hidden>
+<button class="btn" onclick="document.getElementById('file').click()">Scan screen recording / screenshots</button>
+<button class="btn sec" onclick="clearAll()">Clear results</button>
+
+<div id="prog"><div class="bar"><div id="fill"></div></div><div id="stat"></div></div>
+<div id="out"></div>
+
+<video id="vid" playsinline muted></video>
+<canvas id="cv"></canvas>
+<canvas id="cv2"></canvas>
+
+<script id="pogodata" type="application/json">{"cpm":[0.094,0.16639787,0.21573247,0.25572005,0.29024988,0.3210876,0.34921268,0.3752356,0.39956728,0.4225,0.44310755,0.4627984,0.48168495,0.49985844,0.51739395,0.5343543,0.5507927,0.5667545,0.5822789,0.5974,0.6121573,0.6265671,0.64065295,0.65443563,0.667934,0.6811649,0.69414365,0.7068842,0.7193991,0.7317,0.7377695,0.74378943,0.74976104,0.7556855,0.76156384,0.76739717,0.7731865,0.77893275,0.784637,0.7903,0.7953,0.8003,0.8053,0.8103,0.8153,0.8203,0.8253,0.8303,0.8353,0.8403,0.8453,0.8503,0.8553,0.8603,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653,0.8653],"stats":{"BULBASAUR":[118,111,128],"IVYSAUR":[151,143,155],"VENUSAUR":[198,189,190],"CHARMANDER":[116,93,118],"CHARMELEON":[158,126,151],"CHARIZARD":[223,173,186],"SQUIRTLE":[94,121,127],"WARTORTLE":[126,155,153],"BLASTOISE":[171,207,188],"CATERPIE":[55,55,128],"METAPOD":[45,80,137],"BUTTERFREE":[167,137,155],"WEEDLE":[63,50,120],"KAKUNA":[46,75,128],"BEEDRILL":[169,130,163],"PIDGEY":[85,73,120],"PIDGEOTTO":[117,105,160],"PIDGEOT":[166,154,195],"RATTATA":[103,70,102],"RATICATE":[161,139,146],"SPEAROW":[112,60,120],"FEAROW":[182,133,163],"EKANS":[110,97,111],"ARBOK":[167,153,155],"PIKACHU":[112,96,111],"RAICHU":[193,151,155],"SANDSHREW":[126,120,137],"SANDSLASH":[182,175,181],"NIDORAN_FEMALE":[86,89,146],"NIDORINA":[117,120,172],"NIDOQUEEN":[180,173,207],"NIDORAN_MALE":[105,76,130],"NIDORINO":[137,111,156],"NIDOKING":[204,156,191],"CLEFAIRY":[107,108,172],"CLEFABLE":[178,162,216],"VULPIX":[96,109,116],"NINETALES":[169,190,177],"JIGGLYPUFF":[80,41,251],"WIGGLYTUFF":[156,90,295],"ZUBAT":[83,73,120],"GOLBAT":[161,150,181],"ODDISH":[131,112,128],"GLOOM":[153,136,155],"VILEPLUME":[202,167,181],"PARAS":[121,99,111],"PARASECT":[165,146,155],"VENONAT":[100,100,155],"VENOMOTH":[179,143,172],"DIGLETT":[109,78,67],"DUGTRIO":[167,134,111],"MEOWTH":[92,78,120],"PERSIAN":[150,136,163],"PSYDUCK":[122,95,137],"GOLDUCK":[191,162,190],"MANKEY":[148,82,120],"PRIMEAPE":[207,138,163],"GROWLITHE":[136,93,146],"ARCANINE":[227,166,207],"POLIWAG":[101,82,120],"POLIWHIRL":[130,123,163],"POLIWRATH":[182,184,207],"ABRA":[195,82,93],"KADABRA":[232,117,120],"ALAKAZAM":[271,167,146],"MACHOP":[137,82,172],"MACHOKE":[177,125,190],"MACHAMP":[234,159,207],"BELLSPROUT":[139,61,137],"WEEPINBELL":[172,92,163],"VICTREEBEL":[207,135,190],"TENTACOOL":[97,149,120],"TENTACRUEL":[166,209,190],"GEODUDE":[132,132,120],"GRAVELER":[164,164,146],"GOLEM":[211,198,190],"PONYTA":[170,127,137],"RAPIDASH":[207,162,163],"SLOWPOKE":[109,98,207],"SLOWBRO":[177,180,216],"MAGNEMITE":[165,121,93],"MAGNETON":[223,169,137],"FARFETCHD":[124,115,141],"DODUO":[158,83,111],"DODRIO":[218,140,155],"SEEL":[85,121,163],"DEWGONG":[139,177,207],"GRIMER":[135,90,190],"MUK":[190,172,233],"SHELLDER":[116,134,102],"CLOYSTER":[186,256,137],"GASTLY":[186,67,102],"HAUNTER":[223,107,128],"GENGAR":[261,149,155],"ONIX":[85,232,111],"DROWZEE":[89,136,155],"HYPNO":[144,193,198],"KRABBY":[181,124,102],"KINGLER":[240,181,146],"VOLTORB":[109,111,120],"ELECTRODE":[173,173,155],"EXEGGCUTE":[107,125,155],"EXEGGUTOR":[233,149,216],"CUBONE":[90,144,137],"MAROWAK":[144,186,155],"HITMONLEE":[224,181,137],"HITMONCHAN":[193,197,137],"LICKITUNG":[108,137,207],"KOFFING":[119,141,120],"WEEZING":[174,197,163],"RHYHORN":[140,127,190],"RHYDON":[222,171,233],"CHANSEY":[60,128,487],"TANGELA":[183,169,163],"KANGASKHAN":[181,165,233],"HORSEA":[129,103,102],"SEADRA":[187,156,146],"GOLDEEN":[123,110,128],"SEAKING":[175,147,190],"STARYU":[137,112,102],"STARMIE":[210,184,155],"MR_MIME":[192,205,120],"SCYTHER":[218,170,172],"JYNX":[223,151,163],"ELECTABUZZ":[198,158,163],"MAGMAR":[206,154,163],"PINSIR":[238,182,163],"TAUROS":[198,183,181],"MAGIKARP":[29,85,85],"GYARADOS":[237,186,216],"LAPRAS":[165,174,277],"DITTO":[91,91,134],"EEVEE":[104,114,146],"VAPOREON":[205,161,277],"JOLTEON":[232,182,163],"FLAREON":[246,179,163],"PORYGON":[153,136,163],"OMANYTE":[155,153,111],"OMASTAR":[207,201,172],"KABUTO":[148,140,102],"KABUTOPS":[220,186,155],"AERODACTYL":[221,159,190],"SNORLAX":[190,169,330],"ARTICUNO":[192,236,207],"ZAPDOS":[253,185,207],"MOLTRES":[251,181,207],"DRATINI":[119,91,121],"DRAGONAIR":[163,135,156],"DRAGONITE":[263,198,209],"MEWTWO":[300,182,214],"MEW":[210,210,225],"CHIKORITA":[92,122,128],"BAYLEEF":[122,155,155],"MEGANIUM":[168,202,190],"CYNDAQUIL":[116,93,118],"QUILAVA":[158,126,151],"TYPHLOSION":[223,173,186],"TOTODILE":[117,109,137],"CROCONAW":[150,142,163],"FERALIGATR":[205,188,198],"SENTRET":[79,73,111],"FURRET":[148,125,198],"HOOTHOOT":[67,88,155],"NOCTOWL":[145,156,225],"LEDYBA":[72,118,120],"LEDIAN":[107,179,146],"SPINARAK":[105,73,120],"ARIADOS":[161,124,172],"CROBAT":[194,178,198],"CHINCHOU":[106,97,181],"LANTURN":[146,137,268],"PICHU":[77,53,85],"CLEFFA":[75,79,137],"IGGLYBUFF":[69,32,207],"TOGEPI":[67,116,111],"TOGETIC":[139,181,146],"NATU":[134,89,120],"XATU":[192,146,163],"MAREEP":[114,79,146],"FLAAFFY":[145,109,172],"AMPHAROS":[211,169,207],"BELLOSSOM":[169,186,181],"MARILL":[37,93,172],"AZUMARILL":[112,152,225],"SUDOWOODO":[167,176,172],"POLITOED":[174,179,207],"HOPPIP":[67,94,111],"SKIPLOOM":[91,120,146],"JUMPLUFF":[118,183,181],"AIPOM":[136,112,146],"SUNKERN":[55,55,102],"SUNFLORA":[185,135,181],"YANMA":[154,94,163],"WOOPER":[75,66,146],"QUAGSIRE":[152,143,216],"ESPEON":[261,175,163],"UMBREON":[126,240,216],"MURKROW":[175,87,155],"SLOWKING":[177,180,216],"MISDREAVUS":[167,154,155],"UNOWN":[136,91,134],"WOBBUFFET":[60,106,382],"GIRAFARIG":[182,133,172],"PINECO":[108,122,137],"FORRETRESS":[161,205,181],"DUNSPARCE":[131,128,225],"GLIGAR":[143,184,163],"STEELIX":[148,272,181],"SNUBBULL":[137,85,155],"GRANBULL":[212,131,207],"QWILFISH":[184,138,163],"SCIZOR":[236,181,172],"SHUCKLE":[17,396,85],"HERACROSS":[234,179,190],"SNEASEL":[189,146,146],"TEDDIURSA":[142,93,155],"URSARING":[236,144,207],"SLUGMA":[118,71,120],"MAGCARGO":[139,191,137],"SWINUB":[90,69,137],"PILOSWINE":[181,138,225],"CORSOLA":[118,156,146],"REMORAID":[127,69,111],"OCTILLERY":[197,141,181],"DELIBIRD":[128,90,128],"MANTINE":[148,226,163],"SKARMORY":[148,226,163],"HOUNDOUR":[152,83,128],"HOUNDOOM":[224,144,181],"KINGDRA":[194,194,181],"PHANPY":[107,98,207],"DONPHAN":[214,185,207],"PORYGON2":[198,180,198],"STANTLER":[192,131,177],"SMEARGLE":[40,83,146],"TYROGUE":[64,64,111],"HITMONTOP":[173,207,137],"SMOOCHUM":[153,91,128],"ELEKID":[135,101,128],"MAGBY":[151,99,128],"MILTANK":[157,193,216],"BLISSEY":[129,169,496],"RAIKOU":[241,195,207],"ENTEI":[235,171,251],"SUICUNE":[180,235,225],"LARVITAR":[115,93,137],"PUPITAR":[155,133,172],"TYRANITAR":[251,207,225],"LUGIA":[193,310,235],"HO_OH":[239,244,214],"CELEBI":[210,210,225],"TREECKO":[124,94,120],"GROVYLE":[172,120,137],"SCEPTILE":[223,169,172],"TORCHIC":[130,87,128],"COMBUSKEN":[163,115,155],"BLAZIKEN":[240,141,190],"MUDKIP":[126,93,137],"MARSHTOMP":[156,133,172],"SWAMPERT":[208,175,225],"POOCHYENA":[96,61,111],"MIGHTYENA":[171,132,172],"ZIGZAGOON":[58,80,116],"LINOONE":[142,128,186],"WURMPLE":[75,59,128],"SILCOON":[60,77,137],"BEAUTIFLY":[189,98,155],"CASCOON":[60,77,137],"DUSTOX":[98,162,155],"LOTAD":[71,77,120],"LOMBRE":[112,119,155],"LUDICOLO":[173,176,190],"SEEDOT":[71,77,120],"NUZLEAF":[134,78,172],"SHIFTRY":[200,121,207],"TAILLOW":[106,61,120],"SWELLOW":[185,124,155],"WINGULL":[106,61,120],"PELIPPER":[175,174,155],"RALTS":[79,59,99],"KIRLIA":[117,90,116],"GARDEVOIR":[237,195,169],"SURSKIT":[93,87,120],"MASQUERAIN":[192,150,172],"SHROOMISH":[74,110,155],"BRELOOM":[241,144,155],"SLAKOTH":[104,92,155],"VIGOROTH":[159,145,190],"SLAKING":[290,166,284],"NINCADA":[80,126,104],"NINJASK":[199,112,156],"SHEDINJA":[153,73,1],"WHISMUR":[92,42,162],"LOUDRED":[134,81,197],"EXPLOUD":[179,137,232],"MAKUHITA":[99,54,176],"HARIYAMA":[209,114,302],"AZURILL":[36,71,137],"NOSEPASS":[82,215,102],"SKITTY":[84,79,137],"DELCATTY":[132,127,172],"SABLEYE":[141,136,137],"MAWILE":[155,141,137],"ARON":[121,141,137],"LAIRON":[158,198,155],"AGGRON":[198,257,172],"MEDITITE":[78,107,102],"MEDICHAM":[121,152,155],"ELECTRIKE":[123,78,120],"MANECTRIC":[215,127,172],"PLUSLE":[167,129,155],"MINUN":[147,150,155],"VOLBEAT":[143,166,163],"ILLUMISE":[143,166,163],"ROSELIA":[186,131,137],"GULPIN":[80,99,172],"SWALOT":[140,159,225],"CARVANHA":[171,39,128],"SHARPEDO":[243,83,172],"WAILMER":[136,68,277],"WAILORD":[175,87,347],"NUMEL":[119,79,155],"CAMERUPT":[194,136,172],"TORKOAL":[151,203,172],"SPOINK":[125,122,155],"GRUMPIG":[171,188,190],"SPINDA":[116,116,155],"TRAPINCH":[162,78,128],"VIBRAVA":[134,99,137],"FLYGON":[205,168,190],"CACNEA":[156,74,137],"CACTURNE":[221,115,172],"SWABLU":[76,132,128],"ALTARIA":[141,201,181],"ZANGOOSE":[222,124,177],"SEVIPER":[196,118,177],"LUNATONE":[178,153,207],"SOLROCK":[178,153,207],"BARBOACH":[93,82,137],"WHISCASH":[151,141,242],"CORPHISH":[141,99,125],"CRAWDAUNT":[224,142,160],"BALTOY":[77,124,120],"CLAYDOL":[140,229,155],"LILEEP":[105,150,165],"CRADILY":[152,194,200],"ANORITH":[176,100,128],"ARMALDO":[222,174,181],"FEEBAS":[29,85,85],"MILOTIC":[192,219,216],"CASTFORM":[139,139,172],"KECLEON":[161,189,155],"SHUPPET":[138,65,127],"BANETTE":[218,126,162],"DUSKULL":[70,162,85],"DUSCLOPS":[124,234,120],"TROPIUS":[136,163,223],"CHIMECHO":[175,170,181],"ABSOL":[246,120,163],"WYNAUT":[41,86,216],"SNORUNT":[95,95,137],"GLALIE":[162,162,190],"SPHEAL":[95,90,172],"SEALEO":[137,132,207],"WALREIN":[182,176,242],"CLAMPERL":[133,135,111],"HUNTAIL":[197,179,146],"GOREBYSS":[211,179,146],"RELICANTH":[162,203,225],"LUVDISC":[81,128,125],"BAGON":[134,93,128],"SHELGON":[172,155,163],"SALAMENCE":[277,168,216],"BELDUM":[96,132,120],"METANG":[138,176,155],"METAGROSS":[257,228,190],"REGIROCK":[179,309,190],"REGICE":[179,309,190],"REGISTEEL":[143,285,190],"LATIAS":[228,246,190],"LATIOS":[268,212,190],"KYOGRE":[270,228,205],"GROUDON":[270,228,205],"RAYQUAZA":[284,170,213],"JIRACHI":[210,210,225],"DEOXYS":[345,115,137],"TURTWIG":[119,110,146],"GROTLE":[157,143,181],"TORTERRA":[202,188,216],"CHIMCHAR":[113,86,127],"MONFERNO":[158,105,162],"INFERNAPE":[222,151,183],"PIPLUP":[112,102,142],"PRINPLUP":[150,139,162],"EMPOLEON":[210,186,197],"STARLY":[101,58,120],"STARAVIA":[142,94,146],"STARAPTOR":[234,140,198],"BIDOOF":[80,73,153],"BIBAREL":[162,119,188],"KRICKETOT":[45,74,114],"KRICKETUNE":[160,100,184],"SHINX":[117,64,128],"LUXIO":[159,95,155],"LUXRAY":[232,156,190],"BUDEW":[91,109,120],"ROSERADE":[243,185,155],"CRANIDOS":[218,71,167],"RAMPARDOS":[295,109,219],"SHIELDON":[76,195,102],"BASTIODON":[94,286,155],"BURMY":[53,83,120],"WORMADAM":[141,180,155],"MOTHIM":[185,98,172],"COMBEE":[59,83,102],"VESPIQUEN":[149,190,172],"PACHIRISU":[94,172,155],"BUIZEL":[132,67,146],"FLOATZEL":[221,114,198],"CHERUBI":[108,92,128],"CHERRIM":[170,153,172],"SHELLOS":[103,105,183],"GASTRODON":[169,143,244],"AMBIPOM":[205,143,181],"DRIFLOON":[117,80,207],"DRIFBLIM":[180,102,312],"BUNEARY":[130,105,146],"LOPUNNY":[156,194,163],"MISMAGIUS":[211,187,155],"HONCHKROW":[243,103,225],"GLAMEOW":[109,82,135],"PURUGLY":[172,133,174],"CHINGLING":[114,94,128],"STUNKY":[121,90,160],"SKUNTANK":[184,132,230],"BRONZOR":[43,154,149],"BRONZONG":[161,213,167],"BONSLY":[124,133,137],"MIME_JR":[125,142,85],"HAPPINY":[25,77,225],"CHATOT":[183,91,183],"SPIRITOMB":[169,199,137],"GIBLE":[124,84,151],"GABITE":[172,125,169],"GARCHOMP":[261,193,239],"MUNCHLAX":[137,117,286],"RIOLU":[127,78,120],"LUCARIO":[236,144,172],"HIPPOPOTAS":[124,118,169],"HIPPOWDON":[201,191,239],"SKORUPI":[93,151,120],"DRAPION":[180,202,172],"CROAGUNK":[116,76,134],"TOXICROAK":[211,133,195],"CARNIVINE":[187,136,179],"FINNEON":[96,116,135],"LUMINEON":[142,170,170],"MANTYKE":[105,179,128],"SNOVER":[115,105,155],"ABOMASNOW":[178,158,207],"WEAVILE":[243,171,172],"MAGNEZONE":[238,205,172],"LICKILICKY":[161,181,242],"RHYPERIOR":[241,190,251],"TANGROWTH":[207,184,225],"ELECTIVIRE":[249,163,181],"MAGMORTAR":[247,172,181],"TOGEKISS":[225,217,198],"YANMEGA":[231,156,200],"LEAFEON":[216,219,163],"GLACEON":[238,205,163],"GLISCOR":[185,222,181],"MAMOSWINE":[247,146,242],"PORYGON_Z":[264,150,198],"GALLADE":[237,195,169],"PROBOPASS":[135,275,155],"DUSKNOIR":[180,254,128],"FROSLASS":[171,150,172],"ROTOM":[185,159,137],"UXIE":[156,270,181],"MESPRIT":[212,212,190],"AZELF":[270,151,181],"DIALGA":[275,211,205],"PALKIA":[280,215,189],"HEATRAN":[251,213,209],"REGIGIGAS":[287,210,221],"GIRATINA":[187,225,284],"CRESSELIA":[152,258,260],"PHIONE":[162,162,190],"MANAPHY":[210,210,225],"DARKRAI":[285,198,172],"SHAYMIN":[210,210,225],"ARCEUS":[238,238,237],"VICTINI":[210,210,225],"SNIVY":[88,107,128],"SERVINE":[122,152,155],"SERPERIOR":[161,204,181],"TEPIG":[115,85,163],"PIGNITE":[173,106,207],"EMBOAR":[235,127,242],"OSHAWOTT":[117,85,146],"DEWOTT":[159,116,181],"SAMUROTT":[212,157,216],"PATRAT":[98,73,128],"WATCHOG":[165,139,155],"LILLIPUP":[107,86,128],"HERDIER":[145,126,163],"STOUTLAND":[206,182,198],"PURRLOIN":[98,73,121],"LIEPARD":[187,106,162],"PANSAGE":[104,94,137],"SIMISAGE":[206,133,181],"PANSEAR":[104,94,137],"SIMISEAR":[206,133,181],"PANPOUR":[104,94,137],"SIMIPOUR":[206,133,181],"MUNNA":[111,92,183],"MUSHARNA":[183,166,253],"PIDOVE":[98,80,137],"TRANQUILL":[144,107,158],"UNFEZANT":[226,146,190],"BLITZLE":[118,64,128],"ZEBSTRIKA":[211,136,181],"ROGGENROLA":[121,110,146],"BOLDORE":[174,143,172],"GIGALITH":[226,201,198],"WOOBAT":[107,85,163],"SWOOBAT":[161,119,167],"DRILBUR":[154,85,155],"EXCADRILL":[255,129,242],"AUDINO":[114,163,230],"TIMBURR":[134,87,181],"GURDURR":[180,134,198],"CONKELDURR":[243,158,233],"TYMPOLE":[98,78,137],"PALPITOAD":[128,109,181],"SEISMITOAD":[188,150,233],"THROH":[172,160,260],"SAWK":[231,153,181],"SEWADDLE":[96,124,128],"SWADLOON":[115,162,146],"LEAVANNY":[205,165,181],"VENIPEDE":[83,99,102],"WHIRLIPEDE":[100,173,120],"SCOLIPEDE":[203,175,155],"COTTONEE":[71,111,120],"WHIMSICOTT":[164,176,155],"PETILIL":[119,91,128],"LILLIGANT":[214,155,172],"BASCULIN":[189,129,172],"SANDILE":[132,69,137],"KROKOROK":[155,90,155],"KROOKODILE":[229,158,216],"DARUMAKA":[153,86,172],"DARMANITAN":[263,114,233],"MARACTUS":[201,130,181],"DWEBBLE":[118,128,137],"CRUSTLE":[188,200,172],"SCRAGGY":[132,132,137],"SCRAFTY":[163,222,163],"SIGILYPH":[204,167,176],"YAMASK":[95,141,116],"COFAGRIGUS":[163,237,151],"TIRTOUGA":[134,146,144],"CARRACOSTA":[192,197,179],"ARCHEN":[213,89,146],"ARCHEOPS":[292,139,181],"TRUBBISH":[96,122,137],"GARBODOR":[181,164,190],"ZORUA":[153,78,120],"ZOROARK":[250,127,155],"MINCCINO":[98,80,146],"CINCCINO":[198,130,181],"GOTHITA":[98,112,128],"GOTHORITA":[137,153,155],"GOTHITELLE":[176,205,172],"SOLOSIS":[170,83,128],"DUOSION":[208,103,163],"REUNICLUS":[214,148,242],"DUCKLETT":[84,96,158],"SWANNA":[182,132,181],"VANILLITE":[118,106,113],"VANILLISH":[151,138,139],"VANILLUXE":[218,184,174],"DEERLING":[115,100,155],"SAWSBUCK":[198,146,190],"EMOLGA":[158,127,146],"KARRABLAST":[137,87,137],"ESCAVALIER":[223,187,172],"FOONGUS":[97,91,170],"AMOONGUSS":[155,139,249],"FRILLISH":[115,134,146],"JELLICENT":[159,178,225],"ALOMOMOLA":[138,131,338],"JOLTIK":[110,98,137],"GALVANTULA":[201,128,172],"FERROSEED":[82,155,127],"FERROTHORN":[158,223,179],"KLINK":[98,121,120],"KLANG":[150,174,155],"KLINKLANG":[199,214,155],"TYNAMO":[105,78,111],"EELEKTRIK":[156,130,163],"EELEKTROSS":[217,152,198],"ELGYEM":[148,100,146],"BEHEEYEM":[221,163,181],"LITWICK":[108,98,137],"LAMPENT":[169,115,155],"CHANDELURE":[271,182,155],"AXEW":[154,101,130],"FRAXURE":[212,123,165],"HAXORUS":[284,172,183],"CUBCHOO":[128,74,146],"BEARTIC":[233,152,216],"CRYOGONAL":[190,218,190],"SHELMET":[72,140,137],"ACCELGOR":[220,120,190],"STUNFISK":[144,171,240],"MIENFOO":[160,98,128],"MIENSHAO":[258,127,163],"DRUDDIGON":[213,170,184],"GOLETT":[127,92,153],"GOLURK":[222,154,205],"PAWNIARD":[154,114,128],"BISHARP":[232,176,163],"BOUFFALANT":[195,182,216],"RUFFLET":[150,97,172],"BRAVIARY":[232,152,225],"VULLABY":[105,139,172],"MANDIBUZZ":[129,205,242],"HEATMOR":[204,129,198],"DURANT":[217,188,151],"DEINO":[116,93,141],"ZWEILOUS":[159,135,176],"HYDREIGON":[256,188,211],"LARVESTA":[156,107,146],"VOLCARONA":[264,189,198],"COBALION":[192,229,209],"TERRAKION":[260,192,209],"VIRIZION":[192,229,209],"TORNADUS":[266,164,188],"THUNDURUS":[266,164,188],"RESHIRAM":[275,211,205],"ZEKROM":[275,211,205],"LANDORUS":[261,182,205],"KYUREM":[246,170,245],"KELDEO":[260,192,209],"MELOETTA":[250,225,225],"GENESECT":[252,199,174],"CHESPIN":[110,106,148],"QUILLADIN":[146,156,156],"CHESNAUGHT":[201,204,204],"FENNEKIN":[116,102,120],"BRAIXEN":[171,130,153],"DELPHOX":[230,189,181],"FROAKIE":[122,84,121],"FROGADIER":[168,114,144],"GRENINJA":[223,152,176],"BUNNELBY":[68,72,116],"DIGGERSBY":[112,155,198],"FLETCHLING":[95,80,128],"FLETCHINDER":[145,110,158],"TALONFLAME":[176,155,186],"SCATTERBUG":[63,63,116],"SPEWPA":[48,89,128],"VIVILLON":[176,103,190],"LITLEO":[139,112,158],"PYROAR":[221,149,200],"FLABEBE":[108,120,127],"FLOETTE":[136,151,144],"FLORGES":[212,244,186],"SKIDDO":[123,102,165],"GOGOAT":[196,146,265],"PANCHAM":[145,107,167],"PANGORO":[226,146,216],"FURFROU":[164,167,181],"ESPURR":[120,114,158],"MEOWSTIC":[166,167,179],"HONEDGE":[135,139,128],"DOUBLADE":[188,206,153],"AEGISLASH":[97,272,155],"SPRITZEE":[110,113,186],"AROMATISSE":[173,150,226],"SWIRLIX":[109,119,158],"SLURPUFF":[168,163,193],"INKAY":[98,95,142],"MALAMAR":[177,165,200],"BINACLE":[96,120,123],"BARBARACLE":[194,205,176],"SKRELP":[109,109,137],"DRAGALGE":[177,207,163],"CLAUNCHER":[108,117,137],"CLAWITZER":[221,171,174],"HELIOPTILE":[115,78,127],"HELIOLISK":[219,168,158],"TYRUNT":[158,123,151],"TYRANTRUM":[227,191,193],"AMAURA":[124,109,184],"AURORUS":[186,163,265],"SYLVEON":[203,205,216],"HAWLUCHA":[195,153,186],"DEDENNE":[164,134,167],"CARBINK":[95,285,137],"GOOMY":[101,112,128],"SLIGGOO":[159,176,169],"GOODRA":[220,242,207],"KLEFKI":[160,179,149],"PHANTUMP":[125,103,125],"TREVENANT":[201,154,198],"PUMPKABOO":[122,124,127],"GOURGEIST":[171,219,146],"BERGMITE":[117,120,146],"AVALUGG":[196,240,216],"NOIBAT":[83,73,120],"NOIVERN":[205,175,198],"XERNEAS":[250,185,246],"YVELTAL":[250,185,246],"ZYGARDE":[203,232,239],"DIANCIE":[190,285,137],"HOOPA":[261,187,173],"VOLCANION":[252,216,190],"ROWLET":[102,99,169],"DARTRIX":[142,139,186],"DECIDUEYE":[210,179,186],"LITTEN":[128,79,128],"TORRACAT":[174,103,163],"INCINEROAR":[214,175,216],"POPPLIO":[120,103,137],"BRIONNE":[168,145,155],"PRIMARINA":[232,195,190],"PIKIPEK":[136,59,111],"TRUMBEAK":[159,100,146],"TOUCANNON":[222,146,190],"YUNGOOS":[122,56,134],"GUMSHOOS":[194,113,204],"GRUBBIN":[115,85,132],"CHARJABUG":[145,161,149],"VIKAVOLT":[254,158,184],"CRABRAWLER":[150,104,132],"CRABOMINABLE":[231,138,219],"ORICORIO":[196,145,181],"CUTIEFLY":[110,81,120],"RIBOMBEE":[198,146,155],"ROCKRUFF":[117,78,128],"LYCANROC":[231,140,181],"WISHIWASHI":[46,43,128],"MAREANIE":[98,110,137],"TOXAPEX":[114,273,137],"MUDBRAY":[175,121,172],"MUDSDALE":[214,174,225],"DEWPIDER":[72,117,116],"ARAQUANID":[126,219,169],"FOMANTIS":[100,64,120],"LURANTIS":[192,169,172],"MORELULL":[108,119,120],"SHIINOTIC":[154,168,155],"SALANDIT":[136,80,134],"SALAZZLE":[228,130,169],"STUFFUL":[136,95,172],"BEWEAR":[226,141,260],"BOUNSWEET":[55,69,123],"STEENEE":[78,94,141],"TSAREENA":[222,195,176],"COMFEY":[165,215,139],"ORANGURU":[168,192,207],"PASSIMIAN":[222,160,225],"WIMPOD":[67,74,93],"GOLISOPOD":[218,226,181],"SANDYGAST":[120,118,146],"PALOSSAND":[178,178,198],"PYUKUMUKU":[97,224,146],"TYPE_NULL":[184,184,216],"SILVALLY":[198,198,216],"MINIOR":[116,194,155],"KOMALA":[216,165,163],"TURTONATOR":[165,215,155],"TOGEDEMARU":[190,145,163],"MIMIKYU":[177,199,146],"BRUXISH":[208,145,169],"DRAMPA":[231,164,186],"DHELMISE":[233,179,172],"JANGMO_O":[102,108,128],"HAKAMO_O":[145,162,146],"KOMMO_O":[222,240,181],"TAPU_KOKO":[250,181,172],"TAPU_LELE":[259,208,172],"TAPU_BULU":[249,215,172],"TAPU_FINI":[189,254,172],"COSMOG":[54,57,125],"COSMOEM":[54,242,125],"SOLGALEO":[255,191,264],"LUNALA":[255,191,264],"NIHILEGO":[249,210,240],"BUZZWOLE":[236,196,216],"PHEROMOSA":[316,85,174],"XURKITREE":[330,144,195],"CELESTEELA":[207,199,219],"KARTANA":[323,182,139],"GUZZLORD":[188,99,440],"NECROZMA":[251,195,219],"MAGEARNA":[246,225,190],"MARSHADOW":[265,190,207],"POIPOLE":[145,133,167],"NAGANADEL":[263,159,177],"STAKATAKA":[213,298,156],"BLACEPHALON":[315,148,142],"ZERAORA":[252,177,204],"MELTAN":[118,99,130],"MELMETAL":[226,190,264],"GROOKEY":[122,91,137],"THWACKEY":[165,134,172],"RILLABOOM":[239,168,225],"SCORBUNNY":[132,79,137],"RABOOT":[170,125,163],"CINDERACE":[238,163,190],"SOBBLE":[132,79,137],"DRIZZILE":[186,113,163],"INTELEON":[262,142,172],"SKWOVET":[95,86,172],"GREEDENT":[160,156,260],"ROOKIDEE":[88,67,116],"CORVISQUIRE":[129,110,169],"CORVIKNIGHT":[163,192,221],"BLIPBUG":[46,67,93],"DOTTLER":[87,157,137],"ORBEETLE":[156,240,155],"NICKIT":[85,82,120],"THIEVUL":[172,164,172],"GOSSIFLEUR":[70,104,120],"ELDEGOSS":[148,211,155],"WOOLOO":[76,97,123],"DUBWOOL":[159,198,176],"CHEWTLE":[114,85,137],"DREDNAW":[213,164,207],"YAMPER":[80,90,153],"BOLTUND":[197,131,170],"ROLYCOLY":[73,91,102],"CARKOL":[114,157,190],"COALOSSAL":[146,198,242],"APPLIN":[71,116,120],"FLAPPLE":[214,144,172],"APPLETUN":[178,146,242],"SILICOBRA":[103,123,141],"SANDACONDA":[202,207,176],"CRAMORANT":[173,163,172],"ARROKUDA":[118,72,121],"BARRASKEWDA":[258,127,156],"TOXEL":[97,65,120],"TOXTRICITY":[224,140,181],"SIZZLIPEDE":[118,90,137],"CENTISKORCH":[220,158,225],"CLOBBOPUS":[121,103,137],"GRAPPLOCT":[209,162,190],"SINISTEA":[134,96,120],"POLTEAGEIST":[248,189,155],"HATENNA":[98,93,123],"HATTREM":[153,133,149],"HATTERENE":[237,182,149],"IMPIDIMP":[103,69,128],"MORGREM":[145,102,163],"GRIMMSNARL":[227,139,216],"OBSTAGOON":[180,194,212],"PERRSERKER":[195,162,172],"CURSOLA":[253,182,155],"SIRFETCHD":[248,176,158],"MR_RIME":[212,179,190],"RUNERIGUS":[163,237,151],"MILCERY":[90,97,128],"ALCREMIE":[203,203,163],"FALINKS":[193,170,163],"PINCURCHIN":[176,161,134],"SNOM":[76,59,102],"FROSMOTH":[230,155,172],"STONJOURNER":[222,182,225],"EISCUE":[148,195,181],"INDEEDEE":[208,166,155],"MORPEKO":[192,121,151],"CUFANT":[140,91,176],"COPPERAJAH":[226,126,263],"DRACOZOLT":[195,165,207],"ARCTOZOLT":[190,166,207],"DRACOVISH":[175,185,207],"ARCTOVISH":[171,185,207],"DURALUDON":[239,185,172],"DREEPY":[117,61,99],"DRAKLOAK":[163,105,169],"DRAGAPULT":[266,170,204],"ZACIAN":[254,236,192],"ZAMAZENTA":[254,236,192],"ETERNATUS":[278,192,268],"KUBFU":[170,112,155],"URSHIFU":[254,177,225],"ZARUDE":[242,215,233],"REGIELEKI":[250,125,190],"REGIDRAGO":[202,101,400],"GLASTRIER":[246,223,225],"SPECTRIER":[273,146,205],"CALYREX":[162,162,225],"WYRDEER":[206,145,230],"KLEAVOR":[253,174,172],"URSALUNA":[243,181,277],"SNEASLER":[259,158,190],"OVERQWIL":[222,171,198],"ENAMORUS":[281,162,179],"SPRIGATITO":[116,99,120],"FLORAGATO":[157,128,156],"MEOWSCARADA":[233,153,183],"FUECOCO":[112,96,167],"CROCALOR":[162,134,191],"SKELEDIRGE":[207,178,232],"QUAXLY":[120,86,146],"QUAXWELL":[162,123,172],"QUAQUAVAL":[236,159,198],"LECHONK":[81,79,144],"OINKOLOGNE":[186,153,242],"TAROUNTULA":[70,77,111],"SPIDOPS":[139,166,155],"NYMBLE":[81,65,107],"LOKIX":[199,144,174],"PAWMI":[95,45,128],"PAWMO":[147,82,155],"PAWMOT":[232,141,172],"TANDEMAUS":[98,90,137],"MAUSHOLD":[159,157,179],"FIDOUGH":[102,126,114],"DACHSBUN":[159,212,149],"SMOLIV":[100,89,121],"DOLLIV":[137,131,141],"ARBOLIVA":[219,189,186],"SQUAWKABILLY":[185,105,193],"NACLI":[95,108,146],"NACLSTACK":[105,160,155],"GARGANACL":[171,212,225],"CHARCADET":[92,74,120],"ARMAROUGE":[234,185,198],"CERULEDGE":[239,189,181],"TADBULB":[104,73,156],"BELLIBOLT":[184,165,240],"WATTREL":[105,75,120],"KILOWATTREL":[221,132,172],"MASCHIFF":[140,108,155],"MABOSSTIFF":[230,168,190],"SHROODLE":[124,70,120],"GRAFAIAI":[199,149,160],"BRAMBLIN":[121,64,120],"BRAMBLEGHAST":[228,144,146],"TOEDSCOOL":[97,149,120],"TOEDSCRUEL":[166,209,190],"KLAWF":[184,185,172],"CAPSAKID":[118,76,137],"SCOVILLAIN":[216,130,163],"RELLOR":[86,108,121],"RABSCA":[201,178,181],"FLITTLE":[105,60,102],"ESPATHRA":[204,127,216],"TINKATINK":[85,110,137],"TINKATUFF":[109,145,163],"TINKATON":[155,196,198],"WIGLETT":[109,52,67],"WUGTRIO":[205,136,111],"BOMBIRDIER":[198,172,172],"FINIZEN":[90,80,172],"PALAFIN":[143,144,225],"VAROOM":[123,107,128],"REVAVROOM":[229,168,190],"CYCLIZAR":[205,142,172],"ORTHWORM":[161,219,172],"GLIMMET":[187,104,134],"GLIMMORA":[246,177,195],"GREAVARD":[105,106,137],"HOUNDSTONE":[186,195,176],"FLAMIGO":[227,145,193],"CETODDLE":[119,80,239],"CETITAN":[208,123,347],"VELUZA":[196,139,207],"DONDOZO":[176,178,312],"TATSUGIRI":[226,166,169],"ANNIHILAPE":[220,178,242],"CLODSIRE":[127,151,277],"FARIGIRAF":[209,136,260],"DUDUNSPARCE":[188,150,268],"KINGAMBIT":[238,203,225],"GREATTUSK":[249,209,251],"SCREAMTAIL":[139,234,251],"BRUTEBONNET":[232,190,244],"FLUTTERMANE":[280,235,146],"SLITHERWING":[261,193,198],"SANDYSHOCKS":[244,195,198],"IRONTREADS":[227,216,207],"IRONBUNDLE":[266,211,148],"IRONHANDS":[245,177,319],"IRONJUGULIS":[249,179,214],"IRONMOTH":[281,196,190],"IRONTHORNS":[250,200,225],"FRIGIBAX":[134,86,163],"ARCTIBAX":[173,128,207],"BAXCALIBUR":[254,168,229],"GIMMIGHOUL":[140,76,128],"GHOLDENGO":[252,190,202],"WOCHIEN":[186,242,198],"CHIENPAO":[261,167,190],"TINGLU":[194,203,321],"CHIYU":[269,221,146],"ROARINGMOON":[280,196,233],"IRONVALIANT":[279,171,179],"KORAIDON":[263,223,205],"MIRAIDON":[263,223,205],"WALKINGWAKE":[233,171,203],"IRONLEAVES":[236,194,189],"DIPPLIN":[173,184,190],"POLTCHAGEIST":[134,96,120],"SINISTCHA":[225,191,174],"OKIDOGI":[220,191,186],"MUNKIDORI":[238,157,186],"FEZANDIPITI":[169,208,186],"OGERPON":[219,178,173],"ARCHALUDON":[250,215,207],"HYDRAPPLE":[216,186,235],"GOUGINGFIRE":[205,208,213],"RAGINGBOLT":[235,165,245],"IRONBOULDER":[227,195,189],"IRONCROWN":[221,200,189],"TERAPAGOS":[126,165,207],"PECHARUNT":[164,248,186]}}</script>
+<script>
+/* ---------- data & solver ---------- */
+const DATA = JSON.parse(document.getElementById('pogodata').textContent);
+const SPECIES = Object.keys(DATA.stats);
+const DUST = [200,400,600,800,1000,1300,1600,1900,2200,2500,3000,3500,4000,4500,5000,6000,7000,8000,9000,10000];
+const dustLevel = c => { const i = DUST.indexOf(c); return i < 0 ? null : [i*2+1, i*2+2.5]; };
+function cpmAt(l){ const i = Math.floor(l)-1;
+  return l === Math.floor(l) ? DATA.cpm[i] : Math.sqrt((DATA.cpm[i]**2 + DATA.cpm[i+1]**2)/2); }
+function calcCP(b,ia,id,is,m){ return Math.max(10, Math.floor((b[0]+ia)*Math.sqrt(b[1]+id)*Math.sqrt(b[2]+is)*m*m/10)); }
+function calcHP(b,is,m){ return Math.max(10, Math.floor((b[2]+is)*m)); }
+function solve(species, cp, hp, level, dust){
+  const b = DATA.stats[species]; if(!b) return [];
+  let levels;
+  if(level) levels = [level];
+  else if(dust && dustLevel(dust)){ const [lo,hi] = dustLevel(dust);
+    levels = []; for(let l=lo*2; l<=hi*2; l++) levels.push(l/2); }
+  else { levels = []; for(let l=2; l<=110; l++) levels.push(l/2); }
+  const res = [];
+  for(const lv of levels){ const m = cpmAt(lv);
+    for(let is=0; is<16; is++){ if(calcHP(b,is,m) !== hp) continue;
+      for(let ia=0; ia<16; ia++) for(let id=0; id<16; id++)
+        if(calcCP(b,ia,id,is,m) === cp) res.push([lv,ia,id,is]); } }
+  return res;
+}
+
+/* ---------- pixel helpers ---------- */
+function gs(px,i){ return 0.299*px[i]+0.587*px[i+1]+0.114*px[i+2]; }         // r,g,b order (getImageData)
+function sat(px,i){ const mx=Math.max(px[i],px[i+1],px[i+2]), mn=Math.min(px[i],px[i+1],px[i+2]);
+  return mx===0?0:255*(mx-mn)/mx; }
+
+/* ---------- level from arc (RANSAC port of the validated Python) ---------- */
+function detectLevel(px, W, H, trainer){
+  const pts=[]; const y0=Math.floor(0.03*H), y1=Math.floor(0.34*H);
+  for(let y=y0; y<y1; y+=2) for(let x=0; x<W; x+=2){ const i=(y*W+x)*4;
+    if(gs(px,i)>110 && sat(px,i)<60) pts.push([x-W/2, y]); }
+  if(pts.length<150) return null;
+  let bi=0, bm=null;
+  for(let t=0; t<800; t++){
+    const p=pts[(Math.random()*pts.length)|0], q=pts[(Math.random()*pts.length)|0];
+    const den=2*(p[1]-q[1]); if(Math.abs(den)<1e-6) continue;
+    const cy=(p[0]**2+p[1]**2-q[0]**2-q[1]**2)/den;
+    const r2=p[0]**2+(p[1]-cy)**2; if(r2<=0) continue;
+    const r=Math.sqrt(r2);
+    if(r<0.3*W||r>0.62*W||cy<0.1*H||cy>0.5*H) continue;
+    let inl=0; for(const s of pts){ if(Math.abs(Math.hypot(s[0],s[1]-cy)-r)<5) inl++; }
+    if(inl>bi){ bi=inl; bm=[cy,r]; }
+  }
+  if(!bm || bi<80) return null;
+  // refit on inliers (least squares, cx fixed)
+  let Sy=0,S1=0,Syy=0,Sb=0,Syb=0;
+  for(const s of pts){ if(Math.abs(Math.hypot(s[0],s[1]-bm[0])-bm[1])>=5) continue;
+    const b=s[0]**2+s[1]**2; Sy+=2*s[1]; S1+=1; Syy+=4*s[1]**2; Sb+=b; Syb+=2*s[1]*b; }
+  const det=Syy*S1-Sy*Sy; if(Math.abs(det)<1e-6) return null;
+  const cy=(Syb*S1-Sy*Sb)/det, k=(Syy*Sb-Sy*Syb)/det, r=Math.sqrt(k+cy*cy);
+  // dot: bright colorless pixels within 12px of circle, angular histogram peak
+  const hist=new Float32Array(360); const angs=[];
+  for(let y=y0; y<Math.floor(0.4*H); y++) for(let x=0; x<W; x++){ const i=(y*W+x)*4;
+    if(gs(px,i)>225 && sat(px,i)<50){
+      const d=Math.abs(Math.hypot(x-W/2, y-cy)-r);
+      if(d<12){ const a=Math.atan2(cy-y, x-W/2)*180/Math.PI;
+        if(a>5&&a<175){ angs.push(a); hist[Math.floor(a*2)]++; } } } }
+  if(angs.length<30) return null;
+  let pk=0; for(let i=1;i<360;i++) if(hist[i]>hist[pk]) pk=i;
+  const sel=angs.filter(a=>a>pk/2-2 && a<pk/2+2.5).sort((a,b)=>a-b);
+  const ang=sel[Math.floor(sel.length/2)];
+  const frac=(180-ang)/180;
+  const mx=Math.min(trainer+10,50);
+  const target=cpmAt(1)+frac*(cpmAt(mx)-cpmAt(1));
+  let best=1, bd=1e9;
+  for(let l=2;l<=mx*2;l++){ const d=Math.abs(cpmAt(l/2)-target); if(d<bd){bd=d;best=l/2;} }
+  return best;
+}
+
+/* ---------- OCR ---------- */
+let worker=null;
+async function getWorker(){ if(!worker) worker=await Tesseract.createWorker('eng'); return worker; }
+
+function binarize(ctx,W,H,x0,y0,w,h,scale,fn){    // returns canvas: black text on white
+  const src=ctx.getImageData(x0,y0,w,h).data;
+  const c2=document.getElementById('cv2'); c2.width=w*scale; c2.height=h*scale;
+  const g=c2.getContext('2d');
+  const im=g.createImageData(w,h);
+  for(let i=0;i<w*h;i++){ const v = fn(src,i*4) ? 0 : 255;
+    im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=v; im.data[i*4+3]=255; }
+  const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h;
+  tmp.getContext('2d').putImageData(im,0,0);
+  g.imageSmoothingEnabled=true; g.drawImage(tmp,0,0,w*scale,h*scale);
+  return c2;
+}
+
+async function scanFrame(ctx, W, H, trainer){
+  const wk=await getWorker();
+  const out={};
+  // CP strip: white & colorless text on sky
+  const cpc=binarize(ctx,W,H, Math.floor(0.12*W), Math.floor(0.03*H), Math.floor(0.76*W), Math.floor(0.11*H), 2,
+    (p,i)=> gs(p,i)>190 && sat(p,i)<45);
+  await wk.setParameters({tessedit_char_whitelist:'CPcp0123456789 ', tessedit_pageseg_mode:'7'});
+  let t=(await wk.recognize(cpc)).data.text.replace(/\s/g,'');
+  let m=t.match(/(\d{2,4})/); if(m) out.cp=parseInt(m[1]);
+  // card region: dark text on white card
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  const c2=document.getElementById('cv2');
+  const ch=Math.floor(0.55*H); c2.width=Math.floor(W/2); c2.height=Math.floor(ch/2);
+  c2.getContext('2d').drawImage(ctx.canvas, 0, Math.floor(0.28*H), W, ch, 0,0, c2.width, c2.height);
+  t=(await wk.recognize(c2)).data.text;
+  const flat=t.replace(/\n/g,' ');
+  m=flat.match(/(\d+)\s*\/\s*(\d+)\s*HP/i); if(m) out.hp=parseInt(m[2]);
+  for(const w2 of flat.toUpperCase().match(/[A-Z]{3,}/g)||[])
+    if(DATA.stats[w2]){ out.species=w2; break; }
+  for(const n of flat.match(/\b\d{1,2}[.,]\d{3}\b|\b\d{3,4}\b/g)||[]){
+    const v=parseInt(n.replace(/[.,]/g,''));
+    if(DUST.includes(v)){ out.dust=v; }                      // last match = power-up row
+  }
+  // level
+  const px=ctx.getImageData(0,0,W,H).data;
+  out.level=detectLevel(px,W,H,trainer);
+  if(out.level && out.dust && dustLevel(out.dust)){          // dust window is authoritative
+    const [lo,hi]=dustLevel(out.dust);
+    if(out.level<lo||out.level>hi) out.level=Math.max(lo,Math.min(hi,out.level));
+  }
+  return out;
+}
+
+/* ---------- input handling ---------- */
+const $=id=>document.getElementById(id);
+const results=JSON.parse(localStorage.getItem('scans')||'[]');
+render();
+
+$('file').addEventListener('change', async e=>{
+  const files=[...e.target.files]; e.target.value='';
+  const trainer=parseInt($('trainer').value)||40;
+  localStorage.setItem('trainer',$('trainer').value);
+  $('prog').style.display='block';
+  for(const f of files){
+    if(f.type.startsWith('video')) await scanVideo(f,trainer);
+    else await scanImage(f,trainer);
+  }
+  status('Done'); setTimeout(()=>$('prog').style.display='none',1500);
+});
+$('trainer').value=localStorage.getItem('trainer')||'40';
+
+function status(s){ $('stat').textContent=s; }
+function progress(p){ $('fill').style.width=(p*100).toFixed(1)+'%'; }
+
+async function scanImage(file,trainer){
+  status('Scanning '+file.name);
+  const bmp=await createImageBitmap(file);
+  const cv=$('cv'); cv.width=bmp.width; cv.height=bmp.height;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(bmp,0,0);
+  await handleScan(ctx,bmp.width,bmp.height,trainer);
+  progress(1);
+}
+
+async function scanVideo(file,trainer){
+  const vid=$('vid'); vid.src=URL.createObjectURL(file);
+  await new Promise(r=>vid.onloadedmetadata=r);
+  const cv=$('cv'); cv.width=vid.videoWidth; cv.height=vid.videoHeight;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  const step=1/3; let prevSig=null, lastKey='';
+  for(let t=0; t<vid.duration; t+=step){
+    vid.currentTime=t;
+    await new Promise(r=>vid.onseeked=r);
+    ctx.drawImage(vid,0,0);
+    // cheap frame signature on 16x16 thumb to detect stability
+    const th=document.createElement('canvas'); th.width=th.height=16;
+    th.getContext('2d').drawImage(cv,0,0,16,16);
+    const d=th.getContext('2d').getImageData(0,0,16,16).data;
+    let sig=0; for(let i=0;i<d.length;i+=16) sig+=d[i];
+    const stable = prevSig!==null && Math.abs(sig-prevSig)<sig*0.004;
+    prevSig=sig;
+    status(`Video ${Math.round(t)}s / ${Math.round(vid.duration)}s — ${results.length} scanned`);
+    progress(t/vid.duration);
+    if(!stable) continue;
+    // status-screen check: top dark sky, lower half bright card
+    const px=ctx.getImageData(0,0,cv.width,cv.height).data;
+    let top=0,bot=0,n1=0,n2=0;
+    for(let y=0;y<cv.height*0.1;y+=4) for(let x=0;x<cv.width;x+=8){ top+=gs(px,(Math.floor(y)*cv.width+x)*4); n1++; }
+    for(let y=Math.floor(cv.height*0.6);y<cv.height*0.9;y+=4) for(let x=0;x<cv.width;x+=8){ bot+=gs(px,(y*cv.width+x)*4); n2++; }
+    if(top/n1>120 || bot/n2<180) continue;
+    const key=await handleScan(ctx,cv.width,cv.height,trainer,lastKey);
+    if(key) lastKey=key;
+  }
+  URL.revokeObjectURL(vid.src);
+}
+
+async function handleScan(ctx,W,H,trainer,skipKey){
+  const s=await scanFrame(ctx,W,H,trainer);
+  if(!s.species && !s.cp) return null;
+  const key=`${s.species}|${s.cp}|${s.hp}`;
+  if(key===skipKey || results.some(r=>r.key===key)) return key;   // dedupe
+  s.key=key;
+  s.combos = (s.species && s.cp && s.hp) ? solve(s.species,s.cp,s.hp,s.level,s.dust) : [];
+  results.unshift(s); save(); render();
+  return key;
+}
+
+/* ---------- UI ---------- */
+function save(){ localStorage.setItem('scans',JSON.stringify(results)); }
+function clearAll(){ results.length=0; save(); render(); }
+function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
+function render(){
+  $('out').innerHTML=results.map((r,i)=>{
+    const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
+    const cls=hi>=90?'g':hi>=70?'m':'b';
+    const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.species&&'name?',!r.level&&'level?'].filter(Boolean).join(' ');
+    return `<div class="mon ${cls}" id="m${i}">
+      <h3><span>${r.species||'?'} ${r.cp?'CP '+r.cp:''}</span>
+      <span class="pct">${ps.length? (lo===hi?hi.toFixed(1):lo.toFixed(1)+'–'+hi.toFixed(1))+'%':'—'}</span></h3>
+      <div class="meta">HP ${r.hp??'?'} · L${r.level??'?'} · dust ${r.dust??'?'} ${flags?'<span class="flag">'+flags+'</span>':''}</div>
+      <div class="ivs">${r.combos.slice(0,6).map(c=>`L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')||'no match — tap to correct'}</div>
+      <div class="fix">
+        <input placeholder="species" value="${r.species||''}" id="sp${i}">
+        <input placeholder="CP" value="${r.cp||''}" id="cp${i}" inputmode="numeric">
+        <input placeholder="HP" value="${r.hp||''}" id="hp${i}" inputmode="numeric">
+        <input placeholder="level" value="${r.level||''}" id="lv${i}" inputmode="decimal">
+        <button onclick="refix(${i});event.stopPropagation()">Re-solve</button>
+      </div></div>`;
+  }).join('');
+  results.forEach((_,i)=>$('m'+i).addEventListener('click',()=>$('m'+i).classList.toggle('editing')));
+}
+function refix(i){
+  const r=results[i];
+  r.species=$('sp'+i).value.toUpperCase().trim()||r.species;
+  r.cp=parseInt($('cp'+i).value)||r.cp;
+  r.hp=parseInt($('hp'+i).value)||r.hp;
+  r.level=parseFloat($('lv'+i).value)||r.level;
+  r.key=`${r.species}|${r.cp}|${r.hp}`;
+  r.combos=solve(r.species,r.cp,r.hp,r.level,r.dust);
+  save(); render();
+}
+</script>
+</body>
+</html>
