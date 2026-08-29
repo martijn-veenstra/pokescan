@@ -39,16 +39,39 @@ video,canvas{display:none}
 </head>
 <body>
 <h1>PokeScan</h1>
-<div class="sub">On-device batch IV scanner — nothing leaves your phone</div>
+<div class="sub">On-device batch IV scanner — nothing leaves your phone · v6</div>
 
-<div class="row">
-  <label>Trainer level</label>
-  <input type="number" id="trainer" min="1" max="80" value="40">
+<button class="btn" onclick="document.getElementById('panel').classList.toggle('open')">＋ Import scans</button>
+<div id="panel" style="display:none;background:var(--card);border-radius:14px;padding:12px;margin:8px 0">
+  <div class="row">
+    <label>Trainer level</label>
+    <input type="number" id="trainer" min="1" max="80" value="40">
+    <label style="margin-left:8px"><input type="checkbox" id="bb" onchange="localStorage.setItem('bb',this.checked?'1':'0');rankCache.clear();render()"> Best Buddy (L51)</label>
+  </div>
+  <input type="file" id="file" accept="video/*,image/*" multiple hidden>
+  <button class="btn" style="margin:6px 0 0" onclick="document.getElementById('file').click()">Choose recording / screenshots</button>
 </div>
-
-<input type="file" id="file" accept="video/*,image/*" multiple hidden>
-<button class="btn" onclick="document.getElementById('file').click()">Scan screen recording / screenshots</button>
-<button class="btn sec" onclick="clearAll()">Clear results</button>
+<style>#panel.open{display:block!important}</style>
+<div class="row" style="gap:6px">
+  <button class="btn sec" style="margin:0" onclick="exportCSV()">Export CSV</button>
+  <button class="btn sec" style="margin:0" onclick="backupJSON()">Backup</button>
+  <button class="btn sec" style="margin:0" onclick="document.getElementById('imp').click()">Restore</button>
+</div>
+<input type="file" id="imp" accept=".json,application/json" hidden>
+<div class="row">
+  <label>Sort</label>
+  <select id="sort" onchange="render()" style="background:var(--card);color:var(--ink);border:1px solid #2a3850;border-radius:8px;padding:8px;font-size:15px">
+    <option value="new">Newest first</option>
+    <option value="pct">Best IV%</option>
+    <option value="cp">Highest CP</option>
+    <option value="name">Name</option>
+    <option value="gl">Best GL rank</option>
+    <option value="meta">GL meta</option>
+  </select>
+  <span id="count" style="color:var(--dim);font-size:13px"></span>
+  <span style="flex:1"></span>
+  <button class="btn sec" style="margin:0;width:auto;padding:8px 14px" onclick="clearAll()">Clear</button>
+</div>
 
 <div id="prog"><div class="bar"><div id="fill"></div></div><div id="stat"></div></div>
 <div id="out"></div>
@@ -62,8 +85,17 @@ video,canvas{display:none}
 /* ---------- data & solver ---------- */
 const DATA = JSON.parse(document.getElementById('pogodata').textContent);
 const SPECIES = Object.keys(DATA.stats);
-const DUST = [200,400,600,800,1000,1300,1600,1900,2200,2500,3000,3500,4000,4500,5000,6000,7000,8000,9000,10000];
-const dustLevel = c => { const i = DUST.indexOf(c); return i < 0 ? null : [i*2+1, i*2+2.5]; };
+const UP = {"candy":[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,6,6,8,8,10,10,12,12,15,0,0,0,0,0,0,0,0,0,0,0],"dust":[200,200,400,400,600,600,800,800,1000,1000,1300,1300,1600,1600,1900,1900,2200,2200,2500,2500,3000,3000,3500,3500,4000,4000,4500,4500,5000,5000,6000,6000,7000,7000,8000,8000,9000,9000,10000,10000,11000,11000,12000,12000,13000,13000,14000,14000,15000],"xl":[10,10,12,12,15,15,17,17,20,20]};   // official per-level power-up costs
+const DUST = [...new Set(UP.dust)];
+const dustLevel = c => { const lv=[]; UP.dust.forEach((d,i)=>{ if(d===c) lv.push(i+1,i+1.5); });
+  return lv.length ? [Math.min(...lv), Math.max(...lv)] : null; };
+function costTo(from, to){                       // dust/candy/XL from level to level
+  let dust=0, candy=0, xl=0;
+  for(let l=from*2; l<to*2; l++){ const idx=Math.floor(l/2)-1;
+    dust+=UP.dust[idx]||0;
+    if((UP.candy[idx]||0)>0) candy+=UP.candy[idx]; else xl+=UP.xl[idx-39]||20; }
+  return {dust,candy,xl};
+}
 function cpmAt(l){ const i = Math.floor(l)-1;
   return l === Math.floor(l) ? DATA.cpm[i] : Math.sqrt((DATA.cpm[i]**2 + DATA.cpm[i+1]**2)/2); }
 function calcCP(b,ia,id,is,m){ return Math.max(10, Math.floor((b[0]+ia)*Math.sqrt(b[1]+id)*Math.sqrt(b[2]+is)*m*m/10)); }
@@ -76,7 +108,7 @@ function solve(species, cp, hp, level, dust, hints){
     if(match.length) fs = match;
   }
   let all = [];
-  for(const b of fs) all = all.concat(solveForm(b, cp, hp, level, dust));
+  for(const b of fs) all = all.concat(solveForm(b, cp, hp, level, dust).map(c=>[...c, b]));
   return all;
 }
 function solveForm(b, cp, hp, level, dust){
@@ -93,10 +125,65 @@ function solveForm(b, cp, hp, level, dust){
   return res;
 }
 
+/* ---------- PvP ranking (stat product under CP cap, max level 51 w/ best buddy) ---------- */
+const rankCache = new Map();
+function maxL(){ return localStorage.getItem('bb')==='0' ? 100 : 102; }
+function maxLevelUnderCap(b, ia, id, is, cap){
+  for(let l=maxL(); l>=2; l--){ const lv=l/2;
+    if(calcCP(b,ia,id,is,cpmAt(lv))<=cap) return lv; }
+  return 1;
+}
+function statProduct(b, ia, id, is, cap){
+  const lv=maxLevelUnderCap(b,ia,id,is,cap), m=cpmAt(lv);
+  return {lv, cp:calcCP(b,ia,id,is,m),
+          prod:(b[0]+ia)*m * (b[1]+id)*m * Math.floor((b[2]+is)*m)};
+}
+function pvpTable(b, cap){
+  const key=b.slice(0,3).join(',')+'|'+cap+'|'+maxL();
+  if(rankCache.has(key)) return rankCache.get(key);
+  const rows=[];
+  for(let ia=0;ia<16;ia++)for(let id=0;id<16;id++)for(let is=0;is<16;is++)
+    rows.push({ia,id,is,...statProduct(b,ia,id,is,cap)});
+  rows.sort((a,c)=>c.prod-a.prod);
+  const t={max:rows[0].prod, rank:new Map()};
+  rows.forEach((r,i)=>t.rank.set(r.ia*256+r.id*16+r.is,{n:i+1,lv:r.lv,cp:r.cp,pct:100*r.prod/rows[0].prod}));
+  rankCache.set(key,t); return t;
+}
+function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*16+is); }
+
+/* ---------- PvPoke meta rankings ---------- */
+let META=null;
+async function loadMeta(){
+  try{
+    const c=JSON.parse(localStorage.getItem('meta1500')||'null');
+    if(c && Date.now()-c.t < 7*864e5){ META=c.d; render(); return; }
+    const r=await fetch('https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-1500.json');
+    const arr=await r.json();
+    META={}; arr.forEach((e,i)=>META[e.speciesId]=[i+1, Math.round((e.score||0)*10)/10, e.moveset||[]]);
+    localStorage.setItem('meta1500', JSON.stringify({t:Date.now(), d:META}));
+    render();
+  }catch(e){}
+}
+loadMeta();
+function metaFor(species){
+  if(!META||!species) return null;
+  const s=species.toLowerCase();
+  const ids=Object.keys(META).filter(k=>k===s||k.startsWith(s+'_'));
+  if(!ids.length) return null;
+  const plain=ids.filter(k=>!k.includes('shadow'));
+  const pool=plain.length?plain:ids;
+  return META[pool.reduce((a,b)=>META[a][0]<META[b][0]?a:b)];
+}
+const pretty=m=>m.toLowerCase().replace(/_/g,' ');
+
 /* ---------- pixel helpers ---------- */
 function gs(px,i){ return 0.299*px[i]+0.587*px[i+1]+0.114*px[i+2]; }         // r,g,b order (getImageData)
 function sat(px,i){ const mx=Math.max(px[i],px[i+1],px[i+2]), mn=Math.min(px[i],px[i+1],px[i+2]);
   return mx===0?0:255*(mx-mn)/mx; }
+function hue(px,i){ const r=px[i],g=px[i+1],b=px[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+  if(mx===mn) return 0; const d=mx-mn; let h2;
+  if(mx===r) h2=((g-b)/d+6)%6; else if(mx===g) h2=(b-r)/d+2; else h2=(r-g)/d+4;
+  return h2*30; }  // 0-180, cv2 scale
 
 /* ---------- level from arc (RANSAC port of the validated Python) ---------- */
 function detectLevel(px, W, H, trainer){
@@ -158,6 +245,36 @@ function binarize(ctx,W,H,x0,y0,w,h,scale,fn){    // returns canvas: black text 
   return c2;
 }
 
+async function dustFromPill(ctx, W, H){
+  const px=ctx.getImageData(0,0,W,H).data;
+  let bestY=-1, bestN=0;
+  for(let y=Math.floor(0.45*H); y<H; y+=3){ let n=0;
+    for(let x=0; x<0.55*W; x+=3){ const i=(y*W+x)*4;
+      const h2=hue(px,i);
+      if(h2>40&&h2<95 && sat(px,i)>60 && Math.max(px[i],px[i+1],px[i+2])>120) n++; }
+    if(n>bestN){ bestN=n; bestY=y; } }
+  if(bestN < 0.15*W/3) return null;
+  const band=Math.floor(0.028*H);
+  const sx=Math.floor(0.5*W), sw2=W-sx, sh2=2*band;
+  const sd=ctx.getImageData(sx,bestY-band,sw2,sh2).data;
+  const c2=document.getElementById('cv2'); c2.width=sw2*2; c2.height=sh2*2;
+  const g2=c2.getContext('2d'); const im=g2.createImageData(sw2,sh2);
+  for(let i=0;i<sw2*sh2;i++){ const v=gs(sd,i*4)<120?0:255; const k=i*4;
+    im.data[k]=im.data[k+1]=im.data[k+2]=v; im.data[k+3]=255; }
+  const tc=document.createElement('canvas'); tc.width=sw2; tc.height=sh2;
+  tc.getContext('2d').putImageData(im,0,0);
+  g2.drawImage(tc,0,0,sw2*2,sh2*2);
+  const wk=await getWorker();
+  await wk.setParameters({tessedit_char_whitelist:'0123456789.,', tessedit_pageseg_mode:'7'});
+  const t=(await wk.recognize(c2)).data.text;
+  for(const x of t.match(/\d[\d.,]*/g)||[]){
+    const v=parseInt(x.replace(/[.,]/g,''));
+    if(DUST.includes(v)) return v;
+    if(x[0]==='1'){ const v2=parseInt(x.slice(1).replace(/[.,]/g,'')||'0');
+      if(DUST.includes(v2)) return v2; }
+  }
+  return null;
+}
 async function scanFrame(ctx, W, H, trainer){
   const out={};
   // CP: sky-adaptive binarize, central text components only (v3)
@@ -216,9 +333,11 @@ async function scanFrame(ctx, W, H, trainer){
     if(!out.species && DATA.stats[w2]) out.species=w2;
     if(TYPES.includes(w2) && !out.hints.includes(w2)) out.hints.push(w2);
   }
-  for(const n of flat.match(/\b\d{1,2}[.,]\d{3}\b|\b\d{3,4}\b/g)||[]){
+  out.txt = flat.toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').slice(0,300);
+  out.dust = await dustFromPill(ctx, W, H);
+  if(!out.dust) for(const n of flat.match(/\b\d{1,2}[.,]\d{3}\b|\b\d{3,4}\b/g)||[]){
     const v=parseInt(n.replace(/[.,]/g,''));
-    if(DUST.includes(v)){ out.dust=v; }                      // last match = power-up row
+    if(DUST.includes(v)){ out.dust=v; }
   }
   // level
   const px=ctx.getImageData(0,0,W,H).data;
@@ -247,6 +366,8 @@ $('file').addEventListener('change', async e=>{
   status('Done'); setTimeout(()=>$('prog').style.display='none',1500);
 });
 $('trainer').value=localStorage.getItem('trainer')||'40';
+$('bb').checked=localStorage.getItem('bb')!=='0';
+function del(i){ results.splice(i,1); save(); render(); }
 
 function status(s){ $('stat').textContent=s; }
 function progress(p){ $('fill').style.width=(p*100).toFixed(1)+'%'; }
@@ -297,19 +418,21 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   const s=await scanFrame(ctx,W,H,trainer);
   if(!s.species || !s.hp) return null;               // status screens always show HP
   s.combos=[];
+  const tries=[]; if(s.level){ tries.push(s.level, s.level-0.5, s.level+0.5); }
+  tries.push(null); if(s.dust) tries.push(0);          // null = dust window; 0 = unconstrained
   outer:
-  for(const lv of [s.level, null, 0]){                // arc level -> dust window -> any level
-    if(lv===0 && s.dust) break;                        // dust window already covered null case
+  for(const lv of tries){
     for(const c of [...new Set(s.cpCandidates)]){
-      const r=solve(s.species,c,s.hp,lv,lv===0?null:s.dust,s.hints);
-      if(r.length){ s.cp=c; s.combos=r;
-        if(lv!==s.level) s.level=r.length===1?r[0][0]:null;
-        break outer; }
+      const r=solve(s.species,c,s.hp,lv||null,lv===0?null:s.dust,s.hints);
+      if(r.length){ s.cp=c; s.combos=r; break outer; }
     }
-    if(lv===null && !s.dust) break;                    // null without dust = full range already
+  }
+  if(s.combos.length){                                 // display level = what actually solved
+    const lvls=[...new Set(s.combos.map(c=>c[0]))];
+    s.level = lvls.length===1 ? lvls[0] : null;
   }
   if(!s.cp && s.cpCandidates.length) s.cp=s.cpCandidates[0];
-  const key=`${s.species}|${s.cp}|${s.hp}`;
+  const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   if(key===skipKey || results.some(r=>r.key===key)) return key;   // dedupe
   s.key=key;
   results.unshift(s); save(); render();
@@ -318,18 +441,77 @@ async function handleScan(ctx,W,H,trainer,skipKey){
 
 /* ---------- UI ---------- */
 function save(){ localStorage.setItem('scans',JSON.stringify(results)); }
+if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+async function shareFile(name, text, type){
+  const file=new File([text], name, {type});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file]}); return; }catch(e){}
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+function exportCSV(){
+  const rows=[['species','cp','hp','level','dust','best_pct','best_ivs','combos']];
+  for(const r of results){
+    const best=r.combos.length?r.combos.reduce((a,b)=>pct(b)>pct(a)?b:a):null;
+    rows.push([r.species,r.cp??'',r.hp??'',r.level??'',r.dust??'',
+      best?pct(best).toFixed(1):'', best?`${best[1]}/${best[2]}/${best[3]}`:'', r.combos.length]);
+  }
+  shareFile('pokescan.csv', rows.map(r=>r.join(',')).join('\n'), 'text/csv');
+}
+function backupJSON(){ shareFile('pokescan-backup.json', JSON.stringify(results), 'application/json'); }
+document.getElementById('imp').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const arr=JSON.parse(await f.text());
+    let added=0;
+    for(const r of arr) if(r.key && !results.some(x=>x.key===r.key)){ results.push(r); added++; }
+    save(); render(); status(added+' restored');
+  }catch(err){ status('restore failed'); }
+});
 function clearAll(){ results.length=0; save(); render(); }
 function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
 function render(){
-  $('out').innerHTML=results.map((r,i)=>{
+  $('count').textContent=results.length+' scanned';
+  const mode=($('sort')||{}).value||'new';
+  const order=results.map((r,i)=>i);
+  const bp=r=>r.combos.length?Math.max(...r.combos.map(pct)):-1;
+  if(mode==='pct') order.sort((a,b)=>bp(results[b])-bp(results[a]));
+  if(mode==='cp') order.sort((a,b)=>(results[b].cp||0)-(results[a].cp||0));
+  if(mode==='name') order.sort((a,b)=>(results[a].species||'').localeCompare(results[b].species||''));
+  if(mode==='meta'){ const mr=r=>{const m=metaFor(r.species); return m?m[0]:9999;};
+    order.sort((a,b)=>mr(results[a])-mr(results[b])); }
+  if(mode==='gl'){
+    const gr=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return 9999;
+      return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],1500).n)); };
+    order.sort((a,b)=>gr(results[a])-gr(results[b]));
+  }
+  $('out').innerHTML=order.map(i=>{ const r=results[i];
     const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
     const cls=hi>=90?'g':hi>=70?'m':'b';
     const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.species&&'name?',!r.level&&'level?'].filter(Boolean).join(' ');
+    const mt=metaFor(r.species);
+    const best=r.combos.length?r.combos.reduce((a,b2)=>pct(b2)>pct(a)?b2:a):null;
+    let costLine='';
+    if(best){ const bb2=best[4]||DATA.stats[r.species][0];
+      const gl=pvpRank(bb2,best[1],best[2],best[3],1500);
+      if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv);
+        costLine=`→ GL L${gl.lv}: ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy${c.xl?' · '+c.xl+' XL':''}`; } }
+    let moveLine='';
+    if(mt&&r.txt) moveLine=mt[2].map(m2=>(r.txt.includes(pretty(m2))?'✓ ':'✗ ')+pretty(m2)).join(' · ');
     return `<div class="mon ${cls}" id="m${i}">
       <h3><span>${r.species||'?'} ${r.cp?'CP '+r.cp:''}</span>
-      <span class="pct">${ps.length? (lo===hi?hi.toFixed(1):lo.toFixed(1)+'–'+hi.toFixed(1))+'%':'—'}</span></h3>
+      <span><span class="pct">${ps.length? (lo===hi?hi.toFixed(1):lo.toFixed(1)+'–'+hi.toFixed(1))+'%':'—'}</span>
+      <span style="color:var(--dim);margin-left:8px" onclick="del(${i});event.stopPropagation()">✕</span></span></h3>
       <div class="meta">HP ${r.hp??'?'} · L${r.level??'?'} · dust ${r.dust??'?'} ${flags?'<span class="flag">'+flags+'</span>':''}</div>
-      <div class="ivs">${r.combos.slice(0,6).map(c=>`L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')||'no match — tap to correct'}</div>
+      ${mt?`<div class="meta">GL meta #${mt[0]} · score ${mt[1]}${moveLine?' — '+moveLine:''}</div>`:''}
+      ${costLine?`<div class="meta">${costLine}</div>`:''}
+      <div class="ivs">${r.combos.slice(0,6).map(c=>{
+        const b=c[4]||DATA.stats[r.species][0];
+        const gl=pvpRank(b,c[1],c[2],c[3],1500), ul=pvpRank(b,c[1],c[2],c[3],2500);
+        return `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%\n   GL #${gl.n} ${gl.pct.toFixed(1)}% @L${gl.lv} CP${gl.cp} · UL #${ul.n} ${ul.pct.toFixed(1)}%`;
+      }).join('\n')||'no match — tap to correct'}</div>
       <div class="fix">
         <input placeholder="species" value="${r.species||''}" id="sp${i}">
         <input placeholder="CP" value="${r.cp||''}" id="cp${i}" inputmode="numeric">
@@ -338,7 +520,7 @@ function render(){
         <button onclick="refix(${i});event.stopPropagation()">Re-solve</button>
       </div></div>`;
   }).join('');
-  results.forEach((_,i)=>$('m'+i).addEventListener('click',()=>$('m'+i).classList.toggle('editing')));
+  results.forEach((_,i)=>{ const el=$('m'+i); if(el) el.addEventListener('click',()=>el.classList.toggle('editing')); });
 }
 function refix(i){
   const r=results[i];
