@@ -34,6 +34,11 @@ input[type=number]{width:70px;background:var(--card);border:1px solid #2a3850;bo
 .mon.editing .fix{display:flex}
 .fix input{width:76px;background:#0e1420;border:1px solid #2a3850;border-radius:8px;color:var(--ink);padding:6px;font-size:14px}
 .fix button{background:var(--acc);border:none;border-radius:8px;padding:6px 12px;font-weight:700;color:#08251a}
+#jsonPanel{display:none;background:var(--card);border:1px solid #2a3850;border-radius:14px;padding:12px;margin:10px 0}
+#jsonPanel.open{display:block}
+#jsonPanel .tools{display:flex;gap:8px;margin-bottom:10px}
+#jsonPanel .tools button{flex:1;background:#0e1420;border:1px solid #2a3850;border-radius:8px;color:var(--ink);padding:8px;font-size:14px}
+#jsonText{font:12px/1.5 ui-monospace,monospace;color:var(--ink);white-space:pre;overflow:auto;max-height:60vh;margin:0}
 video,canvas{display:none}
 </style>
 </head>
@@ -48,7 +53,16 @@ video,canvas{display:none}
 
 <input type="file" id="file" accept="video/*,image/*" multiple hidden>
 <button class="btn" onclick="document.getElementById('file').click()">Scan screen recording / screenshots</button>
+<button class="btn sec" onclick="toggleJSON()" id="jsonBtn">View JSON</button>
 <button class="btn sec" onclick="clearAll()">Clear results</button>
+
+<div id="jsonPanel">
+  <div class="tools">
+    <button onclick="copyJSON(this)">Copy</button>
+    <button onclick="saveJSON()">Save .json</button>
+  </div>
+  <pre id="jsonText"></pre>
+</div>
 
 <div id="prog"><div class="bar"><div id="fill"></div></div><div id="stat"></div></div>
 <div id="out"></div>
@@ -255,11 +269,52 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   return key;
 }
 
+/* ---------- JSON view & export ---------- */
+function exportData(){
+  return results.map(r=>{
+    const combos=r.combos||[], ps=combos.map(pct);
+    return {
+      species:r.species??null, cp:r.cp??null, hp:r.hp??null,
+      level:r.level??null, dust:r.dust??null,
+      ivPctMin:ps.length?+Math.min(...ps).toFixed(1):null,
+      ivPctMax:ps.length?+Math.max(...ps).toFixed(1):null,
+      combos:combos.map(c=>({level:c[0],atk:c[1],def:c[2],sta:c[3],pct:+pct(c).toFixed(1)}))
+    };
+  });
+}
+function toggleJSON(){
+  const p=$('jsonPanel'), open=p.classList.toggle('open');
+  $('jsonBtn').textContent=open?'Hide JSON':'View JSON';
+  if(open) renderJSON();
+}
+function renderJSON(){
+  if(!$('jsonPanel').classList.contains('open')) return;
+  $('jsonText').textContent=JSON.stringify(exportData(),null,2);
+}
+async function copyJSON(btn){
+  const txt=JSON.stringify(exportData(),null,2);
+  try{ await navigator.clipboard.writeText(txt); }
+  catch(e){
+    const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  const old=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=old,1200);
+}
+function saveJSON(){
+  const blob=new Blob([JSON.stringify(exportData(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='pokescan-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
 /* ---------- UI ---------- */
 function save(){ localStorage.setItem('scans',JSON.stringify(results)); }
 function clearAll(){ results.length=0; save(); render(); }
 function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
 function render(){
+  renderJSON();
   $('out').innerHTML=results.map((r,i)=>{
     const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
     const cls=hi>=90?'g':hi>=70?'m':'b';
