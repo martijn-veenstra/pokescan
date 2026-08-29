@@ -8,38 +8,83 @@
 <meta name="apple-mobile-web-app-title" content="PokeScan">
 <title>PokeScan — batch IV scanner</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0e1420;--card:#182234;--ink:#e8eef8;--dim:#8fa0b8;--acc:#39c98e;--warn:#e8b23c;--bad:#e05a5a}
+:root{--bg:#0E1626;--card:#17222F;--line:#24334A;--ink:#EAF1F7;--dim:#7E93AC;
+ --green:#48D597;--gold:#F5B84C;--coral:#F0654F;--gl:#5B8DEF;--ul:#F5B84C}
 *{box-sizing:border-box;margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:14px;padding-top:calc(14px + env(safe-area-inset-top))}
-h1{font-size:20px;margin-bottom:2px}
-.sub{color:var(--dim);font-size:13px;margin-bottom:14px}
-.row{display:flex;gap:10px;align-items:center;margin:10px 0}
-label{font-size:14px;color:var(--dim)}
-input[type=number]{width:70px;background:var(--card);border:1px solid #2a3850;border-radius:8px;color:var(--ink);padding:8px;font-size:16px}
-.btn{display:block;width:100%;text-align:center;background:var(--acc);color:#08251a;font-weight:700;border:none;border-radius:12px;padding:14px;font-size:16px;margin:8px 0}
-.btn.sec{background:var(--card);color:var(--ink);border:1px solid #2a3850}
+body{background:linear-gradient(180deg,#0B1220 0%,#0E1626 40%,#101A2E 100%);min-height:100vh;
+ color:var(--ink);font:15px/1.5 -apple-system,system-ui,sans-serif;
+ padding:14px;padding-top:calc(16px + env(safe-area-inset-top))}
+h1{font-family:Sora,sans-serif;font-weight:800;font-size:22px;letter-spacing:-.02em;
+ display:flex;align-items:center;gap:9px}
+h1 svg{flex:none}
+.sub{color:var(--dim);font-size:12.5px;margin:2px 0 16px}
+.row{display:flex;gap:10px;align-items:center;margin:10px 0;flex-wrap:wrap}
+label{font-size:13px;color:var(--dim)}
+input[type=number]{width:64px;background:var(--card);border:1px solid var(--line);
+ border-radius:10px;color:var(--ink);padding:8px;font-size:16px}
+select{background:var(--card);color:var(--ink);border:1px solid var(--line);
+ border-radius:10px;padding:8px 10px;font-size:14px}
+.btn{display:block;width:100%;text-align:center;border:none;border-radius:14px;
+ padding:14px;font-size:15.5px;font-weight:700;font-family:Sora,sans-serif;
+ background:linear-gradient(135deg,#3BC489,#2BA8A0);color:#062018;margin:8px 0}
+.btn.sec{background:var(--card);color:var(--dim);border:1px solid var(--line);font-weight:600}
+.tools{display:flex;gap:8px;margin:8px 0}
+.tools .btn{margin:0;padding:10px;font-size:13px;border-radius:11px}
+#panel{display:none;background:var(--card);border:1px solid var(--line);
+ border-radius:16px;padding:4px 14px 12px;margin:8px 0}
+#panel.open{display:block!important}
 #prog{display:none;margin:12px 0}
-.bar{height:8px;background:var(--card);border-radius:4px;overflow:hidden}
-.bar>div{height:100%;background:var(--acc);width:0%}
-#stat{font-size:13px;color:var(--dim);margin-top:6px}
-.mon{background:var(--card);border-radius:14px;padding:12px;margin:10px 0}
-.mon h3{font-size:16px;display:flex;justify-content:space-between}
-.mon .pct{font-weight:800}
-.g .pct{color:var(--acc)}.m .pct{color:var(--warn)}.b .pct{color:var(--bad)}
-.meta{font-size:13px;color:var(--dim);margin:4px 0}
-.ivs{font-size:13px;font-family:ui-monospace,monospace;margin-top:6px;white-space:pre-wrap}
-.flag{font-size:12px;color:var(--warn)}
-.fix{margin-top:8px;display:none;gap:6px;flex-wrap:wrap}
+.bar{height:6px;background:var(--card);border-radius:3px;overflow:hidden}
+.bar>div{height:100%;background:linear-gradient(90deg,#3BC489,#2BA8A0);width:0%;transition:width .3s}
+#stat{font-size:12.5px;color:var(--dim);margin-top:6px}
+#count{color:var(--dim);font-size:13px}
+
+.mon{background:var(--card);border:1px solid var(--line);border-radius:18px;
+ padding:14px 15px 12px;margin:10px 0}
+.mon .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mon .name{font-family:Sora,sans-serif;font-weight:600;font-size:17px;letter-spacing:-.01em}
+.mon .cp{color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mon .cp b{color:var(--ink);font-size:15px}
+.del{color:var(--dim);padding:2px 0 2px 10px;font-size:15px}
+.pctbig{font-family:Sora,sans-serif;font-weight:800;font-size:21px;letter-spacing:-.02em;
+ font-variant-numeric:tabular-nums}
+.g .pctbig{color:var(--green)}.m .pctbig{color:var(--gold)}.b .pctbig{color:var(--coral)}
+.bars{display:grid;grid-template-columns:32px 1fr 22px;gap:4px 8px;align-items:center;
+ margin:9px 0 2px;font-size:11px;color:var(--dim)}
+.tr{height:7px;background:#0E1626;border-radius:4px;overflow:hidden}
+.tr>i{display:block;height:100%;border-radius:4px;background:var(--gold)}
+.tr>i.max{background:linear-gradient(90deg,#F0654F,#F5885B)}
+.iv{font-variant-numeric:tabular-nums;color:var(--ink);text-align:right}
+.meta{font-size:12.5px;color:var(--dim);margin-top:7px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.chip{font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;
+ font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip.gl{background:rgba(91,141,239,.16);color:#9DBCF7}
+.chip.ul{background:rgba(245,184,76,.14);color:#F5CE8A}
+.chip.meta1{background:rgba(72,213,151,.13);color:#7FE3B6}
+.chip.warn{background:rgba(240,101,79,.13);color:#F59A8B}
+.moves{font-size:12.5px;margin-top:8px;color:var(--dim)}
+.moves b{color:var(--green);font-weight:600}
+.moves s{color:var(--coral);text-decoration:none}
+.alts{font-size:12.5px;color:var(--dim);margin-top:8px;font-family:ui-monospace,monospace;
+ white-space:pre-wrap;display:none}
+.mon.editing .alts{display:block}
+.flag{font-size:11.5px;color:var(--gold)}
+.fix{margin-top:10px;display:none;gap:6px;flex-wrap:wrap}
 .mon.editing .fix{display:flex}
-.fix input{width:76px;background:#0e1420;border:1px solid #2a3850;border-radius:8px;color:var(--ink);padding:6px;font-size:14px}
-.fix button{background:var(--acc);border:none;border-radius:8px;padding:6px 12px;font-weight:700;color:#08251a}
+.fix input{width:74px;background:#0E1626;border:1px solid var(--line);border-radius:9px;
+ color:var(--ink);padding:7px;font-size:14px}
+.fix button{background:var(--green);border:none;border-radius:9px;padding:7px 13px;
+ font-weight:700;color:#062018}
 video,canvas{display:none}
 </style>
 </head>
 <body>
-<h1>PokeScan</h1>
-<div class="sub">On-device batch IV scanner — nothing leaves your phone · v6</div>
+<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan</h1>
+<div class="sub">On-device batch IV scanner — nothing leaves your phone · v7</div>
 
 <button class="btn" onclick="document.getElementById('panel').classList.toggle('open')">＋ Import scans</button>
 <div id="panel" style="display:none;background:var(--card);border-radius:14px;padding:12px;margin:8px 0">
@@ -51,11 +96,11 @@ video,canvas{display:none}
   <input type="file" id="file" accept="video/*,image/*" multiple hidden>
   <button class="btn" style="margin:6px 0 0" onclick="document.getElementById('file').click()">Choose recording / screenshots</button>
 </div>
-<style>#panel.open{display:block!important}</style>
-<div class="row" style="gap:6px">
-  <button class="btn sec" style="margin:0" onclick="exportCSV()">Export CSV</button>
-  <button class="btn sec" style="margin:0" onclick="backupJSON()">Backup</button>
-  <button class="btn sec" style="margin:0" onclick="document.getElementById('imp').click()">Restore</button>
+
+<div class="tools">
+  <button class="btn sec" onclick="exportCSV()">Export CSV</button>
+  <button class="btn sec" onclick="backupJSON()">Backup</button>
+  <button class="btn sec" onclick="document.getElementById('imp').click()">Restore</button>
 </div>
 <input type="file" id="imp" accept=".json,application/json" hidden>
 <div class="row">
@@ -490,28 +535,36 @@ function render(){
   $('out').innerHTML=order.map(i=>{ const r=results[i];
     const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
     const cls=hi>=90?'g':hi>=70?'m':'b';
-    const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.species&&'name?',!r.level&&'level?'].filter(Boolean).join(' ');
     const mt=metaFor(r.species);
     const best=r.combos.length?r.combos.reduce((a,b2)=>pct(b2)>pct(a)?b2:a):null;
-    let costLine='';
+    const nice=(r.species||'?').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.level&&'level?'].filter(Boolean).join(' ');
+    let chips='';
     if(best){ const bb2=best[4]||DATA.stats[r.species][0];
-      const gl=pvpRank(bb2,best[1],best[2],best[3],1500);
+      const gl=pvpRank(bb2,best[1],best[2],best[3],1500), ul=pvpRank(bb2,best[1],best[2],best[3],2500);
+      chips+=`<span class="chip gl">GL #${gl.n} · L${gl.lv} · ${gl.cp} CP</span>`;
+      chips+=`<span class="chip ul">UL #${ul.n}</span>`;
       if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv);
-        costLine=`→ GL L${gl.lv}: ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy${c.xl?' · '+c.xl+' XL':''}`; } }
-    let moveLine='';
-    if(mt&&r.txt) moveLine=mt[2].map(m2=>(r.txt.includes(pretty(m2))?'✓ ':'✗ ')+pretty(m2)).join(' · ');
+        chips+=`<span class="chip warn">→ ${c.dust.toLocaleString('nl')} dust · ${c.candy||c.xl}${c.candy?'':' XL'} candy</span>`; } }
+    if(mt) chips+=`<span class="chip meta1">meta #${mt[0]} · ${mt[1]}</span>`;
+    const barRow=(l,v)=>`<span>${l}</span><span class="tr"><i class="${v===15?'max':''}" style="width:${v/15*100}%"></i></span><span class="iv">${v}</span>`;
+    const bars=best?`<div class="bars">${barRow('Atk',best[1])}${barRow('Def',best[2])}${barRow('HP',best[3])}</div>`:'';
+    let moves='';
+    if(mt&&r.txt) moves=`<div class="moves">${mt[2].map(m2=>{const p=pretty(m2);
+      return r.txt.includes(p)?`<b>✓ ${p}</b>`:`<s>✗ ${p}</s>`;}).join(' · ')}</div>`;
+    const alts=r.combos.length>1?`<div class="alts">${r.combos.map(c=>`L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`:'';
+    const more=r.combos.length>1?` <span style="font-size:12px;color:var(--dim)">· ${r.combos.length} mogelijk</span>`:'';
     return `<div class="mon ${cls}" id="m${i}">
-      <h3><span>${r.species||'?'} ${r.cp?'CP '+r.cp:''}</span>
-      <span><span class="pct">${ps.length? (lo===hi?hi.toFixed(1):lo.toFixed(1)+'–'+hi.toFixed(1))+'%':'—'}</span>
-      <span style="color:var(--dim);margin-left:8px" onclick="del(${i});event.stopPropagation()">✕</span></span></h3>
-      <div class="meta">HP ${r.hp??'?'} · L${r.level??'?'} · dust ${r.dust??'?'} ${flags?'<span class="flag">'+flags+'</span>':''}</div>
-      ${mt?`<div class="meta">GL meta #${mt[0]} · score ${mt[1]}${moveLine?' — '+moveLine:''}</div>`:''}
-      ${costLine?`<div class="meta">${costLine}</div>`:''}
-      <div class="ivs">${r.combos.slice(0,6).map(c=>{
-        const b=c[4]||DATA.stats[r.species][0];
-        const gl=pvpRank(b,c[1],c[2],c[3],1500), ul=pvpRank(b,c[1],c[2],c[3],2500);
-        return `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%\n   GL #${gl.n} ${gl.pct.toFixed(1)}% @L${gl.lv} CP${gl.cp} · UL #${ul.n} ${ul.pct.toFixed(1)}%`;
-      }).join('\n')||'no match — tap to correct'}</div>
+      <div class="top"><span class="name">${nice}</span>
+        <span class="cp"><b>${r.cp??'?'}</b> CP · ${r.hp??'?'} HP · L${r.level??'?'}
+        <span class="del" onclick="del(${i});event.stopPropagation()">✕</span></span></div>
+      <div class="top" style="margin-top:6px">
+        <span class="pctbig">${ps.length?(lo===hi?hi.toFixed(1):lo.toFixed(1)+'–'+hi.toFixed(1))+'%':'—'}${more}</span>
+        <span class="flag">${flags}</span></div>
+      ${bars}
+      <div class="chips">${chips}</div>
+      ${moves}${alts}
+      ${r.combos.length?'':'<div class="meta">Geen match — tik om te corrigeren</div>'}
       <div class="fix">
         <input placeholder="species" value="${r.species||''}" id="sp${i}">
         <input placeholder="CP" value="${r.cp||''}" id="cp${i}" inputmode="numeric">
