@@ -1,0 +1,74 @@
+{
+  "league": "great",
+  "notes": "Martijn's Great League roster for scripts/generate_roster_team_comps.py. speciesIds match PvPoke. Moves are the ones actually on the Pokemon; omit to use PvPoke's recommended moveset. Pending second moves are counted as unlocked.",
+  "owned": {
+    "tinkaton": [
+      "FAIRY_WIND",
+      "GIGATON_HAMMER",
+      "PLAY_ROUGH"
+    ],
+    "ninetales": [
+      "FIRE_SPIN",
+      "WEATHER_BALL_FIRE",
+      "ENERGY_BALL"
+    ],
+    "thievul": [
+      "SNARL",
+      "ICY_WIND",
+      "NIGHT_SLASH"
+    ],
+    "azumarill": [
+      "BUBBLE",
+      "ICE_BEAM",
+      "PLAY_ROUGH"
+    ],
+    "quagsire": [
+      "MUD_SHOT",
+      "AQUA_TAIL",
+      "STONE_EDGE"
+    ],
+    "chesnaught": [
+      "VINE_WHIP",
+      "FRENZY_PLANT",
+      "SUPERPOWER"
+    ],
+    "mimikyu": null
+  },
+  "pending": {
+    "lickilicky": [
+      "ROLLOUT",
+      "BODY_SLAM",
+      "SHADOW_BALL"
+    ]
+  },
+  "candidates": {
+    "forretress": null,
+    "sableye": null,
+    "medicham": null,
+    "jumpluff": null,
+    "furret": null,
+    "doublade": null
+  },
+  "tagged": {
+    "Team#1": [
+      "tinkaton",
+      "quagsire",
+      "mimikyu"
+    ],
+    "Team#2": [
+      "ninetales",
+      "azumarill",
+      "thievul"
+    ],
+    "Comp 1 Champion's Core": [
+      "ninetales",
+      "lickilicky",
+      "tinkaton"
+    ],
+    "Old Team#1": [
+      "tinkaton",
+      "ninetales",
+      "thievul"
+    ]
+  }
+}
