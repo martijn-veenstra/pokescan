@@ -5,7 +5,7 @@ Single-page Pokémon GO screenshot scanner (`index.html`).
 ## PvPoke rankings JSON
 
 `data/pvpoke-rankings.json` is a flattened JSON list of the PvPoke rankings shown at
-<https://pvpoke.com/rankings/> (Great, Ultra, Master and Little League, "overall" category).
+<https://pvpoke.com/rankings/> (Great, Ultra, Master and Little League, "overall" category; Little League is PvPoke's "little" cup).
 It is generated from the JSON files PvPoke publishes in its open-source repository, which are
 the same files the website renders.
 
@@ -42,3 +42,21 @@ Output shape:
   }
 }
 ```
+
+## Best team comps (derived)
+
+PvPoke does not publish a ranked list of teams (its Team Builder simulates the team you enter,
+and its training-mode team pools are years out of date). `data/pvpoke-team-comps.json` is therefore
+**derived** from PvPoke data: for each league, every trio from the top 40 of PvPoke's curated meta
+group is scored against the whole meta group. Pairings use PvPoke's published simulated
+matchup/counter ratings where available, and a type-effectiveness + ranking-score estimate otherwise.
+
+```sh
+python3 scripts/generate_pvpoke_team_comps.py                 # top 25 teams per league
+python3 scripts/generate_pvpoke_team_comps.py --top 50 --pool 30 --leagues great
+```
+
+Per team: `teamScore`, `coverage` (mean best-member rating across the meta, 0-1000 scale, 500 = even),
+`members` (with rank, score, moveset), `unansweredMeta` (meta Pokémon no member is rated above 500
+against) and `sharedWeaknesses` (meta Pokémon that clearly beat two or more members).
+Treat it as a shortlist to verify in PvPoke's Team Builder, not as a simulation result.

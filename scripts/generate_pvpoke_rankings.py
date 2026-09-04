@@ -21,13 +21,14 @@ from datetime import datetime, timezone
 RAW = "https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data"
 GAMEMASTER_URL = f"{RAW}/gamemaster.min.json"
 
-# League slug -> (CP cap, human title). "all" cup + "overall" category is what
-# https://pvpoke.com/rankings/ shows by default for each league.
+# League slug -> (CP cap, human title, PvPoke cup). "overall" category is what
+# https://pvpoke.com/rankings/ shows by default for each league. Little League
+# on pvpoke.com is the "little" cup (pvpoke.com/rankings/little/500/overall/).
 LEAGUES = {
-    "little": (500, "Little League"),
-    "great": (1500, "Great League"),
-    "ultra": (2500, "Ultra League"),
-    "master": (10000, "Master League"),
+    "little": (500, "Little League", "little"),
+    "great": (1500, "Great League", "all"),
+    "ultra": (2500, "Ultra League", "all"),
+    "master": (10000, "Master League", "all"),
 }
 # Order of the per-scenario scores in each ranking entry's "scores" array
 # (matches the Lead / Closer / Switch / Charger / Attacker / Consistency hexagon
@@ -96,13 +97,14 @@ def main(argv=None):
         "leagues": {},
     }
     for slug in args.leagues:
-        cp, title = LEAGUES[slug]
-        url = rankings_url(cp)
+        cp, title, cup = LEAGUES[slug]
+        url = rankings_url(cp, cup)
         print(f"fetching {url}", file=sys.stderr)
         entries = fetch_json(url)
         result["leagues"][slug] = {
             "title": title,
             "cp": cp,
+            "cup": cup,
             "count": min(len(entries), args.limit) if args.limit else len(entries),
             "rankings": build_league(entries, pokemon_by_id, moves_by_id, args.limit),
         }
