@@ -18,6 +18,8 @@ Output has four sections:
   marginal    per candidate: rank, and the best trio that includes it, so you
               can see which pickup moves the needle
   tagged      score of each named team
+  disjoint    best pair of trios with no species in common (two in-game
+              parties you can rotate), from owned + pending and from all
 
 Usage:
     python3 scripts/generate_roster_team_comps.py
@@ -51,6 +53,25 @@ def describe(league, team, ev):
         "unansweredMeta": [league.entry[o]["speciesName"] for o in ev["holes"]],
         "sharedWeaknesses": [league.entry[o]["speciesName"] for o in ev["sharedWeaknesses"]],
     }
+
+
+def best_disjoint_pairs(league, pool, top):
+    """Best pairs of trios sharing no species, ranked by the weaker team's score then the sum."""
+    scored = sorted(((league.evaluate(t), t) for t in trios(pool)), key=lambda r: -r[0]["score"])
+    scored = scored[:60]  # both teams of a good pair are near the top of the single-trio list
+    pairs = []
+    for i in range(len(scored)):
+        ev1, t1 = scored[i]
+        b1 = {base_species(s) for s in t1}
+        for j in range(i + 1, len(scored)):
+            ev2, t2 = scored[j]
+            if b1 & {base_species(s) for s in t2}:
+                continue
+            pairs.append((min(ev1["score"], ev2["score"]), ev1["score"] + ev2["score"], t1, ev1, t2, ev2))
+    pairs.sort(key=lambda r: (-r[0], -r[1]))
+    return [{"rank": i + 1, "weakerScore": w, "combinedScore": round(c, 1),
+             "teams": [describe(league, t1, e1), describe(league, t2, e2)]}
+            for i, (w, c, t1, e1, t2, e2) in enumerate(pairs[:top])]
 
 
 def best_from(league, pool, top):
@@ -124,6 +145,10 @@ def main(argv=None):
         "candidates": best_from(league, p_all, args.top),
         "marginal": marginal,
         "tagged": tagged,
+        "disjoint": {
+            "pending": best_disjoint_pairs(league, p_pending, args.top),
+            "candidates": best_disjoint_pairs(league, p_all, args.top),
+        },
     }
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
@@ -140,6 +165,11 @@ def main(argv=None):
     print("marginal value of candidates", file=sys.stderr)
     for m in marginal:
         print(f"  {m['name']:<14} #{m['rank']:<4} {line(m['bestTrio'])}", file=sys.stderr)
+    for key in ("pending", "candidates"):
+        pairs = result["disjoint"][key]
+        if pairs:
+            a, b = pairs[0]["teams"]
+            print(f"best two disjoint teams ({key}): {line(a)}  +  {line(b)}", file=sys.stderr)
     print(f"wrote {out_path}", file=sys.stderr)
 
 

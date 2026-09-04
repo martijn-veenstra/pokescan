@@ -3,7 +3,7 @@
  "title": "Great League",
  "roster": "data/roster-great.json",
  "gamemasterTimestamp": "2026-09-01 18:36:39",
- "generatedAt": "2026-09-04T19:02:41Z",
+ "generatedAt": "2026-09-04T19:05:47Z",
  "method": "Same heuristic as generate_pvpoke_team_comps.py, restricted to the roster file. Team scores are comparable with data/pvpoke-team-comps.json and the community-teams analysis.",
  "today": [
   {
@@ -2991,5 +2991,3094 @@
     "Charjabug"
    ]
   }
- ]
+ ],
+ "disjoint": {
+  "pending": [
+   {
+    "rank": 1,
+    "weakerScore": 604.3,
+    "combinedScore": 1269.3,
+    "teams": [
+     {
+      "teamScore": 665.0,
+      "coverage": 695.0,
+      "members": [
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Mimikyu (Busted)",
+       "Jumpluff",
+       "Furret"
+      ]
+     },
+     {
+      "teamScore": 604.3,
+      "coverage": 652.3,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Empoleon",
+       "Clodsire"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Talonflame"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 2,
+    "weakerScore": 604.3,
+    "combinedScore": 1238.7,
+    "teams": [
+     {
+      "teamScore": 634.4,
+      "coverage": 694.4,
+      "members": [
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Furret",
+       "Florges"
+      ],
+      "sharedWeaknesses": [
+       "Mimikyu (Busted)",
+       "Jumpluff",
+       "Wigglytuff",
+       "Florges",
+       "Annihilape (Shadow)",
+       "Primeape"
+      ]
+     },
+     {
+      "teamScore": 604.3,
+      "coverage": 652.3,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Empoleon",
+       "Clodsire"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Talonflame"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 3,
+    "weakerScore": 604.3,
+    "combinedScore": 1223.7,
+    "teams": [
+     {
+      "teamScore": 619.4,
+      "coverage": 685.4,
+      "members": [
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Tinkaton",
+       "Forretress",
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Tinkaton",
+       "Mimikyu (Busted)",
+       "Wigglytuff",
+       "Charjabug",
+       "Weezing (Galarian)"
+      ]
+     },
+     {
+      "teamScore": 604.3,
+      "coverage": 652.3,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Empoleon",
+       "Clodsire"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Talonflame"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 4,
+    "weakerScore": 599.6,
+    "combinedScore": 1264.6,
+    "teams": [
+     {
+      "teamScore": 665.0,
+      "coverage": 695.0,
+      "members": [
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Mimikyu (Busted)",
+       "Jumpluff",
+       "Furret"
+      ]
+     },
+     {
+      "teamScore": 599.6,
+      "coverage": 653.6,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Cramorant",
+       "Talonflame"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Clodsire",
+       "Talonflame",
+       "Florges",
+       "Charjabug"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 5,
+    "weakerScore": 599.6,
+    "combinedScore": 1264.4,
+    "teams": [
+     {
+      "teamScore": 664.8,
+      "coverage": 700.8,
+      "members": [
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Jumpluff",
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Jumpluff",
+       "Medicham"
+      ]
+     },
+     {
+      "teamScore": 599.6,
+      "coverage": 653.6,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Cramorant",
+       "Talonflame"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Clodsire",
+       "Talonflame",
+       "Florges",
+       "Charjabug"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 6,
+    "weakerScore": 599.6,
+    "combinedScore": 1263.9,
+    "teams": [
+     {
+      "teamScore": 664.3,
+      "coverage": 694.3,
+      "members": [
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Tinkaton",
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon"
+      ]
+     },
+     {
+      "teamScore": 599.6,
+      "coverage": 653.6,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Cramorant",
+       "Talonflame"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Clodsire",
+       "Talonflame",
+       "Florges",
+       "Charjabug"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 7,
+    "weakerScore": 596.0,
+    "combinedScore": 1277.1,
+    "teams": [
+     {
+      "teamScore": 681.1,
+      "coverage": 687.1,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Empoleon"
+      ]
+     },
+     {
+      "teamScore": 596.0,
+      "coverage": 656.0,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Quagsire",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Sableye (Shadow)",
+       "Malamar",
+       "Charjabug"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 8,
+    "weakerScore": 596.0,
+    "combinedScore": 1261.0,
+    "teams": [
+     {
+      "teamScore": 665.0,
+      "coverage": 695.0,
+      "members": [
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Mimikyu (Busted)",
+       "Jumpluff",
+       "Furret"
+      ]
+     },
+     {
+      "teamScore": 596.0,
+      "coverage": 656.0,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Quagsire",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Sableye (Shadow)",
+       "Malamar",
+       "Charjabug"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 9,
+    "weakerScore": 596.0,
+    "combinedScore": 1221.7,
+    "teams": [
+     {
+      "teamScore": 625.7,
+      "coverage": 691.7,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Florges"
+      ],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Cramorant",
+       "Jumpluff",
+       "Kingdra",
+       "Guzzlord",
+       "Talonflame",
+       "Cradily",
+       "Florges",
+       "Mantine"
+      ]
+     },
+     {
+      "teamScore": 596.0,
+      "coverage": 656.0,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Quagsire",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Sableye (Shadow)",
+       "Malamar",
+       "Charjabug"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 10,
+    "weakerScore": 590.3,
+    "combinedScore": 1283.1,
+    "teams": [
+     {
+      "teamScore": 692.8,
+      "coverage": 716.8,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Jumpluff",
+       "Talonflame",
+       "Diggersby",
+       "Gourgeist (Super)"
+      ]
+     },
+     {
+      "teamScore": 590.3,
+      "coverage": 626.3,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Empoleon",
+       "Clodsire"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Clodsire"
+      ]
+     }
+    ]
+   }
+  ],
+  "candidates": [
+   {
+    "rank": 1,
+    "weakerScore": 642.8,
+    "combinedScore": 1335.6,
+    "teams": [
+     {
+      "teamScore": 692.8,
+      "coverage": 716.8,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Jumpluff",
+       "Talonflame",
+       "Diggersby",
+       "Gourgeist (Super)"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 2,
+    "weakerScore": 642.8,
+    "combinedScore": 1319.8,
+    "teams": [
+     {
+      "teamScore": 677.0,
+      "coverage": 707.0,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "furret",
+        "name": "Furret",
+        "rank": 26,
+        "score": 90.3,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "SUCKER_PUNCH",
+        "chargedMoves": [
+         "SWIFT",
+         "TRAILBLAZE"
+        ],
+        "moveNames": [
+         "Sucker Punch",
+         "Swift",
+         "Trailblaze"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Forretress",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Diggersby"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 3,
+    "weakerScore": 642.8,
+    "combinedScore": 1318.7,
+    "teams": [
+     {
+      "teamScore": 675.9,
+      "coverage": 711.9,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Quagsire",
+       "Clodsire",
+       "Diggersby"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 4,
+    "weakerScore": 642.8,
+    "combinedScore": 1307.7,
+    "teams": [
+     {
+      "teamScore": 664.9,
+      "coverage": 706.9,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "thievul",
+        "name": "Thievul",
+        "rank": 43,
+        "score": 89.7,
+        "types": [
+         "dark"
+        ],
+        "fastMove": "SNARL",
+        "chargedMoves": [
+         "ICY_WIND",
+         "NIGHT_SLASH"
+        ],
+        "moveNames": [
+         "Snarl",
+         "Icy Wind",
+         "Night Slash"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Forretress",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Diggersby",
+       "Wigglytuff",
+       "Charjabug"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 5,
+    "weakerScore": 642.8,
+    "combinedScore": 1307.6,
+    "teams": [
+     {
+      "teamScore": 664.8,
+      "coverage": 700.8,
+      "members": [
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Jumpluff",
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Jumpluff",
+       "Medicham"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 6,
+    "weakerScore": 642.8,
+    "combinedScore": 1303.8,
+    "teams": [
+     {
+      "teamScore": 661.0,
+      "coverage": 697.0,
+      "members": [
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       },
+       {
+        "speciesId": "medicham",
+        "name": "Medicham",
+        "rank": 34,
+        "score": 90.1,
+        "types": [
+         "fighting",
+         "psychic"
+        ],
+        "fastMove": "PSYCHO_CUT",
+        "chargedMoves": [
+         "ICE_PUNCH",
+         "DYNAMIC_PUNCH"
+        ],
+        "moveNames": [
+         "Psycho Cut",
+         "Ice Punch",
+         "Dynamic Punch"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Tinkaton",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Sableye (Shadow)",
+       "Wigglytuff"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 7,
+    "weakerScore": 642.8,
+    "combinedScore": 1296.4,
+    "teams": [
+     {
+      "teamScore": 653.6,
+      "coverage": 701.6,
+      "members": [
+       {
+        "speciesId": "quagsire",
+        "name": "Quagsire",
+        "rank": 9,
+        "score": 91.7,
+        "types": [
+         "water",
+         "ground"
+        ],
+        "fastMove": "MUD_SHOT",
+        "chargedMoves": [
+         "AQUA_TAIL",
+         "STONE_EDGE"
+        ],
+        "moveNames": [
+         "Mud Shot",
+         "Aqua Tail",
+         "Stone Edge"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "doublade",
+        "name": "Doublade",
+        "rank": 94,
+        "score": 87.5,
+        "types": [
+         "steel",
+         "ghost"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SACRED_SWORD",
+         "GYRO_BALL"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Sacred Sword",
+         "Gyro Ball"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Furret"
+      ],
+      "sharedWeaknesses": [
+       "Lickilicky",
+       "Altaria",
+       "Jumpluff",
+       "Feraligatr (Shadow)",
+       "Talonflame",
+       "Primeape"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 8,
+    "weakerScore": 642.8,
+    "combinedScore": 1294.8,
+    "teams": [
+     {
+      "teamScore": 652.0,
+      "coverage": 706.0,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "sableye",
+        "name": "Sableye",
+        "rank": 47,
+        "score": 89.5,
+        "types": [
+         "dark",
+         "ghost"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "FOUL_PLAY",
+         "POWER_GEM"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Foul Play",
+         "Power Gem"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Forretress",
+       "Corviknight",
+       "Diggersby"
+      ],
+      "sharedWeaknesses": [
+       "Quagsire",
+       "Diggersby",
+       "Wigglytuff"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 9,
+    "weakerScore": 642.8,
+    "combinedScore": 1294.1,
+    "teams": [
+     {
+      "teamScore": 651.3,
+      "coverage": 705.3,
+      "members": [
+       {
+        "speciesId": "tinkaton",
+        "name": "Tinkaton",
+        "rank": 2,
+        "score": 92.6,
+        "types": [
+         "fairy",
+         "steel"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "GIGATON_HAMMER",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Gigaton Hammer",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "medicham",
+        "name": "Medicham",
+        "rank": 34,
+        "score": 90.1,
+        "types": [
+         "fighting",
+         "psychic"
+        ],
+        "fastMove": "PSYCHO_CUT",
+        "chargedMoves": [
+         "ICE_PUNCH",
+         "DYNAMIC_PUNCH"
+        ],
+        "moveNames": [
+         "Psycho Cut",
+         "Ice Punch",
+         "Dynamic Punch"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Forretress",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Jellicent",
+       "Corviknight",
+       "Talonflame",
+       "Diggersby",
+       "Wigglytuff"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   },
+   {
+    "rank": 10,
+    "weakerScore": 642.8,
+    "combinedScore": 1291.1,
+    "teams": [
+     {
+      "teamScore": 648.3,
+      "coverage": 696.3,
+      "members": [
+       {
+        "speciesId": "mimikyu",
+        "name": "Mimikyu (Busted)",
+        "rank": 5,
+        "score": 92.2,
+        "types": [
+         "ghost",
+         "fairy"
+        ],
+        "fastMove": "SHADOW_CLAW",
+        "chargedMoves": [
+         "SHADOW_SNEAK",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Shadow Claw",
+         "Shadow Sneak",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "lickilicky",
+        "name": "Lickilicky",
+        "rank": 1,
+        "score": 93.7,
+        "types": [
+         "normal"
+        ],
+        "fastMove": "ROLLOUT",
+        "chargedMoves": [
+         "BODY_SLAM",
+         "SHADOW_BALL"
+        ],
+        "moveNames": [
+         "Rollout",
+         "Body Slam",
+         "Shadow Ball"
+        ]
+       },
+       {
+        "speciesId": "jumpluff",
+        "name": "Jumpluff",
+        "rank": 18,
+        "score": 90.9,
+        "types": [
+         "grass",
+         "flying"
+        ],
+        "fastMove": "FAIRY_WIND",
+        "chargedMoves": [
+         "ENERGY_BALL",
+         "ACROBATICS"
+        ],
+        "moveNames": [
+         "Fairy Wind",
+         "Energy Ball",
+         "Acrobatics"
+        ]
+       }
+      ],
+      "unansweredMeta": [
+       "Tinkaton",
+       "Corviknight"
+      ],
+      "sharedWeaknesses": [
+       "Empoleon",
+       "Clodsire",
+       "Medicham",
+       "Wigglytuff"
+      ]
+     },
+     {
+      "teamScore": 642.8,
+      "coverage": 660.8,
+      "members": [
+       {
+        "speciesId": "ninetales",
+        "name": "Ninetales",
+        "rank": 12,
+        "score": 91.4,
+        "types": [
+         "fire"
+        ],
+        "fastMove": "FIRE_SPIN",
+        "chargedMoves": [
+         "WEATHER_BALL_FIRE",
+         "ENERGY_BALL"
+        ],
+        "moveNames": [
+         "Fire Spin",
+         "Weather Ball (Fire)",
+         "Energy Ball"
+        ]
+       },
+       {
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 24,
+        "score": 90.5,
+        "types": [
+         "water",
+         "fairy"
+        ],
+        "fastMove": "BUBBLE",
+        "chargedMoves": [
+         "ICE_BEAM",
+         "PLAY_ROUGH"
+        ],
+        "moveNames": [
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
+        ]
+       },
+       {
+        "speciesId": "forretress",
+        "name": "Forretress",
+        "rank": 11,
+        "score": 91.5,
+        "types": [
+         "bug",
+         "steel"
+        ],
+        "fastMove": "VOLT_SWITCH",
+        "chargedMoves": [
+         "SAND_TOMB",
+         "ROCK_TOMB"
+        ],
+        "moveNames": [
+         "Volt Switch",
+         "Sand Tomb",
+         "Rock Tomb"
+        ]
+       }
+      ],
+      "unansweredMeta": [],
+      "sharedWeaknesses": [
+       "Altaria",
+       "Empoleon",
+       "Guzzlord"
+      ]
+     }
+    ]
+   }
+  ]
+ }
 }
