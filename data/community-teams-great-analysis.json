@@ -1,0 +1,992 @@
+{
+ "league": "great",
+ "title": "Great League",
+ "source": "YouTube video transcript: '10 best teams for the Great League' (5 community teams from Twitter, 5 from the creator)",
+ "gamemasterTimestamp": "2026-09-01 18:36:39",
+ "generatedAt": "2026-09-04T16:43:30Z",
+ "derivedTopScoreRange": [
+  720.9,
+  692.3
+ ],
+ "poolTrioScoreRange": [
+  229.2,
+  720.9
+ ],
+ "poolTrioMedian": 520.8,
+ "poolTrios": 9690,
+ "method": "Same heuristic as generate_pvpoke_team_comps.py, using the video's movesets for the video Pokemon.",
+ "teams": [
+  {
+   "id": 1,
+   "name": "Umbreon closer (community, Rizzie)",
+   "members": [
+    {
+     "speciesId": "forretress",
+     "name": "Forretress",
+     "rank": 11,
+     "score": 91.5,
+     "types": [
+      "bug",
+      "steel"
+     ],
+     "fastMove": "VOLT_SWITCH",
+     "chargedMoves": [
+      "SAND_TOMB",
+      "ROCK_TOMB"
+     ],
+     "moveNames": [
+      "Volt Switch",
+      "Sand Tomb",
+      "Rock Tomb"
+     ],
+     "role": "lead",
+     "inMetaGroup": true,
+     "note": "Non-shadow; Volt Switch preferred over Bug Bite"
+    },
+    {
+     "speciesId": "sealeo_shadow",
+     "name": "Sealeo (Shadow)",
+     "rank": 42,
+     "score": 89.7,
+     "types": [
+      "ice",
+      "water"
+     ],
+     "fastMove": "POWDER_SNOW",
+     "chargedMoves": [
+      "SURF",
+      "BODY_SLAM"
+     ],
+     "moveNames": [
+      "Powder Snow",
+      "Surf",
+      "Body Slam"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "umbreon",
+     "name": "Umbreon",
+     "rank": 33,
+     "score": 90.2,
+     "types": [
+      "dark"
+     ],
+     "fastMove": "SNARL",
+     "chargedMoves": [
+      "FOUL_PLAY",
+      "LAST_RESORT"
+     ],
+     "moveNames": [
+      "Snarl",
+      "Foul Play",
+      "Last Resort"
+     ],
+     "role": "closer",
+     "inMetaGroup": false
+    }
+   ],
+   "teamScore": 535.8,
+   "coverage": 631.8,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 57.3,
+   "unansweredMeta": [
+    "Quagsire (Shadow)",
+    "Ninetales",
+    "Ninetales (Shadow)"
+   ],
+   "sharedWeaknesses": [
+    "Tinkaton",
+    "Altaria",
+    "Ninetales (Shadow)",
+    "Sableye (Shadow)",
+    "Medicham",
+    "Sableye",
+    "Malamar",
+    "Charjabug",
+    "Annihilape (Shadow)",
+    "Primeape"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Steel/Dragon core with Aegislash (community)",
+   "members": [
+    {
+     "speciesId": "corviknight",
+     "name": "Corviknight",
+     "rank": 20,
+     "score": 90.7,
+     "types": [
+      "flying",
+      "steel"
+     ],
+     "fastMove": "SAND_ATTACK",
+     "chargedMoves": [
+      "AIR_CUTTER",
+      "PAYBACK"
+     ],
+     "moveNames": [
+      "Sand Attack",
+      "Air Cutter",
+      "Payback"
+     ],
+     "role": "flex",
+     "inMetaGroup": true,
+     "note": "Transcript says 'Sableye' but the moves are Corviknight's"
+    },
+    {
+     "speciesId": "aegislash_shield",
+     "name": "Aegislash (Blade)",
+     "rank": 67,
+     "score": 88.7,
+     "types": [
+      "steel",
+      "ghost"
+     ],
+     "fastMove": "AEGISLASH_CHARGE_PSYCHO_CUT",
+     "chargedMoves": [
+      "SHADOW_BALL",
+      "GYRO_BALL"
+     ],
+     "moveNames": [
+      "Psycho Cut",
+      "Shadow Ball",
+      "Gyro Ball"
+     ],
+     "role": "flex",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "dragonite",
+     "name": "Dragonite",
+     "rank": 335,
+     "score": 79.8,
+     "types": [
+      "dragon",
+      "flying"
+     ],
+     "fastMove": "DRAGON_BREATH",
+     "chargedMoves": [
+      "THUNDER_PUNCH",
+      "SUPERPOWER"
+     ],
+     "moveNames": [
+      "Dragon Breath",
+      "Thunder Punch",
+      "SUPERPOWER"
+     ],
+     "role": "flex",
+     "inMetaGroup": false,
+     "note": "Inferred: the video names a Dragon partner and mentions Dragonite; Altaria is the other plausible reading"
+    }
+   ],
+   "teamScore": 426.0,
+   "coverage": 594.0,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 11.4,
+   "unansweredMeta": [
+    "Altaria",
+    "Forretress",
+    "Forretress (Shadow)",
+    "Azumarill",
+    "Diggersby",
+    "Charjabug",
+    "Stunfisk"
+   ],
+   "sharedWeaknesses": [
+    "Mimikyu (Busted)",
+    "Forretress",
+    "Ninetales (Shadow)",
+    "Forretress (Shadow)",
+    "Feraligatr (Shadow)",
+    "Guzzlord",
+    "Furret",
+    "Seismitoad",
+    "Talonflame",
+    "Thievul",
+    "Diggersby",
+    "Dewgong",
+    "Stunfisk",
+    "Seaking"
+   ],
+   "alternatives": [
+    {
+     "replace": "dragonite",
+     "with": "altaria",
+     "teamScore": 499.0,
+     "unansweredMeta": [
+      "Cramorant",
+      "Feraligatr",
+      "Azumarill",
+      "Stunfisk"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Castform Energy Ball (creator)",
+   "members": [
+    {
+     "speciesId": "castform",
+     "name": "Castform",
+     "rank": 177,
+     "score": 84.5,
+     "types": [
+      "normal"
+     ],
+     "fastMove": "HEX",
+     "chargedMoves": [
+      "WEATHER_BALL_ROCK",
+      "ENERGY_BALL"
+     ],
+     "moveNames": [
+      "Hex",
+      "Weather Ball (Rock)",
+      "Energy Ball"
+     ],
+     "role": "lead",
+     "inMetaGroup": false
+    },
+    {
+     "speciesId": "sableye",
+     "name": "Sableye",
+     "rank": 47,
+     "score": 89.5,
+     "types": [
+      "dark",
+      "ghost"
+     ],
+     "fastMove": "SHADOW_CLAW",
+     "chargedMoves": [
+      "DRAIN_PUNCH",
+      "FOUL_PLAY"
+     ],
+     "moveNames": [
+      "Shadow Claw",
+      "Drain Punch",
+      "Foul Play"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true,
+     "note": "Drain Punch tech"
+    },
+    {
+     "speciesId": "tinkaton",
+     "name": "Tinkaton",
+     "rank": 2,
+     "score": 92.6,
+     "types": [
+      "fairy",
+      "steel"
+     ],
+     "fastMove": "FAIRY_WIND",
+     "chargedMoves": [
+      "GIGATON_HAMMER",
+      "BULLDOZE"
+     ],
+     "moveNames": [
+      "Fairy Wind",
+      "Gigaton Hammer",
+      "Bulldoze"
+     ],
+     "role": "closer",
+     "inMetaGroup": true
+    }
+   ],
+   "teamScore": 608.8,
+   "coverage": 668.8,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 89.2,
+   "unansweredMeta": [
+    "Forretress",
+    "Forretress (Shadow)",
+    "Clodsire",
+    "Corviknight"
+   ],
+   "sharedWeaknesses": [
+    "Tinkaton",
+    "Quagsire"
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Triple shadow with Pidgeot (community)",
+   "members": [
+    {
+     "speciesId": "ninetales_shadow",
+     "name": "Ninetales (Shadow)",
+     "rank": 14,
+     "score": 91.1,
+     "types": [
+      "fire"
+     ],
+     "fastMove": "EMBER",
+     "chargedMoves": [
+      "WEATHER_BALL_FIRE",
+      "ENERGY_BALL"
+     ],
+     "moveNames": [
+      "Ember",
+      "Weather Ball (Fire)",
+      "Energy Ball"
+     ],
+     "role": "flex",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "pidgeot_shadow",
+     "name": "Pidgeot (Shadow)",
+     "rank": 282,
+     "score": 81.4,
+     "types": [
+      "normal",
+      "flying"
+     ],
+     "fastMove": "GUST",
+     "chargedMoves": [
+      "AIR_CUTTER",
+      "BRAVE_BIRD"
+     ],
+     "moveNames": [
+      "Gust",
+      "Air Cutter",
+      "Brave Bird"
+     ],
+     "role": "flex",
+     "inMetaGroup": false,
+     "note": "Creator prefers Gust/Air Cutter over PvPoke's Wing Attack/Twister"
+    }
+   ],
+   "incomplete": "Third shadow member is garbled in the transcript",
+   "suggestedThird": {
+    "speciesId": "mimikyu",
+    "name": "Mimikyu (Busted)",
+    "rank": 5,
+    "teamScore": 646.6,
+    "unansweredMeta": [
+     "Diggersby",
+     "Morpeko (Hangry)"
+    ]
+   }
+  },
+  {
+   "id": 5,
+   "name": "Shadow Kingdra with Lickilicky swap (community)",
+   "members": [
+    {
+     "speciesId": "kingdra_shadow",
+     "name": "Kingdra (Shadow)",
+     "rank": 27,
+     "score": 90.3,
+     "types": [
+      "water",
+      "dragon"
+     ],
+     "fastMove": "DRAGON_BREATH",
+     "chargedMoves": [
+      "SURF",
+      "OUTRAGE"
+     ],
+     "moveNames": [
+      "Dragon Breath",
+      "Surf",
+      "Outrage"
+     ],
+     "role": "closer",
+     "inMetaGroup": false
+    },
+    {
+     "speciesId": "lickilicky",
+     "name": "Lickilicky",
+     "rank": 1,
+     "score": 93.7,
+     "types": [
+      "normal"
+     ],
+     "fastMove": "ROLLOUT",
+     "chargedMoves": [
+      "BODY_SLAM",
+      "SHADOW_BALL"
+     ],
+     "moveNames": [
+      "Rollout",
+      "Body Slam",
+      "Shadow Ball"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true
+    }
+   ],
+   "incomplete": "Lead is not named; the video only says it is weak to Fairy types",
+   "suggestedThird": {
+    "speciesId": "mimikyu",
+    "name": "Mimikyu (Busted)",
+    "rank": 5,
+    "teamScore": 644.3,
+    "unansweredMeta": [
+     "Tinkaton",
+     "Jumpluff",
+     "Corviknight"
+    ]
+   }
+  },
+  {
+   "id": 6,
+   "name": "Mantine + Galarian Stunfisk (creator)",
+   "members": [
+    {
+     "speciesId": "mantine",
+     "name": "Mantine",
+     "rank": 55,
+     "score": 89.3,
+     "types": [
+      "water",
+      "flying"
+     ],
+     "fastMove": "WING_ATTACK",
+     "chargedMoves": [
+      "TWISTER",
+      "WATER_PULSE"
+     ],
+     "moveNames": [
+      "Wing Attack",
+      "Twister",
+      "Water Pulse"
+     ],
+     "role": "lead",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "lickilicky",
+     "name": "Lickilicky",
+     "rank": 1,
+     "score": 93.7,
+     "types": [
+      "normal"
+     ],
+     "fastMove": "ROLLOUT",
+     "chargedMoves": [
+      "BODY_SLAM",
+      "SHADOW_BALL"
+     ],
+     "moveNames": [
+      "Rollout",
+      "Body Slam",
+      "Shadow Ball"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true,
+     "note": "Solar Beam Lickilicky also suggested"
+    },
+    {
+     "speciesId": "stunfisk_galarian",
+     "name": "Stunfisk (Galarian)",
+     "rank": 71,
+     "score": 88.5,
+     "types": [
+      "ground",
+      "steel"
+     ],
+     "fastMove": "MUD_SHOT",
+     "chargedMoves": [
+      "ROCK_SLIDE",
+      "EARTHQUAKE"
+     ],
+     "moveNames": [
+      "Mud Shot",
+      "Rock Slide",
+      "Earthquake"
+     ],
+     "role": "closer",
+     "inMetaGroup": false
+    }
+   ],
+   "teamScore": 495.9,
+   "coverage": 615.9,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 37.9,
+   "unansweredMeta": [
+    "Clodsire",
+    "Corviknight",
+    "Azumarill",
+    "Furret",
+    "Grumpig",
+    "Thievul",
+    "Cradily"
+   ],
+   "sharedWeaknesses": [
+    "Quagsire",
+    "Forretress",
+    "Forretress (Shadow)",
+    "Medicham",
+    "Malamar",
+    "Morpeko (Hangry)"
+   ],
+   "alternatives": [
+    {
+     "replace": "lickilicky",
+     "with": "ferrothorn",
+     "teamScore": 429.2,
+     "unansweredMeta": [
+      "Forretress",
+      "Forretress (Shadow)",
+      "Corsola (Galarian)",
+      "Clodsire",
+      "Furret",
+      "Grumpig",
+      "Thievul",
+      "Sableye",
+      "Wigglytuff"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Unovan Stunfisk + Seaking + Pelipper (creator)",
+   "members": [
+    {
+     "speciesId": "stunfisk",
+     "name": "Stunfisk",
+     "rank": 72,
+     "score": 88.4,
+     "types": [
+      "ground",
+      "electric"
+     ],
+     "fastMove": "THUNDER_SHOCK",
+     "chargedMoves": [
+      "MUD_BOMB",
+      "DISCHARGE"
+     ],
+     "moveNames": [
+      "Thunder Shock",
+      "Mud Bomb",
+      "Discharge"
+     ],
+     "role": "lead",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "seaking",
+     "name": "Seaking",
+     "rank": 84,
+     "score": 87.9,
+     "types": [
+      "water"
+     ],
+     "fastMove": "PECK",
+     "chargedMoves": [
+      "DRILL_RUN",
+      "ICY_WIND"
+     ],
+     "moveNames": [
+      "Peck",
+      "Drill Run",
+      "Icy Wind"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true,
+     "note": "Two legacy moves"
+    },
+    {
+     "speciesId": "pelipper",
+     "name": "Pelipper",
+     "rank": 81,
+     "score": 88,
+     "types": [
+      "water",
+      "flying"
+     ],
+     "fastMove": "WING_ATTACK",
+     "chargedMoves": [
+      "WEATHER_BALL_WATER",
+      "HURRICANE"
+     ],
+     "moveNames": [
+      "Wing Attack",
+      "Weather Ball (Water)",
+      "Hurricane"
+     ],
+     "role": "closer",
+     "inMetaGroup": false
+    }
+   ],
+   "teamScore": 301.7,
+   "coverage": 583.7,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 0.2,
+   "unansweredMeta": [
+    "Mimikyu (Busted)",
+    "Forretress",
+    "Feraligatr",
+    "Forretress (Shadow)",
+    "Corsola (Galarian)",
+    "Feraligatr (Shadow)",
+    "Kingdra",
+    "Azumarill",
+    "Sableye (Shadow)",
+    "Seismitoad",
+    "Sealeo (Shadow)",
+    "Thievul",
+    "Sableye",
+    "Wigglytuff",
+    "Cradily",
+    "Florges",
+    "Dewgong",
+    "Malamar",
+    "Charjabug"
+   ],
+   "sharedWeaknesses": [
+    "Mimikyu (Busted)",
+    "Quagsire",
+    "Jellicent",
+    "Forretress",
+    "Forretress (Shadow)",
+    "Sableye (Shadow)",
+    "Cradily",
+    "Charjabug",
+    "Electrode (Hisuian)"
+   ],
+   "alternatives": [
+    {
+     "replace": "pelipper",
+     "with": "mantine",
+     "teamScore": 368.9,
+     "unansweredMeta": [
+      "Mimikyu (Busted)",
+      "Forretress",
+      "Feraligatr",
+      "Forretress (Shadow)",
+      "Corsola (Galarian)",
+      "Feraligatr (Shadow)",
+      "Azumarill",
+      "Seismitoad",
+      "Sealeo (Shadow)",
+      "Thievul",
+      "Sableye",
+      "Wigglytuff",
+      "Cradily",
+      "Florges",
+      "Charjabug"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "name": "Altaria / Ninetales / Empoleon (creator)",
+   "members": [
+    {
+     "speciesId": "altaria",
+     "name": "Altaria",
+     "rank": 3,
+     "score": 92.2,
+     "types": [
+      "dragon",
+      "flying"
+     ],
+     "fastMove": "DRAGON_BREATH",
+     "chargedMoves": [
+      "SKY_ATTACK",
+      "FLAMETHROWER"
+     ],
+     "moveNames": [
+      "Dragon Breath",
+      "Sky Attack",
+      "Flamethrower"
+     ],
+     "role": "lead",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "ninetales",
+     "name": "Ninetales",
+     "rank": 12,
+     "score": 91.4,
+     "types": [
+      "fire"
+     ],
+     "fastMove": "EMBER",
+     "chargedMoves": [
+      "WEATHER_BALL_FIRE",
+      "ENERGY_BALL"
+     ],
+     "moveNames": [
+      "Ember",
+      "Weather Ball (Fire)",
+      "Energy Ball"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true,
+     "note": "Dewgong if Mantine is a problem"
+    },
+    {
+     "speciesId": "empoleon",
+     "name": "Empoleon",
+     "rank": 4,
+     "score": 92.2,
+     "types": [
+      "water",
+      "steel"
+     ],
+     "fastMove": "METAL_SOUND",
+     "chargedMoves": [
+      "HYDRO_CANNON",
+      "DRILL_PECK"
+     ],
+     "moveNames": [
+      "Metal Sound",
+      "Hydro Cannon",
+      "Drill Peck"
+     ],
+     "role": "closer",
+     "inMetaGroup": true
+    }
+   ],
+   "teamScore": 510.0,
+   "coverage": 624.0,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 44.4,
+   "unansweredMeta": [
+    "Mimikyu (Busted)",
+    "Corsola (Galarian)",
+    "Guzzlord",
+    "Mantine"
+   ],
+   "sharedWeaknesses": [
+    "Mimikyu (Busted)",
+    "Jellicent",
+    "Corsola (Galarian)",
+    "Fearow",
+    "Kingdra",
+    "Guzzlord",
+    "Seismitoad",
+    "Cradily",
+    "Florges",
+    "Stunfisk",
+    "Seaking"
+   ],
+   "alternatives": [
+    {
+     "replace": "ninetales",
+     "with": "dewgong",
+     "teamScore": 417.1,
+     "unansweredMeta": [
+      "Mimikyu (Busted)",
+      "Jellicent",
+      "Corsola (Galarian)",
+      "Feraligatr (Shadow)",
+      "Seismitoad",
+      "Medicham",
+      "Grumpig",
+      "Thievul",
+      "Sableye",
+      "Mantine"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "name": "Swanna double ground (creator)",
+   "members": [
+    {
+     "speciesId": "swanna",
+     "name": "Swanna",
+     "rank": 217,
+     "score": 83.1,
+     "types": [
+      "water",
+      "flying"
+     ],
+     "fastMove": "GUST",
+     "chargedMoves": [
+      "AQUA_JET",
+      "FLY"
+     ],
+     "moveNames": [
+      "Gust",
+      "Aqua Jet",
+      "Fly"
+     ],
+     "role": "lead",
+     "inMetaGroup": false
+    },
+    {
+     "speciesId": "seismitoad",
+     "name": "Seismitoad",
+     "rank": 32,
+     "score": 90.2,
+     "types": [
+      "water",
+      "ground"
+     ],
+     "fastMove": "MUD_SHOT",
+     "chargedMoves": [
+      "EARTH_POWER",
+      "ICY_WIND"
+     ],
+     "moveNames": [
+      "Mud Shot",
+      "Earth Power",
+      "Icy Wind"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "diggersby",
+     "name": "Diggersby",
+     "rank": 44,
+     "score": 89.6,
+     "types": [
+      "normal",
+      "ground"
+     ],
+     "fastMove": "QUICK_ATTACK",
+     "chargedMoves": [
+      "FIRE_PUNCH",
+      "SCORCHING_SANDS"
+     ],
+     "moveNames": [
+      "Quick Attack",
+      "Fire Punch",
+      "Scorching Sands"
+     ],
+     "role": "closer",
+     "inMetaGroup": true
+    }
+   ],
+   "teamScore": 467.5,
+   "coverage": 599.5,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 24.7,
+   "unansweredMeta": [
+    "Lickilicky",
+    "Jellicent",
+    "Cramorant",
+    "Feraligatr",
+    "Feraligatr (Shadow)",
+    "Kingdra",
+    "Furret",
+    "Cradily"
+   ],
+   "sharedWeaknesses": [
+    "Altaria",
+    "Mimikyu (Busted)",
+    "Jellicent",
+    "Furret",
+    "Cradily",
+    "Electrode (Hisuian)"
+   ]
+  },
+  {
+   "id": 10,
+   "name": "Shadow Starmie experiment (creator)",
+   "members": [
+    {
+     "speciesId": "starmie_shadow",
+     "name": "Starmie (Shadow)",
+     "rank": 288,
+     "score": 81.3,
+     "types": [
+      "water",
+      "psychic"
+     ],
+     "fastMove": "PSYWAVE",
+     "chargedMoves": [
+      "AQUA_JET",
+      "POWER_GEM"
+     ],
+     "moveNames": [
+      "Psywave",
+      "Aqua Jet",
+      "Power Gem"
+     ],
+     "role": "lead",
+     "inMetaGroup": false
+    },
+    {
+     "speciesId": "diggersby",
+     "name": "Diggersby",
+     "rank": 44,
+     "score": 89.6,
+     "types": [
+      "normal",
+      "ground"
+     ],
+     "fastMove": "QUICK_ATTACK",
+     "chargedMoves": [
+      "FIRE_PUNCH",
+      "SCORCHING_SANDS"
+     ],
+     "moveNames": [
+      "Quick Attack",
+      "Fire Punch",
+      "Scorching Sands"
+     ],
+     "role": "safe swap",
+     "inMetaGroup": true
+    },
+    {
+     "speciesId": "tinkaton",
+     "name": "Tinkaton",
+     "rank": 2,
+     "score": 92.6,
+     "types": [
+      "fairy",
+      "steel"
+     ],
+     "fastMove": "FAIRY_WIND",
+     "chargedMoves": [
+      "GIGATON_HAMMER",
+      "BULLDOZE"
+     ],
+     "moveNames": [
+      "Fairy Wind",
+      "Gigaton Hammer",
+      "Bulldoze"
+     ],
+     "role": "closer",
+     "inMetaGroup": true
+    }
+   ],
+   "teamScore": 467.4,
+   "coverage": 647.4,
+   "positionInDerivedTop": null,
+   "percentileOfPoolTrios": 24.6,
+   "unansweredMeta": [
+    "Quagsire (Shadow)",
+    "Jellicent",
+    "Ninetales",
+    "Seismitoad",
+    "Seaking",
+    "Annihilape (Shadow)"
+   ],
+   "sharedWeaknesses": [
+    "Empoleon",
+    "Quagsire (Shadow)",
+    "Quagsire",
+    "Jellicent",
+    "Forretress",
+    "Ninetales",
+    "Ninetales (Shadow)",
+    "Forretress (Shadow)",
+    "Corviknight",
+    "Feraligatr (Shadow)",
+    "Furret",
+    "Seismitoad",
+    "Grumpig",
+    "Thievul",
+    "Sableye",
+    "Cradily",
+    "Malamar",
+    "Gourgeist (Super)"
+   ]
+  }
+ ]
+}
