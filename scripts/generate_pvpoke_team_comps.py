@@ -73,8 +73,9 @@ def base_species(species_id):
 
 
 class League:
-    def __init__(self, slug, gm, entries, group):
+    def __init__(self, slug, gm, entries, group, move_overrides=None):
         self.slug = slug
+        self.move_overrides = dict(move_overrides or {})
         self.pokemon = {p["speciesId"]: p for p in gm["pokemon"]}
         self.moves = {m["moveId"]: m for m in gm["moves"]}
         self.rank = {e["speciesId"]: i + 1 for i, e in enumerate(entries)}
@@ -88,8 +89,6 @@ class League:
                 seen.add(g["speciesId"])
                 self.meta.append(g)
         self.meta.sort(key=lambda g: self.rank[g["speciesId"]])
-        # Movesets: the ranking's recommended moveset (what the rankings page shows).
-        self.moveset = {g["speciesId"]: list(self.entry[g["speciesId"]]["moveset"]) for g in self.meta}
         # Published simulated ratings: (attacker, defender) -> rating 0..1000
         self.published = {}
         for e in entries:
@@ -109,8 +108,12 @@ class League:
     def types(self, sid):
         return [t for t in self.pokemon[sid]["types"] if t and t != "none"]
 
+    def moves_of(self, sid):
+        """Moveset used for sid: an override if given, else PvPoke's recommended moveset."""
+        return list(self.move_overrides.get(sid) or self.entry[sid]["moveset"])
+
     def move_types(self, sid):
-        return [self.moves[m]["type"] for m in self.moveset[sid] if m in self.moves]
+        return [self.moves[m]["type"] for m in self.moves_of(sid) if m in self.moves]
 
     def rating(self, atk, dfn):
         """Estimated battle rating (0..1000) of atk vs dfn."""
@@ -132,7 +135,7 @@ class League:
 
     def label(self, sid):
         e = self.entry[sid]
-        ms = self.moveset[sid]
+        ms = self.moves_of(sid)
         return {
             "speciesId": sid,
             "name": e["speciesName"],

@@ -60,3 +60,18 @@ Per team: `teamScore`, `coverage` (mean best-member rating across the meta, 0-10
 `members` (with rank, score, moveset), `unansweredMeta` (meta Pokémon no member is rated above 500
 against) and `sharedWeaknesses` (meta Pokémon that clearly beat two or more members).
 Treat it as a shortlist to verify in PvPoke's Team Builder, not as a simulation result.
+
+## Checking hand-picked teams against the meta
+
+`scripts/evaluate_teams.py` scores teams from any source (a video, Twitter) with the same heuristic
+and shows how they compare with the top-ranked Pokémon: member ranks, team score, the percentile
+against every trio from the top 40 of the meta group, the position it would take in the derived
+top 25, unanswered meta Pokémon, shared weaknesses, alternatives, and a suggested third member
+for incomplete teams.
+
+```sh
+python3 scripts/evaluate_teams.py data/community-teams-great.json -o data/community-teams-great-analysis.json
+```
+
+`data/community-teams-great.json` holds ten Great League teams transcribed from a community video
+(with the video's movesets); `data/community-teams-great-analysis.json` is the scored result.

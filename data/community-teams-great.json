@@ -1,0 +1,94 @@
+{
+  "league": "great",
+  "source": "YouTube video transcript: '10 best teams for the Great League' (5 community teams from Twitter, 5 from the creator)",
+  "notes": [
+    "Species and moves were mapped from a speech-to-text transcript; ambiguous spots are flagged per team.",
+    "'Sableye' in team 2 is a transcription error: Sand Attack / Air Cutter / Payback is Corviknight's moveset.",
+    "'Calyrex form' in team 3 is a transcription error for Castform."
+  ],
+  "teams": [
+    {
+      "id": 1, "name": "Umbreon closer (community, Rizzie)",
+      "members": [
+        {"speciesId": "forretress", "role": "lead", "moves": ["VOLT_SWITCH", "SAND_TOMB", "ROCK_TOMB"], "note": "Non-shadow; Volt Switch preferred over Bug Bite"},
+        {"speciesId": "sealeo_shadow", "role": "safe swap", "moves": ["POWDER_SNOW", "SURF", "BODY_SLAM"]},
+        {"speciesId": "umbreon", "role": "closer", "moves": ["SNARL", "FOUL_PLAY", "LAST_RESORT"]}
+      ],
+      "videoWeaknesses": ["morpeko_full_belly", "annihilape"]
+    },
+    {
+      "id": 2, "name": "Steel/Dragon core with Aegislash (community)",
+      "members": [
+        {"speciesId": "corviknight", "role": "flex", "moves": ["SAND_ATTACK", "AIR_CUTTER", "PAYBACK"], "note": "Transcript says 'Sableye' but the moves are Corviknight's"},
+        {"speciesId": "aegislash_shield", "role": "flex", "moves": ["AEGISLASH_CHARGE_PSYCHO_CUT", "SHADOW_BALL", "GYRO_BALL"]},
+        {"speciesId": "dragonite", "role": "flex", "moves": ["DRAGON_BREATH", "THUNDER_PUNCH", "SUPERPOWER"], "note": "Inferred: the video names a Dragon partner and mentions Dragonite; Altaria is the other plausible reading", "alternatives": ["altaria"]}
+      ]
+    },
+    {
+      "id": 3, "name": "Castform Energy Ball (creator)",
+      "members": [
+        {"speciesId": "castform", "role": "lead", "moves": ["HEX", "WEATHER_BALL_ROCK", "ENERGY_BALL"]},
+        {"speciesId": "sableye", "role": "safe swap", "moves": ["SHADOW_CLAW", "DRAIN_PUNCH", "FOUL_PLAY"], "note": "Drain Punch tech"},
+        {"speciesId": "tinkaton", "role": "closer", "moves": ["FAIRY_WIND", "GIGATON_HAMMER", "BULLDOZE"]}
+      ]
+    },
+    {
+      "id": 4, "name": "Triple shadow with Pidgeot (community)",
+      "members": [
+        {"speciesId": "ninetales_shadow", "role": "flex", "moves": ["EMBER", "WEATHER_BALL_FIRE", "ENERGY_BALL"]},
+        {"speciesId": "pidgeot_shadow", "role": "flex", "moves": ["GUST", "AIR_CUTTER", "BRAVE_BIRD"], "note": "Creator prefers Gust/Air Cutter over PvPoke's Wing Attack/Twister"}
+      ],
+      "incomplete": "Third shadow member is garbled in the transcript"
+    },
+    {
+      "id": 5, "name": "Shadow Kingdra with Lickilicky swap (community)",
+      "members": [
+        {"speciesId": "kingdra_shadow", "role": "closer", "moves": ["DRAGON_BREATH", "SURF", "OUTRAGE"]},
+        {"speciesId": "lickilicky", "role": "safe swap", "moves": ["ROLLOUT", "BODY_SLAM", "SHADOW_BALL"]}
+      ],
+      "incomplete": "Lead is not named; the video only says it is weak to Fairy types"
+    },
+    {
+      "id": 6, "name": "Mantine + Galarian Stunfisk (creator)",
+      "members": [
+        {"speciesId": "mantine", "role": "lead", "moves": ["WING_ATTACK", "TWISTER", "WATER_PULSE"]},
+        {"speciesId": "lickilicky", "role": "safe swap", "moves": ["ROLLOUT", "BODY_SLAM", "SHADOW_BALL"], "alternatives": ["ferrothorn"], "note": "Solar Beam Lickilicky also suggested"},
+        {"speciesId": "stunfisk_galarian", "role": "closer", "moves": ["MUD_SHOT", "ROCK_SLIDE", "EARTHQUAKE"]}
+      ]
+    },
+    {
+      "id": 7, "name": "Unovan Stunfisk + Seaking + Pelipper (creator)",
+      "members": [
+        {"speciesId": "stunfisk", "role": "lead", "moves": ["THUNDER_SHOCK", "MUD_BOMB", "DISCHARGE"]},
+        {"speciesId": "seaking", "role": "safe swap", "moves": ["PECK", "DRILL_RUN", "ICY_WIND"], "note": "Two legacy moves"},
+        {"speciesId": "pelipper", "role": "closer", "moves": ["WING_ATTACK", "WEATHER_BALL_WATER", "HURRICANE"], "alternatives": ["mantine"]}
+      ]
+    },
+    {
+      "id": 8, "name": "Altaria / Ninetales / Empoleon (creator)",
+      "members": [
+        {"speciesId": "altaria", "role": "lead", "moves": ["DRAGON_BREATH", "SKY_ATTACK", "FLAMETHROWER"]},
+        {"speciesId": "ninetales", "role": "safe swap", "moves": ["EMBER", "WEATHER_BALL_FIRE", "ENERGY_BALL"], "alternatives": ["dewgong"], "note": "Dewgong if Mantine is a problem"},
+        {"speciesId": "empoleon", "role": "closer", "moves": ["METAL_SOUND", "HYDRO_CANNON", "DRILL_PECK"]}
+      ],
+      "videoWeaknesses": ["mantine"]
+    },
+    {
+      "id": 9, "name": "Swanna double ground (creator)",
+      "members": [
+        {"speciesId": "swanna", "role": "lead", "moves": ["GUST", "AQUA_JET", "FLY"]},
+        {"speciesId": "seismitoad", "role": "safe swap", "moves": ["MUD_SHOT", "EARTH_POWER", "ICY_WIND"]},
+        {"speciesId": "diggersby", "role": "closer", "moves": ["MUD_SHOT", "FIRE_PUNCH", "SCORCHING_SANDS"]}
+      ]
+    },
+    {
+      "id": 10, "name": "Shadow Starmie experiment (creator)",
+      "members": [
+        {"speciesId": "starmie_shadow", "role": "lead", "moves": ["PSYWAVE", "AQUA_JET", "POWER_GEM"]},
+        {"speciesId": "diggersby", "role": "safe swap", "moves": ["QUICK_ATTACK", "FIRE_PUNCH", "SCORCHING_SANDS"]},
+        {"speciesId": "tinkaton", "role": "closer", "moves": ["FAIRY_WIND", "GIGATON_HAMMER", "BULLDOZE"]}
+      ],
+      "openQuestion": "Creator asks which team Starmie fits best"
+    }
+  ]
+}
