@@ -1,6 +1,25 @@
 # pokescan
 
-Single-page Pokémon GO screenshot scanner (`index.html`).
+Pokémon GO screenshot scanner and Great League team planner. Runs entirely in the browser,
+installable as a PWA: https://martijn-veenstra.github.io/pokescan/
+
+- **Scans** tab: import screenshots or a screen recording, solve level and IVs, see Great/Ultra League
+  rank, power-up cost to the cap, evolution preview (CP now, whether it fits under 1500, target level)
+  and second-move cost.
+- **Team builder** tab: your Great League roster is derived from the scans (≤1500 CP, one per species),
+  with pending pieces, candidate pickups and tagged in-game parties you add yourself. It ranks the trios
+  you can build today, with pending pieces, with candidates, the marginal value of each candidate and the
+  best two teams with no species in common. Export the roster as `roster-great.json` for the Python scripts.
+
+Files: `index.html` (app), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
+(PWA), `data/app-great.json` (bundled PvPoke data). `.github/workflows/update-data.yml` regenerates all
+data files every Monday and commits them, so the app updates itself.
+
+## Bundled app data
+
+`scripts/build_app_data.py` writes `data/app-great.json`: rankings with recommended movesets, published
+matchups/counters, move names and types, the curated meta group, evolutions and second-move cost. The
+page loads this file (offline via the service worker) instead of calling PvPoke live.
 
 ## PvPoke rankings JSON
 

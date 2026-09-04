@@ -1,0 +1,36 @@
+name: Update PvPoke data
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Regenerate data files
+        run: |
+          python3 scripts/generate_pvpoke_rankings.py
+          python3 scripts/generate_pvpoke_team_comps.py
+          python3 scripts/build_app_data.py
+          python3 scripts/evaluate_teams.py data/community-teams-great.json -o data/community-teams-great-analysis.json
+          python3 scripts/generate_roster_team_comps.py --pretty
+      - name: Commit and push if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No data changes"
+          else
+            git commit -m "Update PvPoke data ($(date -u +%Y-%m-%d))"
+            git push
+          fi
