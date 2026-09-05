@@ -30,3 +30,19 @@ jobs:
           fi
           npm i -g @railway/cli
           railway up --service "$SERVICE" --ci
+      - name: Smoke check the live health endpoint
+        env:
+          APP_URL: ${{ vars.APP_URL || 'https://pokescan-production.up.railway.app' }}
+        run: |
+          echo "Waiting for $APP_URL/api/health ..."
+          for i in $(seq 1 20); do
+            if out=$(curl -sf --max-time 10 "$APP_URL/api/health"); then
+              echo "health: $out"
+              echo "$out" | grep -q '"storage":"postgres"' || echo "::warning::storage is not postgres - is DATABASE_URL set on the service?"
+              echo "$out" | grep -q '"sync":true' || echo "::warning::sync is off - is PASSCODE set on the service?"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::health endpoint did not answer within 2 minutes"
+          exit 1
