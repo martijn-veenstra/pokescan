@@ -1,5 +1,5 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v9';
+const VERSION = 'pokescan-v9.1';
 const SHELL = ['./', 'index.html', 'pvp.js', 'planner.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const DATA = ['data/app-great.json'];
 
@@ -16,7 +16,7 @@ self.addEventListener('fetch', e => {
   if (url.pathname.includes('/data/')) {
     // stale-while-revalidate: serve cached data at once, refresh in the background
     e.respondWith(caches.open(VERSION).then(async c => {
-      const cached = await c.match(e.request);
+      const cached = await c.match(e.request, {ignoreSearch: true});
       const net = fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; }).catch(() => cached);
       return cached || net;
     }));

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="pvp.js"></script>
+<script src="pvp.js?v=9.1"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -378,22 +378,34 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
+const APP_VERSION='9.1';
+function showLoadError(msg){
+  for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
+}
 async function loadMeta(){
+  let loaded=false;
+  const slow=setTimeout(()=>{ if(!loaded) showLoadError('The PvPoke data file is taking long to load. Offline, or the first visit on a slow connection?'); }, 12000);
   try{
-    const r=await fetch('data/app-great.json',{cache:'no-cache'});
-    APP=await r.json();
+    const r=await fetch('data/app-great.json?v='+APP_VERSION,{cache:'no-cache'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    APP=await r.json(); loaded=true; clearTimeout(slow);
+    APP.prevo=APP.prevo||{}; APP.unranked=APP.unranked||{}; APP.benchmark=APP.benchmark||{best:720.9,median:521.5};
     META={}; for(const [id,e] of Object.entries(APP.pokemon)) META[id]=[e.rank, e.score, e.moveset];
     const di=$('datainfo'); if(di) di.textContent=`PvPoke ${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} meta Pokémon`;
     const dl=$('species'); if(dl) dl.innerHTML=Object.keys(APP.pokemon).map(id=>`<option value="${id}">`).join('');
-    render(); if(window.Planner) Planner.refresh();
   }catch(e){
+    clearTimeout(slow);
+    showLoadError('data/app-great.json did not load ('+(e&&e.message||e)+').');
     try{  // fallback: live PvPoke rankings, meta chips only
       const r=await fetch('https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-1500.json');
       const arr=await r.json();
       META={}; arr.forEach((e,i)=>META[e.speciesId]=[i+1, Math.round((e.score||0)*10)/10, e.moveset||[]]);
-      render();
     }catch(e2){}
   }
+  // render separately: an error here must be visible, never swallowed
+  try{ render(); }catch(e){ console.error(e); status('render error: '+e.message); }
+  try{ if(window.Planner) Planner.refresh(); else showLoadError('planner.js did not load.'); }
+  catch(e){ console.error(e); showLoadError('Error in the planner: '+(e&&e.message||e)); }
 }
 loadMeta();
 function metaFor(species){
@@ -909,6 +921,6 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="planner.js"></script>
+<script src="planner.js?v=9.1"></script>
 </body>
 </html>

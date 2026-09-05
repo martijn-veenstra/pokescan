@@ -137,7 +137,7 @@ function nextMoves(m) {
   }
   for (const g of rep.gains) {
     const delta = Math.round((g.bestTrio.teamScore - bestScore) * 10) / 10;
-    const id = g.speciesId, a = auto[id], pre = APP.prevo[id];
+    const id = g.speciesId, a = auto[id], pre = (APP.prevo || {})[id];
     let title, sub = `lifts your best team to ${g.bestTrio.teamScore.toFixed(1)}`;
     if (a) { const c = costTo(a.level, a.toLevel); title = `Evolve your ${a.from} → ${nm(id)}`; sub += ` · fits to L${a.toLevel} · ${fmt(c.dust)} dust after evolving`; }
     else if (id in ri.pending) { title = `Get ${nm(id)}`; }
@@ -157,8 +157,17 @@ function teamLine(t, title) {
               t.sharedWeaknesses.length ? `two lose to ${esc(t.sharedWeaknesses.join(', '))}` : ''].filter(Boolean).join(' · ');
   return `<div class="team" onclick="Planner.coverage(${JSON.stringify(t.members.map(m => m.speciesId)).replace(/"/g, '&quot;')})"><span class="sc">${t.teamScore.toFixed(1)}</span><span class="nm">${title ? esc(title) + ': ' : ''}${t.members.map(m => `${esc(m.name)} <span class="dim">#${m.rank}</span>`).join(' / ')}</span><div class="dt">${dt}</div></div>`;
 }
+function errorCard(where, e) {
+  console.error(e);
+  return `<div class="empty"><b>The ${where} view hit an error.</b><br><span style="font-family:ui-monospace,monospace;font-size:12px">${esc(e && e.message || e)}</span><br><br>
+    <button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button>
+    <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data</button></div>`;
+}
 function renderToday() {
   const el = $('today'); if (!el) return;
+  try { renderTodayInner(el); } catch (e) { el.innerHTML = errorCard('Today', e); }
+}
+function renderTodayInner(el) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
   const m = M(), {L, rep, own} = m, best = rep.today[0];
   const bm = APP.benchmark || {best: 721, median: 521};
@@ -203,6 +212,9 @@ function renderToday() {
 
 /* ---------- coverage overlay (B) ---------- */
 function coverage(team) {
+  try { coverageInner(team); } catch (e) { $('sheet').innerHTML = `<div class="box">${errorCard('coverage', e)}</div>`; $('sheet').classList.add('open'); }
+}
+function coverageInner(team) {
   const m = M(), {L, own, ri} = m, ev = L.evaluate(team);
   const rows = L.meta.filter((o, i) => i < 15 || ev.holes.includes(o) || ev.shared.includes(o));
   const cls = r => r >= 500 ? 'w' : r < 400 ? 'l' : 'e';
@@ -218,7 +230,7 @@ function coverage(team) {
   }
   swaps.sort((a, b) => b.delta - a.delta);
   const grid = `<div class="cov"><div class="cr head"><span>Meta threat</span>${team.map(t => `<span>${esc(nm(t))}</span>`).join('')}</div>` +
-    rows.map(o => `<div class="cr ${ev.shared.includes(o) || ev.holes.includes(o) ? 'tint' : ''}"><span>${esc(nm(o))} <span class="dim">#${APP.pokemon[o].rank}</span></span>${team.map(t => `<i class="${cls(L.rating(t, o))} ${L.isPublished(t, o) ? '' : 'est'}" title="${Math.round(L.rating(t, o))}"></i>`).join('')}</div>`).join('') +
+    rows.map(o => `<div class="cr ${ev.shared.includes(o) || ev.holes.includes(o) ? 'tint' : ''}"><span>${esc(nm(o))} <span class="dim">#${APP.pokemon[o].rank}</span></span>${team.map(t => `<i class="${cls(L.rating(t, o))} ${(L.isPublished ? L.isPublished(t, o) : true) ? '' : 'est'}" title="${Math.round(L.rating(t, o))}"></i>`).join('')}</div>`).join('') +
     `<div class="legend"><span><i class="w"></i>wins</span><span><i class="e"></i>even</span><span><i class="l"></i>loses</span><span><i class="w est"></i>faded = estimated from typing</span><span class="dim">${rows.length} of ${L.meta.length}</span></div></div>`;
   const readout = `${ev.holes.length ? `<b>${esc(ev.holes.map(nm).join(', '))}</b> ${ev.holes.length > 1 ? 'have' : 'has'} no green cell: nobody on this team beats ${ev.holes.length > 1 ? 'them' : 'it'}. ` : 'Every row has a green cell, so nothing is unanswered. '}${ev.shared.length ? `Tinted rows beat two of your three: if your lead meets one, swap straight to the one green Pokémon.` : ''}`;
   const sw = swaps.slice(0, 4).map(s => `<div class="swap"><span class="dim">Swap ${esc(nm(s.out))} → ${esc(nm(s.in))}${s.pending ? ' (pending)' : ''}</span><span class="${s.delta >= 0 ? 'up' : 'down'}">${s.delta >= 0 ? '+' : ''}${s.delta}${s.fixed.length ? ' · fixes ' + esc(s.fixed.slice(0, 2).join(', ')) : ''}${s.opened.length ? ' · opens ' + esc(s.opened.slice(0, 2).join(', ')) : ''}</span></div>`).join('');
@@ -241,7 +253,7 @@ function tiles(m) {
   }
   for (const [id, a] of Object.entries(auto)) out.push({id, st: 'pending', txt: `evolve ${a.from}`, sub: `#${APP.pokemon[id].rank} · fits to L${a.toLevel}`});
   for (const id of Object.keys(ROSTER.pending)) if (!own[id] && !auto[id] && APP.pokemon[id]) out.push({id, st: 'pending', txt: 'pending', sub: `#${APP.pokemon[id].rank}`});
-  for (const id of Object.keys(ri.candidates)) { const pre = APP.prevo[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
+  for (const id of Object.keys(ri.candidates)) { const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
     out.push({id, st: 'wanted', txt: sc ? `${nm(pre)} ≤ ${sc.safe} CP` : 'wanted', sub: `#${APP.pokemon[id].rank}`}); }
   for (const id of ROSTER.exclude) if (APP.pokemon[id]) out.push({id, st: 'bench', txt: 'benched', sub: `#${APP.pokemon[id].rank}`});
   const order = {ready: 0, power: 1, manual: 2, pending: 3, wanted: 4, xl: 5, bench: 6};
@@ -282,6 +294,9 @@ function detail(m, id) {
 }
 function renderRoster() {
   const el = $('board'); if (!el) return;
+  try { renderRosterInner(el); } catch (e) { el.innerHTML = errorCard('Roster', e); }
+}
+function renderRosterInner(el) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
   const m = M(), ts = tiles(m);
   const counts = {}; ts.forEach(t => counts[t.st] = (counts[t.st] || 0) + 1);
