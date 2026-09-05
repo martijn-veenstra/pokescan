@@ -115,11 +115,24 @@ video,canvas{display:none}
 .plan{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
 .plan b{color:var(--ink);font-weight:600}.plan .ok{color:var(--green)}.plan .no{color:var(--coral)}
 .note{font-size:12px;color:var(--dim);margin:4px 0 8px}
+h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);
+ color:var(--dim);font:700 15px Sora,sans-serif;display:flex;align-items:center;justify-content:center}
+#help{display:none;position:fixed;inset:0;background:rgba(6,10,20,.82);z-index:20;overflow:auto;
+ padding:calc(14px + env(safe-area-inset-top)) 14px 40px}
+#help.open{display:block}
+#help .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;max-width:560px;margin:0 auto;font-size:14px}
+#help h2{font-family:Sora,sans-serif;font-size:18px;margin:0 0 6px;display:flex;justify-content:space-between}
+#help h3{font-family:Sora,sans-serif;font-size:14px;margin:16px 0 4px;color:var(--green)}
+#help p,#help li{color:var(--ink);margin:4px 0;line-height:1.5}
+#help ul{padding-left:18px}
+#help .dim{color:var(--dim)}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;padding:16px;margin:10px 0;font-size:14px;color:var(--dim);line-height:1.6}
+.empty b{color:var(--ink)}
 </style>
 </head>
 <body>
-<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan</h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v8</div>
+<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
+<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v8.1</div>
 
 <div class="tabs">
   <button id="tab-scans" class="on" onclick="showTab('scans')">Scans</button>
@@ -160,13 +173,20 @@ video,canvas{display:none}
 </div>
 
 <div id="prog"><div class="bar"><div id="fill"></div></div><div id="stat"></div></div>
+<div id="empty" class="empty" style="display:none"><b>No scans on this device yet.</b><br>
+Tap <b>＋ Import scans</b> and pick Pokémon status-screen screenshots (or a screen recording of you swiping through them).
+Everything is solved on the phone and kept here until you delete it — you never need to rescan a Pokémon unless you power it up or evolve it.<br>
+Scanned before on another browser or the home-screen app? Use <b>Backup</b> there and <b>Restore</b> here.
+Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#" onclick="toggleHelp();return false" style="color:var(--green)">Read the help</a>.</div>
 <div id="out"></div>
 </div>
 
 <div id="view-roster" class="view">
   <div class="note" id="datainfo">Loading PvPoke data…</div>
-  <div class="sec">Owned (from scans, ≤1500 CP) <small id="owncount"></small></div>
+  <div class="sec">Owned <small id="owncount"></small></div>
+  <div class="note">Filled from your scans (≤1500 CP, best copy per species). Add Pokémon you own but have not scanned, or load the saved roster from the repo.</div>
   <div id="owned"></div>
+  <div class="add"><input id="addown" list="species" placeholder="species id, e.g. tinkaton"><button onclick="addTo('owned')">Add</button><button onclick="loadRepoRoster()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Load saved roster</button></div>
   <div class="sec">Pending <small>one item away (evolve, stone, TM)</small></div>
   <div class="rlist" id="pending"></div>
   <div class="add"><input id="addpend" list="species" placeholder="species id, e.g. lickilicky"><button onclick="addTo('pending')">Add</button></div>
@@ -181,6 +201,35 @@ video,canvas{display:none}
   <div id="teams"></div>
   <div class="note">Heuristic, not a simulation: PvPoke's published matchups where available, type effectiveness and ranking score otherwise. Scores are comparable with data/pvpoke-team-comps.json (top band 690–720, pool median 520).</div>
 </div>
+
+<div id="help" onclick="if(event.target===this)toggleHelp()"><div class="box">
+<h2>How to use PokeScan <span onclick="toggleHelp()" style="cursor:pointer;color:var(--dim)">✕</span></h2>
+<p class="dim">Everything runs on your phone. Scans, roster and settings live in this browser's storage and never leave the device.</p>
+<h3>1 · Scan your Pokémon</h3>
+<ul>
+<li>In Pokémon GO open a Pokémon's status screen and take a screenshot, or screen-record while swiping through your storage.</li>
+<li>Set your <b>trainer level</b> once, tap <b>＋ Import scans</b>, pick the screenshots or the recording.</li>
+<li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
+<li>Tap a card to correct species, CP, HP or level and re-solve. ✕ deletes it.</li>
+<li>Scans stay until you delete them. Rescan a Pokémon only after you power it up or evolve it, and delete the old card.</li>
+</ul>
+<h3>2 · Build teams</h3>
+<ul>
+<li><b>Owned</b> is filled from scans at or under 1500 CP, one copy per species. Fix the three moves per Pokémon; they default to what the screenshot showed or PvPoke's recommendation.</li>
+<li><b>Pending</b> are pieces one step away: evolutions of scanned Pokémon appear here by themselves, add stones/TM targets yourself.</li>
+<li><b>Candidates</b> are wild pickups you consider. <b>Marginal value</b> shows which one moves the needle.</li>
+<li><b>Tagged teams</b> are your in-game parties, scored as-is.</li>
+<li>Scores are on PvPoke's 0–1000 battle-rating scale: the best meta trios score 690–720, an average trio about 520. "No answer to X" means nobody on the team beats X.</li>
+<li>No scans yet? <b>Load saved roster</b> pulls the roster committed in the repo. <b>Export roster JSON</b> writes the file the Python scripts use.</li>
+</ul>
+<h3>3 · Data and updates</h3>
+<ul>
+<li>PvPoke rankings are bundled with the app and refreshed automatically every Monday. The date is shown at the top of Team builder.</li>
+<li>The app works offline after the first visit. Scanning itself needs a connection for the text-recognition library.</li>
+<li>Install it: on iPhone use Share → <b>Add to Home Screen</b>. Note that the home-screen app has its own storage: move scans with <b>Backup</b> and <b>Restore</b>.</li>
+<li>Team scores are a heuristic (PvPoke's published matchups plus type effectiveness), not a battle simulation. Verify a team in PvPoke's Team Builder before investing stardust.</li>
+</ul>
+</div></div>
 
 <video id="vid" playsinline muted></video>
 <canvas id="cv"></canvas>
@@ -584,8 +633,10 @@ document.getElementById('imp').addEventListener('change', async e=>{
 });
 function clearAll(){ results.length=0; save(); render(); }
 function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
+function toggleHelp(){ $('help').classList.toggle('open'); }
 function render(){
   $('count').textContent=results.length+' scanned';
+  const em=$('empty'); if(em) em.style.display=results.length?'none':'block';
   const mode=($('sort')||{}).value||'new';
   const order=results.map((r,i)=>i);
   const bp=r=>r.combos.length?Math.max(...r.combos.map(pct)):-1;
@@ -677,7 +728,7 @@ function planFor(r,best){
 }
 
 /* ---------- team builder (roster from scans + trio heuristic in pvp.js) ---------- */
-const ROSTER=Object.assign({pending:{},candidates:{},tagged:{},moves:{},exclude:[]}, JSON.parse(localStorage.getItem('roster')||'{}'));
+const ROSTER=Object.assign({owned:{},pending:{},candidates:{},tagged:{},moves:{},exclude:[]}, JSON.parse(localStorage.getItem('roster')||'{}'));
 function saveRoster(){ localStorage.setItem('roster',JSON.stringify(ROSTER)); }
 function showTab(t){
   for(const k of ['scans','roster']){ $('tab-'+k).classList.toggle('on',k===t); $('view-'+k).classList.toggle('on',k===t); }
@@ -707,8 +758,22 @@ function rosterOwned(){                      // GL-eligible scans, one per speci
     const gl=pvpRank(b,best[1],best[2],best[3],1500);
     if(!own[id]||gl.n<own[id].glRank) own[id]={id,glRank:gl.n,cp:r.cp,level:best[0],toLevel:gl.lv,toCP:gl.cp,ivs:[best[1],best[2],best[3]],txt:r.txt};
   }
-  for(const o of Object.values(own)) o.moves=ROSTER.moves[o.id]||detectMoves(o.id,o.txt);
+  for(const [id,mv] of Object.entries(ROSTER.owned||{}))          // owned but not scanned
+    if(!own[id]&&APP.pokemon[id]&&!ROSTER.exclude.includes(id)) own[id]={id,manual:true,glRank:null,moves:mv};
+  for(const o of Object.values(own)) o.moves=ROSTER.moves[o.id]||o.moves||detectMoves(o.id,o.txt);
   return own;
+}
+async function loadRepoRoster(){
+  try{
+    const r=await (await fetch('data/roster-great.json',{cache:'no-cache'})).json();
+    const scanned=rosterOwned();
+    for(const [k,v] of Object.entries(r.owned||{})) if(APP.pokemon[k]&&!scanned[k]) ROSTER.owned[k]=v||null;
+    for(const [k,v] of Object.entries(r.pending||{})) if(APP.pokemon[k]) ROSTER.pending[k]=v||null;
+    for(const k of Object.keys(r.candidates||{})) if(APP.pokemon[k]) ROSTER.candidates[k]=null;
+    for(const [k,v] of Object.entries(r.tagged||{})) if(v.length===3&&v.every(x=>APP.pokemon[x])) ROSTER.tagged[k]=v;
+    for(const [k,v] of Object.entries(Object.assign({},r.owned,r.pending))) if(v&&v.length&&APP.pokemon[k]) ROSTER.moves[k]=v;
+    saveRoster(); renderRoster(true);
+  }catch(e){ $('datainfo').textContent='Could not load data/roster-great.json'; }
 }
 function autoEvolutions(own){                // scanned pre-evolutions whose evolution fits under the cap
   const out={};
@@ -733,12 +798,12 @@ function rosterInput(){
   return {league:'great', owned, pending, candidates, tagged:ROSTER.tagged, _own:own, _auto:auto};
 }
 function addTo(kind){
-  const inp=$(kind==='pending'?'addpend':'addcand'), id=inp.value.trim().toLowerCase();
+  const inp=$({pending:'addpend',candidates:'addcand',owned:'addown'}[kind]), id=inp.value.trim().toLowerCase();
   if(!APP||!APP.pokemon[id]){ inp.value=''; inp.placeholder='unknown species id'; return; }
   ROSTER[kind][id]=null; inp.value=''; saveRoster(); renderRoster(true);
 }
 function dropFrom(kind,id){ delete ROSTER[kind][id]; saveRoster(); renderRoster(true); }
-function excludeId(id){ if(!ROSTER.exclude.includes(id)) ROSTER.exclude.push(id); saveRoster(); renderRoster(true); }
+function excludeId(id){ if(ROSTER.owned[id]){ delete ROSTER.owned[id]; } else if(!ROSTER.exclude.includes(id)) ROSTER.exclude.push(id); saveRoster(); renderRoster(true); }
 function includeId(id){ ROSTER.exclude=ROSTER.exclude.filter(x=>x!==id); saveRoster(); renderRoster(true); }
 function setMove(id,slot,val){ const cur=(ROSTER.moves[id]||rosterInput().owned[id]||rosterInput().pending[id]||APP.pokemon[id].moveset).slice();
   cur[slot]=val; ROSTER.moves[id]=cur; saveRoster(); renderRoster(true); }
@@ -771,8 +836,8 @@ function renderRoster(force){
   if(!$('view-roster').classList.contains('on')&&!force) { rosterDirty=true; return; }
   const ri=rosterInput(), own=ri._own;
   $('owncount').textContent=Object.keys(own).length+' species';
-  $('owned').innerHTML=Object.values(own).sort((a,b)=>a.glRank-b.glRank).map(o=>`<div class="own">
-    <div class="h"><b>${APP.pokemon[o.id].name}</b> <span>meta #${APP.pokemon[o.id].rank} · IV #${o.glRank} · ${o.cp} CP L${o.level}${o.toLevel>o.level?` → L${o.toLevel} (${o.toCP} CP)`:''}
+  $('owned').innerHTML=Object.values(own).sort((a,b)=>(a.glRank||9999)-(b.glRank||9999)).map(o=>`<div class="own">
+    <div class="h"><b>${APP.pokemon[o.id].name}</b> <span>meta #${APP.pokemon[o.id].rank}${o.manual?' · not scanned':` · IV #${o.glRank} · ${o.cp} CP L${o.level}${o.toLevel>o.level?` → L${o.toLevel} (${o.toCP} CP)`:''}`}
       <span class="x" style="margin-left:8px;cursor:pointer" onclick="excludeId('${o.id}')">✕</span></span></div>${movesRow(o.id,o.moves)}</div>`).join('')
     +(ROSTER.exclude.length?`<div class="note">Excluded: ${ROSTER.exclude.map(id=>`<span class="pill">${(APP.pokemon[id]||{name:id}).name}<span class="x" onclick="includeId('${id}')">↺</span></span>`).join(' ')}</div>`:'');
   $('pending').innerHTML=Object.keys(ri._auto).map(id=>`<span class="pill auto" title="evolve your scanned ${ri._auto[id]}">${APP.pokemon[id].name} <small style="color:var(--dim)">evolve ${ri._auto[id]}</small><span class="x" onclick="excludeId('${id}')">✕</span></span>`).join('')
@@ -781,7 +846,7 @@ function renderRoster(force){
   const L=PVP.fromRoster(APP, ri), rep=L.report(ri,5);
   $('tagged').innerHTML=rep.tagged.map(t=>teamCard(t,t.name).replace('</div></div>',`<span class="x" style="color:var(--dim);cursor:pointer;float:right" onclick="dropTag('${t.name.replace(/'/g,"\\'")}')">✕</span></div></div>`)).join('')||'<div class="note">No tagged teams yet.</div>';
   const sec=(title,small,list,empty)=>`<div class="sec">${title} <small>${small||''}</small></div>`+(list.length?list.map(t=>teamCard(t)).join(''):`<div class="note">${empty||'Not enough Pokémon yet.'}</div>`);
-  let html=sec('Best teams today','from owned only',rep.today,'Scan at least three Great League Pokémon (≤1500 CP).');
+  let html=sec('Best teams today','from owned only',rep.today,'Add or scan at least three Great League Pokémon (≤1500 CP), or tap Load saved roster.');
   if(Object.keys(ri.pending).length) html+=sec('With pending pieces','owned + pending',rep.pending);
   if(Object.keys(ri.candidates).length){
     html+=sec('With candidates','owned + pending + candidates',rep.candidates);
