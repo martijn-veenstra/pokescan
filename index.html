@@ -109,7 +109,8 @@ video,canvas{display:none}
 .mv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin:4px 0 8px}
 .mv select{font-size:12px;padding:5px}
 .own{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:6px 0}
-.own .h{display:flex;justify-content:space-between;font-size:13.5px}
+.own .h{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;flex-wrap:wrap}
+.own .h span{text-align:right;flex:1}
 .own .h b{font-weight:600}
 .own .h span{color:var(--dim);font-size:12px}
 .plan{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
@@ -894,7 +895,8 @@ function exportRoster(){
 const mvName=m=>(APP.moves[m]||{n:m}).n;
 function movesRow(id, moves){
   const e=APP.pokemon[id];
-  const sel=(slot,list)=>`<select onchange="setMove('${id}',${slot},this.value)">${list.map(m=>`<option value="${m}" ${moves[slot]===m?'selected':''}>${mvName(m)}</option>`).join('')}</select>`;
+  const withCur=(list,slot)=>moves[slot]&&!list.includes(moves[slot])?[moves[slot],...list]:list;   // keep a move PvPoke does not list
+  const sel=(slot,list0)=>{ const list=withCur(list0,slot); return `<select onchange="setMove('${id}',${slot},this.value)">${list.map(m=>`<option value="${m}" ${moves[slot]===m?'selected':''}>${mvName(m)}</option>`).join('')}</select>`; };
   return `<div class="mv">${sel(0,e.fast)}${sel(1,e.charged)}${sel(2,e.charged)}</div>`;
 }
 function teamCard(t, title){
