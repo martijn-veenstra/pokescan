@@ -60,6 +60,7 @@
       this.cache = new Map();
     }
     has(id) { return !!this.pokemon[id]; }
+    isPublished(atk, dfn) { return this.pub.has(atk + '|' + dfn); }
     movesOf(id) { return (this.overrides[id] && this.overrides[id].length) ? this.overrides[id] : this.pokemon[id].moveset; }
     moveTypes(id) { return this.movesOf(id).filter(m => this.moves[m]).map(m => this.moves[m].t); }
     rating(atk, dfn) {

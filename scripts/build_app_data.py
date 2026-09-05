@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from generate_pvpoke_rankings import GAMEMASTER_URL, LEAGUES, RAW, fetch_json, rankings_url  # noqa: E402
+from generate_pvpoke_team_comps import League  # noqa: E402
 
 GROUP_URL = RAW + "/groups/{league}.json"
 THIRD_MOVE_CANDY = {10000: 25, 50000: 50, 75000: 75, 100000: 100}
@@ -84,8 +85,28 @@ def main(argv=None):
                 gp = gm_pokemon[evo]
                 extra[evo] = {"name": gp["speciesName"], "types": [t for t in gp["types"] if t != "none"]}
 
+    # Benchmark for the score bar: best and median trio score over the top 40 of the meta group.
+    league = League(args.league, gm, entries, group)
+    scores = sorted(ev["score"] for ev, _ in ((league.evaluate(list(t)), t)
+                    for t in __import__("itertools").combinations([g["speciesId"] for g in league.meta[:40]], 3)
+                    if len({x.replace("_shadow", "") for x in t}) == 3))
+    benchmark = {"best": scores[-1], "median": scores[len(scores) // 2], "trios": len(scores)}
+    prevo = {}
+    for gp in gm["pokemon"]:                       # any pre-evolution, ranked or not (Sentret is not)
+        if "shadow" in gp["speciesId"]:
+            continue
+        for evo in gp.get("family", {}).get("evolutions", []):
+            if evo in pokemon:
+                prevo.setdefault(evo, gp["speciesId"])
+    for pre in set(prevo.values()):
+        if pre not in pokemon and pre not in extra:
+            gp = gm_pokemon[pre]
+            extra[pre] = {"name": gp["speciesName"], "types": [t for t in gp["types"] if t != "none"]}
+
     result = {
         "league": {"slug": args.league, "title": title, "cp": cp, "cup": cup},
+        "benchmark": benchmark,
+        "prevo": prevo,
         "source": "https://pvpoke.com/rankings/",
         "gamemasterTimestamp": gm.get("timestamp"),
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

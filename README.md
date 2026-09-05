@@ -3,15 +3,18 @@
 Pokémon GO screenshot scanner and Great League team planner. Runs entirely in the browser,
 installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 
+- **Today** tab: the best team you can build from what you own, with lead / swap / closer, a score bar
+  against the meta best, its threats, ranked next moves (power-ups, evolutions, catches with a safe CP,
+  what to park), a second team with no overlap, and other teams grouped by shared core. Tap a team for
+  the coverage grid (wins / even / loses against the meta, faded cells are estimated) and swap suggestions.
+- **Roster** tab: every Pokémon as a status tile (ready, powering up, pending, wanted, XL gated, benched).
+  Tap for rank, cost to the cap, moves, what it beats and loses to, and actions. Owned tiles come from
+  scans at or under 1500 CP; add others by name or load the roster committed in the repo.
 - **Scans** tab: import screenshots or a screen recording, solve level and IVs, see Great/Ultra League
-  rank, power-up cost to the cap, evolution preview (CP now, whether it fits under 1500, target level)
-  and second-move cost.
-- **Team builder** tab: your Great League roster is derived from the scans (≤1500 CP, one per species),
-  with pending pieces, candidate pickups and tagged in-game parties you add yourself. It ranks the trios
-  you can build today, with pending pieces, with candidates, the marginal value of each candidate and the
-  best two teams with no species in common. Export the roster as `roster-great.json` for the Python scripts.
+  rank and percentage, power-up cost, evolution preview and second-move cost. Appraisal screenshots pin
+  the exact IVs. Set the moves on each card, favourite, bench, search and filter.
 
-Files: `index.html` (app), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
+Files: `index.html` (scanner and shell), `planner.js` (Today, coverage and roster views), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
 (PWA), `data/app-great.json` (bundled PvPoke data). `.github/workflows/update-data.yml` regenerates all
 data files every Monday and commits them, so the app updates itself.
 

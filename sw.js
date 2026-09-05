@@ -1,6 +1,6 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v8.2';
-const SHELL = ['./', 'index.html', 'pvp.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'pokescan-v9';
+const SHELL = ['./', 'index.html', 'pvp.js', 'planner.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const DATA = ['data/app-great.json'];
 
 self.addEventListener('install', e => {
