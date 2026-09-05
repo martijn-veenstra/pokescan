@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { timingSafeEqual, createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { openDb } from './db.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,6 +13,7 @@ const PASSCODE = process.env.PASSCODE || '';
 const KINDS = new Set(['scans', 'roster', 'appr']);
 const USER = 'default';                       // one passcode = one user, for now
 const MAX_BYTES = 8 * 1024 * 1024;
+const VERSION = (() => { try { return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return 'dev'; } })();
 
 export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true } = {}) {
   const app = Fastify({ logger, bodyLimit: MAX_BYTES });
@@ -34,7 +36,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   app.get('/api/health', async () => {
     let dbOk = false;
     try { dbOk = await db.ping(); } catch { dbOk = false; }
-    return { ok: true, db: dbOk, storage: db.kind, sync: !!passcode, version: process.env.npm_package_version || 'dev' };
+    return { ok: true, db: dbOk, storage: db.kind, sync: !!passcode, version: VERSION };
   });
   app.post('/api/auth', { preHandler: auth }, async () => ({ ok: true }));
   app.get('/api/state', { preHandler: auth }, async () => ({ user: USER, state: await db.all(USER) }));
