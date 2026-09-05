@@ -1,6 +1,7 @@
 /* PokeScan sources: where a Pokémon can be obtained right now or soon (raids, eggs, field research, events).
-   Data is Leek Duck's schedule as published by the ScrapedDuck project (github.com/bigfoott/ScrapedDuck), fetched
-   straight from GitHub so it also works on the static GitHub Pages copy. Cached for six hours in localStorage. */
+   Data is Leek Duck's schedule as published by the ScrapedDuck project (github.com/bigfoott/ScrapedDuck). When the app is
+   served by the PokeScan server, /api/sources adds the raid bosses and spawns of GO Fest, Raid Day and seasonal event pages
+   (which ScrapedDuck leaves out); on the static GitHub Pages copy the JSON comes straight from GitHub. Cached for six hours. */
 (function () {
 'use strict';
 const BASE = 'https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/';
@@ -37,12 +38,20 @@ async function load(force) {
   if (loading) return loading;
   loading = (async () => {
     try {
-      const out = {t: Date.now()};
-      for (const k of KINDS) {
-        const r = await fetch(BASE + k + '.json', {cache: 'no-store'});
-        if (!r.ok) throw new Error(k + ' HTTP ' + r.status);
-        out[k] = await r.json();
+      let out = null;
+      try {                                   // the PokeScan server enriches events with their page lists
+        const r = await fetch('/api/sources', {cache: 'no-store'});
+        if (r.ok && (r.headers.get('content-type') || '').includes('json')) { const j = await r.json(); if (j && j.events) out = j; }
+      } catch {}
+      if (!out) {
+        out = {t: Date.now()};
+        for (const k of KINDS) {
+          const r = await fetch(BASE + k + '.json', {cache: 'no-store'});
+          if (!r.ok) throw new Error(k + ' HTTP ' + r.status);
+          out[k] = await r.json();
+        }
       }
+      out.t = Date.now();
       S = out; error = '';
       try { localStorage.setItem('sources', JSON.stringify(S)); } catch {}
       listeners.forEach(f => { try { f(); } catch {} });
@@ -79,7 +88,22 @@ function forSpecies(names, opts) {
     } else if (ev.eventType === 'pokemon-spotlight-hour' && x.spotlight) {
       for (const sp of x.spotlight.list || [x.spotlight]) { const h = hit(sp.name); if (!h || opts.shadow) continue;
         push({kind: 'event', name: h.w.name, what: 'Spotlight Hour', now: isNow, when, sort, start: ev.start, remote: false, note: x.spotlight.bonus || ''}); }
-    } else if (['raid-day', 'raid-hour', 'event', 'max-mondays', 'max-battles'].includes(ev.eventType)) {
+    }
+    if (x.page) {                             // lists read from the Leek Duck event page by the server
+      const label = ev.eventType === 'pokemon-go-fest' ? 'GO Fest' : ev.eventType === 'raid-day' ? 'Raid Day' : ev.name.length < 32 ? ev.name : 'event';
+      for (const b of x.page.raids || []) { const h = hit(b.name); if (!h) continue;
+        if (h.b.shadow !== !!opts.shadow) continue;
+        const tier = b.group && /raid|star|mega|tier/i.test(b.group) ? b.group.replace(/\s*[·,-].*$/, '') : (h.b.mega ? 'Mega raids' : 'raids');
+        push({kind: 'raid', name: h.w.name, what: `${tier} (${label})`, now: isNow, when: b.group && !/raid|star|mega|tier/i.test(b.group) ? `${b.group} · ${when}` : when, remote: !h.b.shadow, shiny: !!b.shiny, sort, start: ev.start, note: h.b.mega ? 'Mega raid, you catch the normal form' : ''}); }
+      if (!opts.shadow) {
+        for (const sp of x.page.spawns || []) { const h = hit(sp.name); if (!h) continue;
+          push({kind: 'event', name: h.w.name, what: `wild spawns (${label})`, now: isNow, when, sort, start: ev.start, remote: false, shiny: !!sp.shiny, note: ''}); }
+        for (const eg of x.page.eggs || []) { const h = hit(eg.name); if (!h) continue;
+          push({kind: 'egg', name: h.w.name, what: `eggs (${label})`, now: isNow, when, sort, start: ev.start, remote: false, shiny: !!eg.shiny, note: eg.group || ''}); }
+      }
+      continue;
+    }
+    if (['raid-day', 'raid-hour', 'event', 'max-mondays', 'max-battles'].includes(ev.eventType)) {
       // no structured list: match the event name itself ("Staraptor Super Mega Raid Day", "Dynamax Ralts during Max Monday")
       for (const w of want) { const b = sig(ev.name); if (!same(w.s, b) || (b.shadow !== !!opts.shadow)) continue;
         const what = ev.eventType === 'raid-day' ? 'Raid Day' : ev.eventType === 'raid-hour' ? 'Raid Hour' : ev.eventType.startsWith('max') ? 'Max Battles' : 'Event';

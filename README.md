@@ -32,7 +32,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Where to get wanted Pokémon**: Today lists raids (with remote eligibility), eggs, field research,
   Community Days, Spotlight Hours and other announced events for every wanted or pending species and its
   pre-evolutions, from Leek Duck's schedule (via the ScrapedDuck JSON on GitHub, cached six hours). The same
-  list sits on each Pokémon page and as a hint on catch suggestions.
+  list sits on each Pokémon page and as a hint on catch suggestions. On the PokeScan server, `GET /api/sources`
+  additionally reads the Leek Duck event pages of GO Fest, Raid Day and seasonal events (whose raid bosses and
+  spawns ScrapedDuck does not publish) and merges those lists in; the GitHub Pages copy only has the JSON feed.
 - **Coach** (Today, server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, a card
   sends a compact roster and meta summary to Claude and shows team suggestions, what to build next and
   what to fear. Answers are cached until the roster changes; the server rate-limits questions.

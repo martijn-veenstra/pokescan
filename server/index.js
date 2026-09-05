@@ -7,6 +7,7 @@ import { timingSafeEqual, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { openDb } from './db.js';
 import { makeCoach } from './coach.js';
+import { makeSources } from './sources.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT) || 8080;
@@ -17,7 +18,7 @@ const MAX_BYTES = 8 * 1024 * 1024;
 const COACH_PER_HOUR = Number(process.env.COACH_PER_HOUR) || 30;
 const VERSION = (() => { try { return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return 'dev'; } })();
 
-export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true, coach = makeCoach(process.env.ANTHROPIC_API_KEY) } = {}) {
+export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true, coach = makeCoach(process.env.ANTHROPIC_API_KEY), sourcesFetch = fetch } = {}) {
   const app = Fastify({ logger, bodyLimit: MAX_BYTES });
   // accept an empty JSON body (POST /api/auth sends none)
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
@@ -26,6 +27,8 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   });
   const db = await openDb(dbUrl);
   app.decorate('db', db);
+  const sources = makeSources({ fetchImpl: sourcesFetch, db, log: app.log });
+  app.decorate('sources', sources);
 
   const hash = s => createHash('sha256').update(String(s)).digest();
   const okCode = given => !!passcode && !!given && timingSafeEqual(hash(given), hash(passcode));
@@ -38,7 +41,12 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   app.get('/api/health', async () => {
     let dbOk = false;
     try { dbOk = await db.ping(); } catch { dbOk = false; }
-    return { ok: true, db: dbOk, storage: db.kind, sync: !!passcode, coach: !!coach, version: VERSION };
+    return { ok: true, db: dbOk, storage: db.kind, sync: !!passcode, coach: !!coach, sources: true, version: VERSION };
+  });
+  // Public schedule (Leek Duck via ScrapedDuck, event pages enriched server-side). No passcode: nothing personal in it.
+  app.get('/api/sources', async (req, reply) => {
+    try { const data = await sources.current(); reply.header('cache-control', 'public, max-age=600'); return data; }
+    catch (e) { req.log.error(e); return reply.code(502).send({ error: 'sources_unavailable', message: e.message }); }
   });
   // AI coach: the browser sends a compact roster/meta summary, the server asks Claude. Passcode-protected and rate-limited,
   // because every call costs money on the server owner's API key.
