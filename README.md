@@ -25,11 +25,19 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Saved parties** (Today and Roster) list their weak spots: the meta Pokémon that nobody on the party
   beats or that beat two of the three, with rank, who they beat, who to swap to, and the best one-member
   fix from your roster.
+- **Pokémon pages**: tap a roster tile, a name in the rankings or a meta team (or "want" in the rankings)
+  for a full page: your copy and its IV rank, moves, the teams it makes with your roster and what it would
+  lift or fix, what it beats and loses to in the meta, where to get it, and roster actions (wanted, pending,
+  owned, bench, remove). The phone's back gesture closes it.
+- **Where to get wanted Pokémon**: Today lists raids (with remote eligibility), eggs, field research,
+  Community Days, Spotlight Hours and other announced events for every wanted or pending species and its
+  pre-evolutions, from Leek Duck's schedule (via the ScrapedDuck JSON on GitHub, cached six hours). The same
+  list sits on each Pokémon page and as a hint on catch suggestions.
 - **Coach** (Today, server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, a card
   sends a compact roster and meta summary to Claude and shows team suggestions, what to build next and
   what to fear. Answers are cached until the roster changes; the server rate-limits questions.
 
-Files: `index.html` (scanner and shell), `planner.js` (Today, coverage and roster views), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
+Files: `index.html` (scanner and shell), `planner.js` (Today, coverage, roster and Pokémon pages), `sources.js` (raid/egg/research/event schedule), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
 (PWA), `data/app-great.json` (bundled PvPoke data), `vendor/tesseract/` (bundled text recognition, so scanning works offline and without a CDN). `.github/workflows/update-data.yml` regenerates all
 data files every Monday and commits them, so the app updates itself.
 
