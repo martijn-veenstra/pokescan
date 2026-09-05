@@ -263,10 +263,10 @@ function partyCard(L, t, m, opts) {           // a saved party with its weakness
   if (opts.remove) h += `<span class="x" onclick="event.stopPropagation();Planner.dropTag('${esc(t.name).replace(/'/g, "\\'")}')">✕</span>`;
   h += `<div class="dt">${th.length ? `${ev.holes.length} unanswered · ${ev.shared.length} beat two of three` : 'covers the whole meta, nothing beats two of your three'}</div>`;
   for (const r of th.slice(0, opts.max || 5)) {
-    h += `<div class="thr"><b style="cursor:pointer" onclick="event.stopPropagation();Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? `beats all three${r.answer ? '' : ', nobody answers it'}` : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="fix">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`;
+    h += `<div class="thr"><b style="cursor:pointer" onclick="event.stopPropagation();Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? `beats all three${r.answer ? '' : ', nobody answers it'}` : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`;
   }
   if (th.length > (opts.max || 5)) h += `<div class="thr">… ${th.length - (opts.max || 5)} more, tap for the full grid</div>`;
-  if (sw && sw.delta > 0) h += `<div class="thr">Fix: swap ${esc(nm(sw.out))} → <span class="fix">${esc(nm(sw.in))}</span>${sw.pending ? ' (pending)' : ''} for +${sw.delta}${sw.fixed.length ? ', covers ' + esc(sw.fixed.slice(0, 2).join(', ')) : ''}</div>`;
+  if (sw && sw.delta > 0) h += `<div class="thr">Fix: swap ${esc(nm(sw.out))} → <span class="good">${esc(nm(sw.in))}</span>${sw.pending ? ' (pending)' : ''} for +${sw.delta}${sw.fixed.length ? ', covers ' + esc(sw.fixed.slice(0, 2).join(', ')) : ''}</div>`;
   return h + '</div>';
 }
 function errorCard(where, e) {
@@ -303,7 +303,7 @@ function renderTodayInner(el) {
   </div>`;
   const all = nextMoves(m), open = all.filter(x => !x.done && !x.snoozed);
   const primary = open.filter(x => !x.faded && x.tag !== 'skip'), noGain = open.filter(x => x.faded || x.tag === 'skip'), snoozed = all.filter(x => x.snoozed);
-  const hintFor = x => { if (!x.id.startsWith('get:') || !window.Sources || !Sources.ready()) return ''; const id = x.id.slice(4); const hnt = Sources.hint(family(id).map(nm), {shadow: /_shadow$/.test(id)}); return hnt ? ` · <span class="fix">${esc(hnt)}</span>` : ''; };
+  const hintFor = x => { if (!x.id.startsWith('get:') || !window.Sources || !Sources.ready()) return ''; const id = x.id.slice(4); const hnt = Sources.hint(family(id).map(nm), {shadow: /_shadow$/.test(id)}); return hnt ? ` · <span class="good">${esc(hnt)}</span>` : ''; };
   const moveCard = x => `<div class="team move ${x.faded || x.tag === 'skip' ? 'faded' : ''}"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">${esc(x.sub)}${hintFor(x)}</div>
       <div class="acts small">${x.species && x.tag !== 'skip' ? `<button onclick="Planner.scanProof('${x.id}')">Scan proof</button>` : ''}<button onclick="Planner.markDone('${x.id}')">${x.tag === 'skip' ? 'Dismiss' : 'Done anyway'}</button><button onclick="Planner.snooze('${x.id}')">Snooze 7d</button></div></div>${chip(x.tag, x.cls === 'dim' ? '' : x.cls)}</div>`;
   if (open.length || snoozed.length) {
@@ -344,11 +344,15 @@ function wantedCard(m) {
   const src = window.Sources;
   let h = `<div class="sec">Get your wanted Pokémon <small>raids, eggs, research, events</small></div>`;
   if (!src || !src.ready()) return h + `<div class="note">${src && src.error() ? 'Schedule not available: ' + esc(src.error()) : 'Loading the raid and egg schedule…'}</div>`;
-  const rows = ids.map(id => ({id, av: availability(id) || []})).filter(x => x.av.length).sort((a, b) => a.av[0].sort - b.av[0].sort);
-  const none = ids.filter(id => !rows.some(r => r.id === id));
-  for (const r of rows) h += `<div class="team" onclick="Planner.openMon('${r.id}')"><span class="nm">${esc(nm(r.id))} <span class="dim">#${APP.pokemon[r.id].rank} · ${ownership(m, r.id)}</span></span>${availLines(r.av, 3)}</div>`;
-  if (none.length) h += `<div class="note">Nothing scheduled for ${none.map(id => `<a href="#" onclick="Planner.openMon('${id}');return false">${esc(nm(id))}</a>`).join(', ')}: wild spawns, trades or GBL rewards. </div>`;
-  h += `<div class="note">Leek Duck schedule via ScrapedDuck, updated ${when(src.updated())}. Remote OK = regular raid you can join with a Remote Raid Pass; Shadow raids are in person only.</div>`;
+  const all = [];
+  for (const id of ids) for (const e of availability(id) || []) all.push(Object.assign({id}, e));
+  const now = all.filter(e => e.now), later = all.filter(e => !e.now).sort((a, b) => a.sort - b.sort);
+  const line = e => `<div class="thr av ${e.now ? 'now' : ''}" onclick="Planner.openMon('${e.id}')" style="cursor:pointer"><b>${esc(nm(e.id))}</b>${e.name !== nm(e.id) ? ` <span class="dim">as ${esc(e.name)}</span>` : ''} · ${esc(e.what)} <span>${esc(e.when)}</span>${e.remote ? ' · <span class="good">remote OK</span>' : e.kind === 'raid' ? ' · in person' : ''}${e.shiny ? ' · ✨' : ''}${e.note ? ` · <span class="dim">${esc(e.note)}</span>` : ''}</div>`;
+  if (now.length) h += `<div class="team" style="cursor:default"><div class="nm">Available now</div>${now.map(line).join('')}</div>`;
+  h += `<div class="team" style="cursor:default"><div class="nm">Coming up <span class="dim" style="font-weight:400;font-size:12px">announced raids and events</span></div>${later.length ? later.slice(0, 8).map(line).join('') : '<div class="thr">Nothing announced yet for your wanted list. Raid rotations are usually published one to three weeks ahead.</div>'}</div>`;
+  const none = ids.filter(id => !all.some(e => e.id === id));
+  if (none.length) h += `<div class="note">Nothing scheduled for ${none.map(id => `<a href="#" onclick="Planner.openMon('${id}');return false">${esc(nm(id))}</a>`).join(', ')}: wild spawns, trades or GBL rewards.</div>`;
+  h += `<div class="note">Leek Duck schedule via ScrapedDuck, updated ${when(src.updated())}. Only events with a published boss or spawn list can be matched. Remote OK = regular raid you can join with a Remote Raid Pass; Shadow raids are in person only.</div>`;
   return h;
 }
 if (window.Sources) Sources.onChange(() => { renderToday(); if (UI.mon) renderMon(); });
@@ -374,7 +378,8 @@ function coachContext(m) {
 }
 function coachHash(o) { const s = JSON.stringify(o); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h); }
 function coachCard(m) {
-  if (!window.Sync || !Sync.coachAvailable()) return '';
+  if (!window.Sync || !Sync.available() || !Sync.state.code) return '';
+  if (!Sync.coachAvailable()) return `<div class="sec">Coach <small>off on your server</small></div><div class="team coach"><div class="dt">The server reports no coach (<code>coach:false</code> in /api/health). Set <code>ANTHROPIC_API_KEY</code> on the Railway service and deploy the staged variable change; then tap re-check.</div><div class="acts small"><button onclick="Sync.detect().then(()=>Planner.renderToday())">Re-check</button></div></div>`;
   const fresh = COACH.text && COACH.hash === coachHash(coachContext(m));
   return `<div class="sec">Coach <small>Claude reads your roster and the meta</small></div>
     <div class="team coach"><div class="nm">Ask the coach</div><div class="dt">Team ideas from what you own, what to build next and what to fear. Uses the numbers above, nothing from your phone leaves except this roster summary.</div>
@@ -458,7 +463,7 @@ function availability(id) {                    // where to get this species (or 
   return Sources.forSpecies(family(id).map(nm), {shadow: /_shadow$/.test(id)});
 }
 function availLines(list, max) {
-  return list.slice(0, max || 6).map(e => `<div class="thr av ${e.now ? 'now' : ''}"><b>${esc(e.name)}</b> · ${esc(e.what)} <span>${esc(e.when)}</span>${e.remote ? ' · <span class="fix">remote OK</span>' : e.kind === 'raid' ? ' · in person' : ''}${e.shiny ? ' · ✨' : ''}${e.note ? ` · <span class="dim">${esc(e.note)}</span>` : ''}</div>`).join('');
+  return list.slice(0, max || 6).map(e => `<div class="thr av ${e.now ? 'now' : ''}"><b>${esc(e.name)}</b> · ${esc(e.what)} <span>${esc(e.when)}</span>${e.remote ? ' · <span class="good">remote OK</span>' : e.kind === 'raid' ? ' · in person' : ''}${e.shiny ? ' · ✨' : ''}${e.note ? ` · <span class="dim">${esc(e.note)}</span>` : ''}</div>`).join('');
 }
 function weakTo(id) {                          // attacking types that hit this Pokémon for more than neutral
   const t = APP.pokemon[id].types; return TYPES18.filter(a => PVP.eff(a, t) > 1).sort((a, b) => PVP.eff(b, t) - PVP.eff(a, t));

@@ -10,7 +10,9 @@ const dirty = new Set();
 const $ = id => document.getElementById(id);
 const hdr = () => ({authorization: 'Bearer ' + S.code, 'content-type': 'application/json'});
 
+let detectedAt = 0;
 async function detect() {
+  detectedAt = Date.now();
   try {
     const r = await fetch('/api/health', {cache: 'no-store'});
     const j = r.ok ? await r.json() : null;
@@ -161,4 +163,11 @@ window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect,
                health: () => health, coachAvailable: () => !!(health && health.coach && S.code)};
 window.addEventListener('load', () => setTimeout(init, 300));
 window.addEventListener('online', () => { if (S.code) flush(); });
+// the server may gain the coach (or sync) after a redeploy: re-read /api/health when the app comes back to the foreground
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || available === false || Date.now() - detectedAt < 120e3) return;
+  const before = JSON.stringify(health);
+  await detect();
+  if (JSON.stringify(health) !== before && window.Planner) Planner.renderToday();
+});
 })();

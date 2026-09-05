@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.6"></script>
+<script src="pvp.js?v=9.7"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -164,13 +164,13 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 #profile.open{display:block}#profile .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;max-width:560px;margin:0 auto;font-size:14px}
 #profile h2{font-family:Sora,sans-serif;font-size:16px;margin:0 0 8px;display:flex;justify-content:space-between}#profile .x{color:var(--dim);cursor:pointer}
 #profile h3{font-family:Sora,sans-serif;font-size:13px;margin:14px 0 4px;color:var(--green)}
-.thr{font-size:12.5px;color:var(--dim);margin-top:5px;line-height:1.45}.thr b{color:#F59A8B;font-weight:600}.thr .fix{color:var(--green)}
-.thr.av b{color:var(--ink)}.thr.av span:not(.fix):not(.dim){color:#F5CE8A}.thr.av.now span:not(.fix):not(.dim){color:#7FE3B6}
+.thr{font-size:12.5px;color:var(--dim);margin-top:5px;line-height:1.45}.thr b{color:#F59A8B;font-weight:600}.thr .good,.dt .good{color:var(--green)}
+.thr.av b{color:var(--ink)}.thr.av span:not(.good):not(.dim){color:#F5CE8A}.thr.av.now span:not(.good):not(.dim){color:#7FE3B6}
 .monhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0 6px}
 .back{background:none;border:none;color:var(--green);font:600 15px Sora,sans-serif;padding:6px 0;cursor:pointer}
 .acts button.danger{color:#F59A8B;border-color:rgba(240,101,79,.5)}
 .team .nm a,.note a{color:var(--ink);text-decoration:underline dotted var(--dim)}.note a{color:var(--green)}
-.coach{cursor:default}.coach .ans{font-size:13.5px;color:var(--ink);line-height:1.55;margin-top:8px}.coach .ans p{margin:6px 0}.coach .ans ul{padding-left:18px;margin:4px 0}.coach .ans li{margin:2px 0}.coach .ans b{color:var(--green)}
+.coach{cursor:default}.coach code{font-family:ui-monospace,monospace;font-size:12px;background:#0E1626;padding:1px 5px;border-radius:5px;color:var(--ink)}.coach .ans{font-size:13.5px;color:var(--ink);line-height:1.55;margin-top:8px}.coach .ans p{margin:6px 0}.coach .ans ul{padding-left:18px;margin:4px 0}.coach .ans li{margin:2px 0}.coach .ans b{color:var(--green)}
 #syncbox{display:none;position:fixed;inset:0;background:rgba(6,10,20,.85);z-index:21;overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 12px 40px}
 #syncbox.open{display:block}#syncbox .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;max-width:560px;margin:0 auto;font-size:14px}
 #syncbox h2{font-family:Sora,sans-serif;font-size:16px;margin:0 0 8px;display:flex;justify-content:space-between}#syncbox .x{color:var(--dim);cursor:pointer}#syncbox p{margin:6px 0;line-height:1.5}
@@ -222,7 +222,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.6</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.7</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -431,7 +431,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.6';
+const APP_VERSION='9.7';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -1125,8 +1125,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.6"></script>
-<script src="planner.js?v=9.6"></script>
-<script src="sync.js?v=9.6"></script>
+<script src="sources.js?v=9.7"></script>
+<script src="planner.js?v=9.7"></script>
+<script src="sync.js?v=9.7"></script>
 </body>
 </html>
