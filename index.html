@@ -132,7 +132,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v8.1</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v8.2</div>
 
 <div class="tabs">
   <button id="tab-scans" class="on" onclick="showTab('scans')">Scans</button>
@@ -210,6 +210,8 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <li>In Pokémon GO open a Pokémon's status screen and take a screenshot, or screen-record while swiping through your storage.</li>
 <li>Set your <b>trainer level</b> once, tap <b>＋ Import scans</b>, pick the screenshots or the recording.</li>
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
+<li><b>Exact IVs:</b> also screenshot (or record) the appraisal screen with the three orange bars. It is matched to the card with the same species, CP and HP and pins the IVs; it never creates a second card. Order does not matter: an appraisal seen first waits for its status screen.</li>
+<li>Rank chips read like Poké Genie: <b>GL #91 · 99.1%</b> is the IV rank among the 4096 spreads of that species at the 1500 cap and its stat product relative to rank 1.</li>
 <li>Tap a card to correct species, CP, HP or level and re-solve. ✕ deletes it.</li>
 <li>Scans stay until you delete them. Rescan a Pokémon only after you power it up or evolve it, and delete the old card.</li>
 </ul>
@@ -510,6 +512,70 @@ async function scanFrame(ctx, W, H, trainer){
   return out;
 }
 
+/* ---------- appraisal screen (IV bars) ---------- */
+/* readAppraisal(ctx,W,H) -> [atk,def,hp] or null. Reads the three IV bars of the in-game appraisal panel. */
+function readAppraisal(ctx, W, H){
+  const x0=0, x1=Math.floor(0.6*W), y0=Math.floor(0.45*H), y1=Math.floor(0.97*H);
+  const w=x1-x0, h=y1-y0, d=ctx.getImageData(x0,y0,w,h).data;
+  const org=i=>{ const r=d[i],g=d[i+1],b=d[i+2]; return r>215&&g>130&&g<205&&b<140&&r-b>90; };   // bar fill ≈ (244,166,76)
+  const grey=i=>{ const r=d[i],g=d[i+1],b=d[i+2]; return r>200&&r<245&&Math.abs(r-g)<10&&Math.abs(g-b)<10; }; // empty track ≈ (226,226,228)
+  const maxGap=Math.round(0.015*W);
+  // per row: longest run of track pixels (orange or grey, small white gaps allowed) starting in the left half
+  function rowRun(y){
+    let best=null, start=-1, last=-1, oMin=-1, oMax=-1, hasO=false, hasG=false;
+    const flush=()=>{ if(start>=0){ const len=last-start+1; if(!best||len>best.len) best={x0:start,x1:last,len,oMin,oMax,hasO,hasG}; } start=-1; oMin=oMax=-1; hasO=hasG=false; };
+    for(let x=0;x<w;x++){ const i=(y*w+x)*4, o=org(i), g=!o&&grey(i);
+      if(o||g){ if(start<0) start=x; last=x; if(o){ if(oMin<0) oMin=x; oMax=x; hasO=true; } else hasG=true; }
+      else if(start>=0 && x-last>maxGap) flush(); }
+    flush(); return best;
+  }
+  const bands=[]; let cur=null;
+  for(let y=0;y<h;y++){
+    const r=rowRun(y);
+    const ok=r && r.len>0.22*W && r.len<0.5*W && r.x0<0.25*W && (r.hasO||r.hasG);
+    if(ok){ if(cur && y-cur.y1<=2){ cur.y1=y; cur.rows.push(r); } else { cur={y0:y,y1:y,rows:[r]}; bands.push(cur); } }
+  }
+  const good=bands.filter(b=>{ const bh=b.y1-b.y0+1; return bh>=0.005*H && bh<=0.02*H; });
+  // the three bars: consecutive bands with the same left edge, the same track width and even spacing
+  for(let i=0;i+2<good.length;i++){
+    const tri=good.slice(i,i+3), rs=tri.map(b=>b.rows[b.rows.length>>1]);
+    const lefts=rs.map(r=>r.x0), tots=rs.map(r=>r.len);
+    if(Math.max(...lefts)-Math.min(...lefts)>0.01*W) continue;
+    if(Math.max(...tots)-Math.min(...tots)>0.05*Math.max(...tots)) continue;
+    const g1=tri[1].y0-tri[0].y0, g2=tri[2].y0-tri[1].y0;
+    if(Math.abs(g1-g2)>0.25*Math.max(g1,g2)) continue;
+    if(rs.some(r=>r.hasO && r.oMin-r.x0>0.01*W)) continue;      // fill must start at the left edge of the track
+    return rs.map(r=>Math.max(0,Math.min(15,Math.round((r.hasO? r.oMax-r.oMin+1 : 0)/r.len*15))));
+  }
+  return null;
+}
+
+const APPR=JSON.parse(localStorage.getItem('appr')||'{}');          // appraisals waiting for their status screen
+function saveAppr(){ localStorage.setItem('appr',JSON.stringify(APPR)); }
+function applyAppraisal(r, ivs){
+  r.appraisal=ivs;
+  const m=r.combos.filter(c=>c[1]===ivs[0]&&c[2]===ivs[1]&&c[3]===ivs[2]);
+  if(m.length){ r.combos=m; r.apMismatch=false; }
+  else {                                                     // re-solve with the IVs fixed, any level
+    const res=[];
+    for(const b of DATA.stats[r.species]||[]) for(let l=2;l<=110;l++){ const lv=l/2, m2=cpmAt(lv);
+      if(calcCP(b,ivs[0],ivs[1],ivs[2],m2)===r.cp && (!r.hp||calcHP(b,ivs[2],m2)===r.hp)) res.push([lv,ivs[0],ivs[1],ivs[2],b]); }
+    if(res.length){ r.combos=res; r.apMismatch=false; } else r.apMismatch=true;
+  }
+  if(r.combos.length){ const lv=[...new Set(r.combos.map(c=>c[0]))]; r.level=lv.length===1?lv[0]:r.level; }
+}
+function apKeys(species,cp,hp){ const k=[]; if(cp) k.push(species+'|'+cp); if(hp) k.push(species+'|hp'+hp); return k; }
+async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
+  const s=await scanFrame(ctx,W,H,trainer);              // species, HP and CP are still visible on the appraisal screen
+  if(!s.species) return null;
+  const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
+  if(key===skipKey) return key;
+  const r=results.find(x=>x.species===s.species && (!cp||x.cp===cp) && (!s.hp||x.hp===s.hp));
+  if(r){ applyAppraisal(r,ivs); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species}`); }
+  else { for(const k of apKeys(s.species,cp,s.hp)) APPR[k]=ivs; saveAppr(); status(`Appraisal ${ivs.join('/')} stored for ${s.species} ${cp??''}`); }
+  return key;
+}
+
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
 const results=JSON.parse(localStorage.getItem('scans')||'[]');
@@ -539,7 +605,9 @@ async function scanImage(file,trainer){
   const cv=$('cv'); cv.width=bmp.width; cv.height=bmp.height;
   const ctx=cv.getContext('2d',{willReadFrequently:true});
   ctx.drawImage(bmp,0,0);
-  await handleScan(ctx,bmp.width,bmp.height,trainer);
+  const ap=readAppraisal(ctx,bmp.width,bmp.height);
+  if(ap) await handleAppraisal(ctx,bmp.width,bmp.height,trainer,ap);
+  else await handleScan(ctx,bmp.width,bmp.height,trainer);
   progress(1);
 }
 
@@ -549,7 +617,7 @@ async function scanVideo(file,trainer){
   try{ await vid.play(); vid.pause(); }catch(e){}      // kick iOS decoder
   const cv=$('cv'); cv.width=vid.videoWidth; cv.height=vid.videoHeight;
   const ctx=cv.getContext('2d',{willReadFrequently:true});
-  const step=1/3; let prevSig=null, lastKey='';
+  const step=1/3; let prevSig=null, lastKey='', lastAp='';
   for(let t=0.2; t<vid.duration; t+=step){
     await new Promise(r=>{ const to=setTimeout(r,2500); vid.onseeked=()=>{clearTimeout(to);r();}; vid.currentTime=t; });
     ctx.drawImage(vid,0,0);
@@ -563,12 +631,14 @@ async function scanVideo(file,trainer){
     status(`Video ${Math.round(t)}s / ${Math.round(vid.duration)}s — ${results.length} scanned`);
     progress(t/vid.duration);
     if(!stable) continue;
-    // status-screen check: top dark sky, lower half bright card
+    const ap=readAppraisal(ctx,cv.width,cv.height);
+    if(ap){ const k=await handleAppraisal(ctx,cv.width,cv.height,trainer,ap,lastAp); if(k) lastAp=k; continue; }
+    // status-screen check: lower half is the bright white card (the sky can be any colour indoors)
     const px=ctx.getImageData(0,0,cv.width,cv.height).data;
     let top=0,bot=0,n1=0,n2=0;
     for(let y=0;y<cv.height*0.1;y+=4) for(let x=0;x<cv.width;x+=8){ top+=gs(px,(Math.floor(y)*cv.width+x)*4); n1++; }
     for(let y=Math.floor(cv.height*0.6);y<cv.height*0.9;y+=4) for(let x=0;x<cv.width;x+=8){ bot+=gs(px,(y*cv.width+x)*4); n2++; }
-    if(top/n1>120 || bot/n2<180) continue;
+    if(bot/n2<180) continue;
     const key=await handleScan(ctx,cv.width,cv.height,trainer,lastKey);
     if(key) lastKey=key;
   }
@@ -596,6 +666,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   if(key===skipKey || results.some(r=>r.key===key)) return key;   // dedupe
   s.key=key;
+  for(const k of apKeys(s.species,s.cp,s.hp)) if(APPR[k]){ applyAppraisal(s,APPR[k]); apKeys(s.species,s.cp,s.hp).forEach(k2=>delete APPR[k2]); saveAppr(); break; }
   results.unshift(s); save(); render();
   return key;
 }
@@ -660,11 +731,12 @@ function render(){
     let chips='';
     if(best){ const bb2=best[4]||DATA.stats[r.species][0];
       const gl=pvpRank(bb2,best[1],best[2],best[3],1500), ul=pvpRank(bb2,best[1],best[2],best[3],2500);
-      chips+=`<span class="chip gl">GL #${gl.n} · L${gl.lv} · ${gl.cp} CP</span>`;
-      chips+=`<span class="chip ul">UL #${ul.n}</span>`;
+      chips+=`<span class="chip gl">GL #${gl.n} · ${gl.pct.toFixed(1)}% · L${gl.lv} · ${gl.cp} CP</span>`;
+      chips+=`<span class="chip ul">UL #${ul.n} · ${ul.pct.toFixed(1)}%</span>`;
       if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv);
         chips+=`<span class="chip warn">→ ${c.dust.toLocaleString('nl')} dust · ${c.candy||c.xl}${c.candy?'':' XL'} candy</span>`; } }
     if(mt) chips+=`<span class="chip meta1">meta #${mt[0]} · ${mt[1]}</span>`;
+    if(r.appraisal) chips+=r.apMismatch?`<span class="chip warn">appraisal ${r.appraisal.join('/')} ≠ CP/HP</span>`:`<span class="chip meta1">✓ appraised ${r.appraisal.join('/')}</span>`;
     const plan=best?planFor(r,best):'';
     const barRow=(l,v)=>`<span>${l}</span><span class="tr"><i class="${v===15?'max':''}" style="width:${v/15*100}%"></i></span><span class="iv">${v}</span>`;
     const bars=best?`<div class="bars">${barRow('Atk',best[1])}${barRow('Def',best[2])}${barRow('HP',best[3])}</div>`:'';
@@ -867,6 +939,7 @@ function refix(i){
   r.level=parseFloat($('lv'+i).value)||r.level;
   r.key=`${r.species}|${r.cp}|${r.hp}`;
   r.combos=solve(r.species,r.cp,r.hp,r.level,r.dust);
+  if(r.appraisal) applyAppraisal(r,r.appraisal);
   save(); render();
 }
 </script>
