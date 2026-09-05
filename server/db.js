@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS history (
 
 export async function openDb(url) {
   if (!url) return memoryDb();
-  const needSsl = /railway|sslmode=require/.test(url);
+  // TLS only for the public proxy host or when asked for; Railway's private network (*.railway.internal) is plain
+  const needSsl = /sslmode=require/.test(url) || (/rlwy\.net/.test(url) && !/railway\.internal/.test(url));
   const pool = new pg.Pool({ connectionString: url, ssl: needSsl ? { rejectUnauthorized: false } : undefined, max: 5 });
   await pool.query(DDL);
   return {
