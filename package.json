@@ -1,6 +1,6 @@
 {
   "name": "pokescan",
-  "version": "9.4.1",
+  "version": "9.4.2",
   "private": true,
   "description": "PokeScan server: serves the app and syncs scans/roster to Postgres",
   "type": "module",

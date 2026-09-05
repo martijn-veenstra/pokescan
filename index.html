@@ -294,7 +294,7 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <li>In Pokémon GO open a Pokémon's status screen and take a screenshot, or screen-record while swiping through your storage.</li>
 <li>Set your <b>trainer level</b> once, tap <b>＋ Import scans</b>, pick the screenshots or the recording.</li>
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
-<li><b>Exact IVs:</b> also screenshot (or record) the appraisal screen with the three orange bars. It is matched to the card with the same species, CP and HP and pins the IVs; it never creates a second card. Order does not matter: an appraisal seen first waits for its status screen.</li>
+<li><b>Exact IVs:</b> screenshot (or record) the appraisal screen with the three orange bars. It shows name, CP, HP and the level arc too, so on its own it already makes a complete card with exact IVs. If a card for that Pokémon exists, the appraisal is attached to it instead; no duplicates either way.</li>
 <li>Rank chips read like Poké Genie: <b>GL #91 · 99.1%</b> is the IV rank among the 4096 spreads of that species at the 1500 cap and its stat product relative to rank 1.</li>
 <li>When you rescan a Pokémon after a power-up or evolution, the old card is archived automatically (filter "Archived" to see it) and the step shows up under Recently completed.</li>
 <li>Tap a card to set its moves, bench it, or correct species, CP, HP or level and re-solve. ☆ marks a favourite, ✕ deletes it. The search box and filter narrow the list; "best copy" marks the best of several copies of a species.</li>
@@ -700,8 +700,21 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
   const r=results.find(x=>x.species===s.species && (!cp||x.cp===cp) && (!s.hp||x.hp===s.hp));
-  if(r){ applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species}`); }
-  else { for(const k of apKeys(s.species,cp,s.hp)) APPR[k]=ivs; saveAppr(); status(`Appraisal ${ivs.join('/')} stored for ${s.species} ${cp??''}`); }
+  if(r){ applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species}`); return key; }
+  if(s.hp && DATA.stats[s.species]){
+    // the appraisal screen shows name, CP, HP and the level arc too: enough for a card of its own
+    s.cp=cp||null; s.cpCandidates=s.cpCandidates||[];
+    s.combos=cp?solve(s.species,cp,s.hp,s.level||null,s.dust||null,s.hints):[];
+    applyAppraisal(s,ivs);                                  // pins the IVs, or infers the CP when it was misread
+    if(s.combos.length){
+      const lv=[...new Set(s.combos.map(c=>c[0]))]; s.level=lv.length===1?lv[0]:s.level;
+      s.key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
+      if(results.some(x=>x.key===s.key)) return key;
+      results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render();
+      status(`${s.species} ${s.cp} CP · appraised ${ivs.join('/')}`); return key;
+    }
+  }
+  for(const k of apKeys(s.species,cp,s.hp)) APPR[k]=ivs; saveAppr(); status(`Appraisal ${ivs.join('/')} stored for ${s.species} ${cp??''}`);
   return key;
 }
 
@@ -801,6 +814,10 @@ async function handleScan(ctx,W,H,trainer,skipKey){
     s.level = lvls.length===1 ? lvls[0] : null;
   }
   if(!s.cp && s.cpCandidates.length) s.cp=s.cpCandidates[0];
+  if(!s.combos.length){                                   // unsolvable, probably a misread CP: fold into an existing card of the same Pokémon
+    const digits=String(s.cp||''), twin=results.find(x=>x.species===s.species && x.hp===s.hp && x.cp && x.combos.length && (!digits||String(x.cp).includes(digits)));
+    if(twin){ status(`${s.species}: same Pokémon as the ${twin.cp} CP card`); return twin.key; }
+  }
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   if(key===skipKey || results.some(r=>r.key===key)) return key;   // dedupe
   s.key=key;
