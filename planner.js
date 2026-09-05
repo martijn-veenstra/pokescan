@@ -13,7 +13,7 @@ const TYPES18 = ['normal', 'fire', 'water', 'grass', 'electric', 'ice', 'fightin
 const WEEK = 7 * 864e5;
 const when = t => new Date(t).toLocaleDateString('nl-NL', {day: 'numeric', month: 'short'});
 let dirty = true, model = null;
-const saveRoster = () => localStorage.setItem('roster', JSON.stringify(ROSTER));
+const saveRoster = () => { localStorage.setItem('roster', JSON.stringify(ROSTER)); if (window.Sync) Sync.touch('roster'); };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const nm = id => (APP.pokemon[id] || APP.unranked[id] || {name: id}).name;
 const mvName = m => (APP.moves[m] || {n: m}).n;

@@ -1,0 +1,32 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: railway-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run server tests
+        run: npm ci && npm test
+      - name: Deploy with the Railway CLI
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE: ${{ vars.RAILWAY_SERVICE || 'pokescan' }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::Missing RAILWAY_TOKEN secret. Create a project token in Railway (Project Settings > Tokens) and add it in GitHub under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          npm i -g @railway/cli
+          railway up --service "$SERVICE" --ci

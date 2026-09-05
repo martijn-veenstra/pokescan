@@ -1,6 +1,6 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v9.3';
-const SHELL = ['./', 'index.html', 'pvp.js', 'planner.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'pokescan-v9.4';
+const SHELL = ['./', 'index.html', 'pvp.js', 'planner.js', 'sync.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const DATA = ['data/app-great.json'];
 
 self.addEventListener('install', e => {
@@ -11,7 +11,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin || e.request.method !== 'GET') return;
+  if (url.origin !== location.origin || e.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
   const path = url.pathname.replace(/^.*\//, '') || './';
   if (url.pathname.includes('/vendor/')) {
     // big, immutable recogniser files: cache-first, fetched once

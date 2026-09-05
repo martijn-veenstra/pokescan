@@ -1,0 +1,4 @@
+node_modules
+.git
+.github
+scripts/__pycache__

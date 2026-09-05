@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.3"></script>
+<script src="pvp.js?v=9.4"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -123,6 +123,8 @@ video,canvas{display:none}
 .plan{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
 .plan b{color:var(--ink);font-weight:600}.plan .ok{color:var(--green)}.plan .no{color:var(--coral)}
 .note{font-size:12px;color:var(--dim);margin:4px 0 8px}
+h1 .help.sync{margin-left:auto}h1 .help.sync.on{color:var(--green);border-color:#3BC489}h1 .help.sync.err{color:#F59A8B;border-color:#F0654F}
+h1 .help.sync+.help{margin-left:0}
 h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);
  color:var(--dim);font:700 15px Sora,sans-serif;display:flex;align-items:center;justify-content:center}
 #help{display:none;position:fixed;inset:0;background:rgba(6,10,20,.82);z-index:20;overflow:auto;
@@ -157,6 +159,9 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 .thirds{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:2px}
 .third{flex:none;background:#0E1626;border:1px solid var(--line);border-radius:10px;padding:6px 10px;display:flex;flex-direction:column;font-size:13px;min-width:84px}
 .third small{color:var(--dim)}.third.best{border-color:#3BC489;background:rgba(72,213,151,.10)}.third.best small{color:#7FE3B6}
+#syncbox{display:none;position:fixed;inset:0;background:rgba(6,10,20,.85);z-index:21;overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 12px 40px}
+#syncbox.open{display:block}#syncbox .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;max-width:560px;margin:0 auto;font-size:14px}
+#syncbox h2{font-family:Sora,sans-serif;font-size:16px;margin:0 0 8px;display:flex;justify-content:space-between}#syncbox .x{color:var(--dim);cursor:pointer}#syncbox p{margin:6px 0;line-height:1.5}
 #sheet{display:none;position:fixed;inset:0;background:rgba(6,10,20,.85);z-index:20;overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 12px 40px}
 #sheet.open{display:block}
 #sheet .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;max-width:560px;margin:0 auto}
@@ -204,8 +209,8 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </style>
 </head>
 <body>
-<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v9.3</div>
+<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
+<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v9.4</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -279,6 +284,7 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 </div>
 
 <div id="sheet" onclick="if(event.target===this)Planner.closeSheet()"></div>
+<div id="syncbox" class="sheetlike" onclick="if(event.target===this)Sync.toggle()"></div>
 
 <div id="help" onclick="if(event.target===this)toggleHelp()"><div class="box">
 <h2>How to use PokeScan <span onclick="toggleHelp()" style="cursor:pointer;color:var(--dim)">✕</span></h2>
@@ -313,7 +319,12 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <li>Owned tiles come from your scans at or under 1500 CP, one copy per species. Use <b>+</b> to add Pokémon by name as owned, pending or wanted, and <b>Load saved roster</b> to pull the roster in the repo.</li>
 <li>Moves default to what the screenshot showed, else PvPoke's recommendation. Change them on the tile or on the scan card; the planner uses what you set.</li>
 </ul>
-<h3>5 · Data and updates</h3>
+<h3>5 · Sync across devices</h3>
+<ul>
+<li>When the app runs on your own PokeScan server, a cloud button appears in the header. Enter the server passcode once per device; scans, roster, parties and the completion log then follow you between phone and laptop. Local storage remains the working copy, so offline still works.</li>
+<li>On the GitHub Pages copy there is no server, so the button is hidden and the app is device-only. Use Backup / Restore to move data.</li>
+</ul>
+<h3>6 · Data and updates</h3>
 <ul>
 <li>PvPoke rankings are bundled with the app and refreshed automatically every Monday. The date is shown at the top of Team builder.</li>
 <li>The app works offline after the first visit. Scanning itself needs a connection for the text-recognition library.</li>
@@ -399,7 +410,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.3';
+const APP_VERSION='9.4';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -699,7 +710,7 @@ const $=id=>document.getElementById(id);
 function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='block'; if(st) st.textContent='⚠ '+msg; console.error(msg); }
 window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
 window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
-const results=JSON.parse(localStorage.getItem('scans')||'[]');
+const results=JSON.parse(localStorage.getItem('scans')||'[]').filter(r=>r&&typeof r.species==='string'); results.forEach(r=>{ if(!Array.isArray(r.combos)) r.combos=[]; });
 try{ render(); }catch(e){ showErr('render failed: '+e.message); }
 
 $('file').addEventListener('change', async e=>{
@@ -800,7 +811,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
 }
 
 /* ---------- UI ---------- */
-function save(){ localStorage.setItem('scans',JSON.stringify(results)); if(window.Planner) Planner.markDirty(); }
+function save(){ localStorage.setItem('scans',JSON.stringify(results)); if(window.Planner) Planner.markDirty(); if(window.Sync) Sync.touch('scans'); }
 if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 async function shareFile(name, text, type){
   const file=new File([text], name, {type});
@@ -973,6 +984,7 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="planner.js?v=9.3"></script>
+<script src="planner.js?v=9.4"></script>
+<script src="sync.js?v=9.4"></script>
 </body>
 </html>

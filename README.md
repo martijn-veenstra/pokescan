@@ -126,3 +126,20 @@ python3 scripts/pogo_cp.py evolve-cap sentret furret --ivs 4 14 13
 
 `evolve-cap` without IVs gives an IV-agnostic answer for a wild catch: a CP that is always safe,
 a band where IVs decide, and a CP above which the evolution cannot fit under the cap.
+
+## Running your own server (Railway)
+
+`server/index.js` serves the app and a passcode-protected sync API backed by Postgres, so scans, roster,
+parties and the completion log follow you between devices. Without `DATABASE_URL` it uses an in-memory
+store; without `PASSCODE` the API answers 503 and the app behaves like the static copy.
+
+```sh
+npm install
+PASSCODE=choose-one DATABASE_URL=postgres://... npm start     # http://localhost:8080
+npm test                                                      # API tests (uses DATABASE_URL when set)
+```
+
+Deploy: `Dockerfile` + `railway.json`. `.github/workflows/deploy-railway.yml` runs the tests and
+`railway up` on every push to main. It needs the repository secret `RAILWAY_TOKEN` (a Railway project
+token) and optionally the variable `RAILWAY_SERVICE` (default `pokescan`). On the Railway service set
+`DATABASE_URL` (reference to the Postgres service) and `PASSCODE`.
