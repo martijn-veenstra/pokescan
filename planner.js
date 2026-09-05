@@ -4,9 +4,11 @@
 (function () {
 'use strict';
 const CAP = 1500;
-const ROSTER = Object.assign({owned: {}, pending: {}, candidates: {}, tagged: {}, moves: {}, exclude: []},
+const ROSTER = Object.assign({owned: {}, pending: {}, candidates: {}, tagged: {}, moves: {}, exclude: [], done: {}, snooze: {}, log: []},
                              JSON.parse(localStorage.getItem('roster') || '{}'));
-const UI = {selected: null, showAll: false};
+const UI = {selected: null, showAll: false, expect: null};
+const WEEK = 7 * 864e5;
+const when = t => new Date(t).toLocaleDateString('nl-NL', {day: 'numeric', month: 'short'});
 let dirty = true, model = null;
 const saveRoster = () => localStorage.setItem('roster', JSON.stringify(ROSTER));
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -130,9 +132,9 @@ function nextMoves(m) {
   for (const o of Object.values(own)) {
     if (o.manual) continue;
     if (o.toLevel > 40 && o.toLevel > o.level) { const c = costTo(o.level, o.toLevel);
-      out.push({p: 9, tag: 'skip', cls: 'warn', title: `${nm(o.id)} needs L${o.toLevel}`, sub: `${fmt(c.dust)} dust${c.xl ? `, ${c.xl} XL candy` : ''} · park it`}); continue; }
+      out.push({id: 'park:' + o.id, p: 9, tag: 'skip', cls: 'warn', title: `${nm(o.id)} needs L${o.toLevel}`, sub: `${fmt(c.dust)} dust${c.xl ? `, ${c.xl} XL candy` : ''} · park it`}); continue; }
     if (o.toLevel > o.level) { const c = costTo(o.level, o.toLevel);
-      out.push({p: inTeam.has(o.id) ? 0 : 3, tag: inTeam.has(o.id) ? 'in team' : 'bench', cls: inTeam.has(o.id) ? 'ok' : 'dim',
+      out.push({id: 'pu:' + o.id, species: o.id, p: inTeam.has(o.id) ? 0 : 3, tag: inTeam.has(o.id) ? 'in team' : 'bench', cls: inTeam.has(o.id) ? 'ok' : 'dim',
                 title: `Power up ${nm(o.id)} to L${o.toLevel}`, sub: `${o.cp} → ${o.toCP} CP · ${fmt(c.dust)} dust · ${c.candy} candy`}); }
   }
   for (const g of rep.gains) {
@@ -144,11 +146,79 @@ function nextMoves(m) {
     else if (pre && DATA.stats[pre.split('_')[0].toUpperCase()]) { const sc = safeCap(pre, id); title = sc ? `Catch a ${nm(pre)} ≤ ${sc.safe} CP` : `Catch a ${nm(pre)}`; if (sc) sub += ` · ${sc.safe + 1}–${sc.max} CP only with the right IVs`; }
     else title = `Catch ${nm(id)}`;
     if (delta <= 0) sub = `best trio with it ${g.bestTrio.teamScore.toFixed(1)}, below your current team`;
-    out.push({p: delta > 0 ? 1 : 5, tag: delta > 0 ? '+' + delta.toFixed(0) : 'no gain', cls: delta > 0 ? 'gold' : 'dim', title, sub, delta, faded: delta <= 0});
+    out.push({id: 'get:' + id, species: a ? a.fromId : (pre || id), p: delta > 0 ? 1 : 5, tag: delta > 0 ? '+' + delta.toFixed(0) : 'no gain', cls: delta > 0 ? 'gold' : 'dim', title, sub, delta, faded: delta <= 0});
   }
   out.sort((a, b) => a.p - b.p || (b.delta || 0) - (a.delta || 0));
+  const now = Date.now();
+  for (const x of out) { x.done = !!ROSTER.done[x.id]; x.snoozed = ROSTER.snooze[x.id] > now; }
   return out;
 }
+function openMoves(m) { return nextMoves(m).filter(x => !x.done && !x.snoozed); }
+
+/* ---------- evidence: supersession of old scans, completion log ---------- */
+function ivSet(r) { return new Set(r.combos.map(c => c.slice(1, 4).join('/'))); }
+function shareIVs(a, b) { const A = ivSet(a); for (const x of ivSet(b)) if (A.has(x)) return true; return false; }
+function lvl(r) { return r.level || (r.combos.length ? Math.max(...r.combos.map(c => c[0])) : null); }
+function logEntry(e) { ROSTER.log.unshift(Object.assign({t: Date.now()}, e)); ROSTER.log = ROSTER.log.slice(0, 50); }
+function onNewScan(s) {                        // called by the scanner after a new card is stored (or an appraisal completes one)
+  if (!APP || !s.combos || !s.combos.length || !s.cp) return;
+  const sid = scanId(s), newId = sid && sid.id, newLv = lvl(s);
+  for (const r of results) {
+    if (r === s || r.superseded || !r.combos || !r.combos.length || !r.cp) continue;
+    const rid = (scanId(r) || {}).id, oldLv = lvl(r);
+    if (!shareIVs(r, s)) continue;
+    if (r.species === s.species && s.cp > r.cp && (!oldLv || !newLv || newLv >= oldLv)) {          // power-up
+      r.superseded = {by: s.key, why: `powered up to L${newLv ?? '?'}`, t: Date.now()};
+      logEntry({kind: 'powerup', id: 'pu:' + rid, title: `${nm(rid || s.species)} powered up ${r.cp} → ${s.cp} CP`, evidence: s.key});
+    } else if (rid && newId && (APP.pokemon[rid] || {}).evo && APP.pokemon[rid].evo.includes(newId) && (!oldLv || !newLv || newLv >= oldLv)) {   // evolution
+      r.superseded = {by: s.key, why: `evolved into ${nm(newId)}`, t: Date.now()};
+      logEntry({kind: 'evolve', id: 'get:' + newId, title: `${nm(rid)} evolved into ${nm(newId)}`, evidence: s.key});
+    }
+  }
+  if (newId && (ROSTER.candidates[newId] !== undefined || ROSTER.pending[newId] !== undefined) && s.cp <= CAP) {
+    logEntry({kind: 'catch', id: 'get:' + newId, title: `${nm(newId)} caught, ${s.cp} CP`, evidence: s.key});
+    delete ROSTER.candidates[newId]; delete ROSTER.pending[newId];
+  } else if (newId) {
+    for (const evo of (APP.pokemon[newId].evo || [])) if (ROSTER.candidates[evo] !== undefined) {
+      const eb = evoBaseStats(evo), b = sid.best;
+      if (eb && calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) <= CAP) logEntry({kind: 'catch', id: 'get:' + evo, title: `${nm(newId)} caught for ${nm(evo)}, ${s.cp} CP`, evidence: s.key});
+    }
+  }
+  saveRoster(); dirty = true;
+}
+function scanProof(moveId) {                   // "Scan proof" on a next move: remember what should clear, open the importer
+  const m = M(), mv = openMoves(m).find(x => x.id === moveId);
+  UI.expect = {id: moveId, title: mv ? mv.title : moveId, before: openMoves(m).map(x => x.id)};
+  showTab('scans'); $('panel').classList.add('open'); $('file').click();
+}
+function afterImport(newScans) {               // called by the scanner when an import finishes
+  dirty = true; const m = M(), after = new Set(openMoves(m).map(x => x.id));
+  const ex = UI.expect; UI.expect = null;
+  if (ex) {
+    if (!after.has(ex.id)) {
+      if (!ROSTER.log.some(e => e.id === ex.id && e.evidence)) logEntry({kind: 'proof', id: ex.id, title: ex.title, evidence: newScans[0] ? newScans[0].key : null});
+      status(`✓ ${ex.title} — cleared by this scan`);
+    } else {
+      const sp = newScans.find(r => r.species) || null, mv = openMoves(m).find(x => x.id === ex.id);
+      let why = 'the scan did not change it';
+      if (sp && mv && mv.id.startsWith('get:')) { const evo = mv.id.slice(4), sid = scanId(sp);
+        if (sid && sid.id && (APP.pokemon[sid.id].evo || []).includes(evo)) { const eb = evoBaseStats(evo), b = sid.best, cp = eb ? calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) : 0;
+          why = cp > CAP ? `${nm(sid.id)} would be ${cp} CP as ${nm(evo)}, over the cap` : 'the scan could not be solved'; }
+        else if (sid && sid.id) why = `that is a ${nm(sid.id)}, not what this item needs`; }
+      status(`Scan added, but "${ex.title}" is still open: ${why}`);
+    }
+    saveRoster();
+  }
+  for (const id of Object.keys(ROSTER.done)) if (!after.has(id)) delete ROSTER.done[id];   // tidy manual ticks once the state caught up
+  refresh();
+}
+function markDone(id, note) { const m = M(), mv = nextMoves(m).find(x => x.id === id);
+  ROSTER.done[id] = {t: Date.now(), note: note || ''}; logEntry({kind: 'manual', id, title: mv ? mv.title : id, evidence: null, note: note || ''}); saveRoster(); refresh(); }
+function snooze(id) { ROSTER.snooze[id] = Date.now() + WEEK; saveRoster(); refresh(); }
+function unsnooze(id) { delete ROSTER.snooze[id]; saveRoster(); refresh(); }
+function undoDone(id) { delete ROSTER.done[id]; ROSTER.log = ROSTER.log.filter(e => !(e.id === id && e.kind === 'manual')); saveRoster(); refresh(); }
+function toggleMore() { UI.showAll = !UI.showAll; renderToday(); }
+function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) return; showTab('scans'); $('filter').value = r.superseded ? 'arch' : 'all'; $('q').value = r.species; render(); }
 
 /* ---------- rendering: Today ---------- */
 const chip = (t, cls) => `<span class="chip ${cls || ''}">${esc(t)}</span>`;
@@ -189,9 +259,17 @@ function renderTodayInner(el) {
     ${threats.filter(t => !t.hole).length ? `<div class="chips" style="margin-top:6px">${threats.filter(t => !t.hole).map(t => chip(t.n, 'warn')).join('')}</div>` : ''}
     ${keep.length ? `<div class="dim" style="font-size:12px;margin-top:8px">They beat two of three. Keep ${esc(keep.slice(0, 3).join(', '))}.</div>` : ''}
   </div>`;
-  const moves = nextMoves(m);
-  if (moves.length) {
-    h += `<div class="sec">Next moves <small>ordered by team gain per resource</small></div>` + moves.slice(0, 6).map(x => `<div class="team move ${x.tag === 'skip' || x.faded ? 'faded' : ''}"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">${esc(x.sub)}</div></div>${chip(x.tag, x.cls === 'dim' ? '' : x.cls)}</div>`).join('');
+  const all = nextMoves(m), open = all.filter(x => !x.done && !x.snoozed);
+  const primary = open.filter(x => !x.faded && x.tag !== 'skip'), noGain = open.filter(x => x.faded || x.tag === 'skip'), snoozed = all.filter(x => x.snoozed);
+  const moveCard = x => `<div class="team move ${x.faded || x.tag === 'skip' ? 'faded' : ''}"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">${esc(x.sub)}</div>
+      <div class="acts small">${x.species && x.tag !== 'skip' ? `<button onclick="Planner.scanProof('${x.id}')">Scan proof</button>` : ''}<button onclick="Planner.markDone('${x.id}')">${x.tag === 'skip' ? 'Dismiss' : 'Done anyway'}</button><button onclick="Planner.snooze('${x.id}')">Snooze 7d</button></div></div>${chip(x.tag, x.cls === 'dim' ? '' : x.cls)}</div>`;
+  if (open.length || snoozed.length) {
+    h += `<div class="sec">Next moves <small>ordered by team gain per resource</small></div>` + primary.map(moveCard).join('');
+    if (noGain.length || snoozed.length) h += `<div class="note" style="cursor:pointer" onclick="Planner.toggleMore()">${UI.showAll ? '▾ hide' : '▸ show'} ${noGain.length} with no gain${snoozed.length ? ` · ${snoozed.length} snoozed` : ''}</div>`;
+    if (UI.showAll) { h += noGain.map(moveCard).join(''); h += snoozed.map(x => `<div class="team move faded"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">snoozed until ${when(ROSTER.snooze[x.id])} · <a href="#" onclick="Planner.unsnooze('${x.id}');return false">unsnooze</a></div></div></div>`).join(''); }
+  }
+  if (ROSTER.log.length) {
+    h += `<div class="sec">Recently completed</div>` + ROSTER.log.slice(0, 5).map(e => `<div class="team move done"><span class="tick ${e.evidence ? 'full' : 'hollow'}">${e.evidence ? '✓' : '○'}</span><div class="mvt"><span class="nm">${esc(e.title)}</span><div class="dt">${when(e.t)}${e.evidence ? ` · <a href="#" onclick="Planner.showScanKey('${esc(e.evidence)}');return false">scan</a>` : e.kind === 'manual' ? ` · without proof · <a href="#" onclick="Planner.undoDone('${e.id}');return false">undo</a>` : ''}${e.note ? ' · ' + esc(e.note) : ''}</div></div></div>`).join('');
   }
   const dj = rep.disjoint.candidates.length ? rep.disjoint.candidates[0] : rep.disjoint.pending[0];
   if (dj) {
@@ -364,5 +442,6 @@ function setScanMove(idx, slot, val) {
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
 window.Planner = {refresh, markDirty, renderToday, renderRoster, coverage, closeSheet, select, toggleAdd, add, drop, bench, unbench,
+                  onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();

@@ -11,8 +11,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="pvp.js?v=9.1"></script>
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="pvp.js?v=9.2"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -189,12 +189,16 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 .kpis b{font-family:Sora,sans-serif;font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acts{display:flex;gap:6px;flex-wrap:wrap}
 .acts button{background:#0E1626;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px}
+.acts.small{margin-top:7px}.acts.small button{padding:5px 9px;font-size:12px;color:var(--dim)}
+.team.done{display:flex;gap:10px;align-items:flex-start;cursor:default}
+.tick{font-family:Sora,sans-serif;font-weight:800;font-size:16px;width:22px;text-align:center;flex:none}.tick.full{color:var(--green)}.tick.hollow{color:var(--dim)}
+.team .dt a{color:var(--green)}
 .empty b{color:var(--ink)}
 </style>
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v9</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v9.2</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -232,6 +236,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
     <option value="appr">Appraised</option>
     <option value="fav">Favourites</option>
     <option value="bench">Benched</option>
+    <option value="arch">Archived (superseded)</option>
   </select>
 </div>
 <div class="row">
@@ -276,13 +281,14 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
 <li><b>Exact IVs:</b> also screenshot (or record) the appraisal screen with the three orange bars. It is matched to the card with the same species, CP and HP and pins the IVs; it never creates a second card. Order does not matter: an appraisal seen first waits for its status screen.</li>
 <li>Rank chips read like Poké Genie: <b>GL #91 · 99.1%</b> is the IV rank among the 4096 spreads of that species at the 1500 cap and its stat product relative to rank 1.</li>
+<li>When you rescan a Pokémon after a power-up or evolution, the old card is archived automatically (filter "Archived" to see it) and the step shows up under Recently completed.</li>
 <li>Tap a card to set its moves, bench it, or correct species, CP, HP or level and re-solve. ☆ marks a favourite, ✕ deletes it. The search box and filter narrow the list; "best copy" marks the best of several copies of a species.</li>
 <li>Scans stay until you delete them. Rescan a Pokémon only after you power it up or evolve it, and delete the old card.</li>
 </ul>
 <h3>2 · Today</h3>
 <ul>
 <li><b>Run this team</b> is the best trio you can build from what you own, with a lead / swap / closer suggestion and the meta Pokémon it struggles with. Tap it for the full coverage grid: green wins, red loses, tinted rows beat two of your three, faded cells are estimated from typing rather than PvPoke's simulations.</li>
-<li><b>Next moves</b> ranks what to do: power-ups for team members, evolutions and catches by how many points they add, and what to park.</li>
+<li><b>Next moves</b> ranks what to do: power-ups for team members, evolutions and catches by how many points they add, and what to park. <b>Scan proof</b> opens the importer; if the new scan clears the item it is ticked with the scan as evidence. <b>Done anyway</b> ticks it without proof, <b>Snooze</b> hides it for a week. Items with no gain are collapsed under "show more".</li>
 <li><b>Other teams</b> groups your trios by shared core; the third slot shows the points lost against the core's best pick.</li>
 <li>Scores are on PvPoke's 0–1000 battle-rating scale: the best meta trios score 690–720, an average trio about 520.</li>
 </ul>
@@ -378,7 +384,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.1';
+const APP_VERSION='9.2';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -473,7 +479,15 @@ function detectLevel(px, W, H, trainer){
 
 /* ---------- OCR ---------- */
 let worker=null;
-async function getWorker(){ if(!worker) worker=await Tesseract.createWorker('eng'); return worker; }
+async function getWorker(){
+  if(worker) return worker;
+  if(typeof Tesseract==='undefined') throw new Error('text recognition library did not load (vendor/tesseract)');
+  status('Loading text recognition…');
+  const base=new URL('vendor/tesseract/', location.href).href;
+  worker=await Tesseract.createWorker('eng', 1, {workerPath: base+'worker.min.js', corePath: base, langPath: base, gzip: true,
+    logger: m=>{ if(m.status&&m.progress!==undefined&&m.status!=='recognizing text') status(`${m.status} ${Math.round(m.progress*100)}%`); }});
+  return worker;
+}
 
 function binarize(ctx,W,H,x0,y0,w,h,scale,fn){    // returns canvas: black text on white
   const src=ctx.getImageData(x0,y0,w,h).data;
@@ -640,7 +654,16 @@ function applyAppraisal(r, ivs){
     const res=[];
     for(const b of DATA.stats[r.species]||[]) for(let l=2;l<=110;l++){ const lv=l/2, m2=cpmAt(lv);
       if(calcCP(b,ivs[0],ivs[1],ivs[2],m2)===r.cp && (!r.hp||calcHP(b,ivs[2],m2)===r.hp)) res.push([lv,ivs[0],ivs[1],ivs[2],b]); }
-    if(res.length){ r.combos=res; r.apMismatch=false; } else r.apMismatch=true;
+    if(res.length){ r.combos=res; r.apMismatch=false; }
+    else if(r.hp){                                            // CP misread? IVs + HP (+ dust window) pin the level, so infer the CP
+      const win=r.dust&&dustLevel(r.dust)?dustLevel(r.dust):[1,55], cands=[];
+      for(const b of DATA.stats[r.species]||[]) for(let l=win[0]*2;l<=win[1]*2;l++){ const lv=l/2, m2=cpmAt(lv);
+        if(calcHP(b,ivs[2],m2)===r.hp) cands.push([lv,ivs[0],ivs[1],ivs[2],b]); }
+      const digits=String(r.cp||''), fit=cands.filter(c=>{ const cpc=String(calcCP(c[4],c[1],c[2],c[3],cpmAt(c[0]))); return !digits||cpc.startsWith(digits)||cpc.endsWith(digits)||cpc.includes(digits); });
+      const pick=fit.length===1?fit:(cands.length===1?cands:[]);
+      if(pick.length){ r.cp=calcCP(pick[0][4],pick[0][1],pick[0][2],pick[0][3],cpmAt(pick[0][0])); r.combos=pick; r.cpInferred=true; r.apMismatch=false; r.key=`${r.species}|${r.cp}|${r.hp}|${pick[0][0]}|${r.dust??''}`; }
+      else r.apMismatch=true;
+    } else r.apMismatch=true;
   }
   if(r.combos.length){ const lv=[...new Set(r.combos.map(c=>c[0]))]; r.level=lv.length===1?lv[0]:r.level; }
 }
@@ -651,26 +674,35 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
   const r=results.find(x=>x.species===s.species && (!cp||x.cp===cp) && (!s.hp||x.hp===s.hp));
-  if(r){ applyAppraisal(r,ivs); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species}`); }
+  if(r){ applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species}`); }
   else { for(const k of apKeys(s.species,cp,s.hp)) APPR[k]=ivs; saveAppr(); status(`Appraisal ${ivs.join('/')} stored for ${s.species} ${cp??''}`); }
   return key;
 }
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
+function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='block'; if(st) st.textContent='⚠ '+msg; console.error(msg); }
+window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
+window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
 const results=JSON.parse(localStorage.getItem('scans')||'[]');
-render();
+try{ render(); }catch(e){ showErr('render failed: '+e.message); }
 
 $('file').addEventListener('change', async e=>{
   const files=[...e.target.files]; e.target.value='';
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
-  $('prog').style.display='block';
+  $('prog').style.display='block'; progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
+  let ok=0; const before=results.length;
   for(const f of files){
-    if(f.type.startsWith('video')) await scanVideo(f,trainer);
-    else await scanImage(f,trainer);
+    try{
+      if(f.type.startsWith('video')) await scanVideo(f,trainer);
+      else await scanImage(f,trainer);
+      ok++;
+    }catch(err){ showErr(`${f.name}: ${err&&err.message||err}`); await new Promise(r=>setTimeout(r,1500)); }
   }
-  status('Done'); setTimeout(()=>$('prog').style.display='none',1500);
+  status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
+  if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
+  setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
 });
 $('trainer').value=localStorage.getItem('trainer')||'40';
 $('bb').checked=localStorage.getItem('bb')!=='0';
@@ -746,8 +778,9 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   if(key===skipKey || results.some(r=>r.key===key)) return key;   // dedupe
   s.key=key;
-  for(const k of apKeys(s.species,s.cp,s.hp)) if(APPR[k]){ applyAppraisal(s,APPR[k]); apKeys(s.species,s.cp,s.hp).forEach(k2=>delete APPR[k2]); saveAppr(); break; }
-  results.unshift(s); save(); render();
+  { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
+    if(hit){ const ivs=APPR[hit]; ks.forEach(k=>delete APPR[k]); applyAppraisal(s,ivs); apKeys(s.species,s.cp,s.hp).forEach(k=>delete APPR[k]); saveAppr(); } }
+  results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render();
   return key;
 }
 
@@ -784,7 +817,7 @@ document.getElementById('imp').addEventListener('change', async e=>{
 });
 function clearAll(){ results.length=0; save(); render(); }
 function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
-const bestOf2=r=>r.combos.reduce((a,b)=>pct(b)>pct(a)?b:a);
+function bestOf2(r){ return r.combos.reduce((a,b)=>pct(b)>pct(a)?b:a); }
 function toggleFav(i){ results[i].fav=!results[i].fav; save(); render(); }
 function toggleBench(i){ results[i].bench=!results[i].bench; save(); render(); if(window.Planner) Planner.refresh(); }
 function toggleHelp(){ $('help').classList.toggle('open'); }
@@ -803,7 +836,8 @@ function render(){
     if(flt==='appr') return !!r.appraisal;
     if(flt==='fav') return !!r.fav;
     if(flt==='bench') return !!r.bench;
-    return true; });
+    if(flt==='arch') return !!r.superseded;
+    return !r.superseded; });
   if(mode==='new') order.sort((a,b)=>(results[b].fav?1:0)-(results[a].fav?1:0));
   const bp=r=>r.combos.length?Math.max(...r.combos.map(pct)):-1;
   if(mode==='pct') order.sort((a,b)=>bp(results[b])-bp(results[a]));
@@ -824,6 +858,8 @@ function render(){
     const nice=(r.species||'?').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.level&&'level?'].filter(Boolean).join(' ');
     let chips='';
+    if(r.superseded) chips+=`<span class="chip">archived · ${r.superseded.why||'superseded'}</span>`;
+    if(r.cpInferred) chips+=`<span class="chip gl">CP inferred from appraisal</span>`;
     if(r.bench) chips+=`<span class="chip">benched</span>`;
     else if(bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1) chips+=`<span class="chip meta1">best copy</span>`;
     if(best){ const bb2=best[4]||DATA.stats[r.species][0];
@@ -860,6 +896,7 @@ function render(){
       <div class="fix" onclick="event.stopPropagation()">
         ${mvsel?`<div style="width:100%"><div class="note" style="margin:0 0 4px">Moves on this Pokémon</div>${mvsel}</div>`:''}
         <button class="sec2" onclick="toggleBench(${i})">${r.bench?'Unbench':'Bench'}</button>
+        ${r.superseded?`<button class="sec2" onclick="results[${i}].superseded=null;save();render();if(window.Planner)Planner.refresh()">Unarchive</button>`:''}
         <input placeholder="species" value="${r.species||''}" id="sp${i}">
         <input placeholder="CP" value="${r.cp||''}" id="cp${i}" inputmode="numeric">
         <input placeholder="HP" value="${r.hp||''}" id="hp${i}" inputmode="numeric">
@@ -921,6 +958,6 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="planner.js?v=9.1"></script>
+<script src="planner.js?v=9.2"></script>
 </body>
 </html>

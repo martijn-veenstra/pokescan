@@ -15,7 +15,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   the exact IVs. Set the moves on each card, favourite, bench, search and filter.
 
 Files: `index.html` (scanner and shell), `planner.js` (Today, coverage and roster views), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
-(PWA), `data/app-great.json` (bundled PvPoke data). `.github/workflows/update-data.yml` regenerates all
+(PWA), `data/app-great.json` (bundled PvPoke data), `vendor/tesseract/` (bundled text recognition, so scanning works offline and without a CDN). `.github/workflows/update-data.yml` regenerates all
 data files every Monday and commits them, so the app updates itself.
 
 ## Bundled app data
