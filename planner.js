@@ -271,11 +271,14 @@ function renderTodayInner(el) {
   if (ROSTER.log.length) {
     h += `<div class="sec">Recently completed</div>` + ROSTER.log.slice(0, 5).map(e => `<div class="team move done"><span class="tick ${e.evidence ? 'full' : 'hollow'}">${e.evidence ? '✓' : '○'}</span><div class="mvt"><span class="nm">${esc(e.title)}</span><div class="dt">${when(e.t)}${e.evidence ? ` · <a href="#" onclick="Planner.showScanKey('${esc(e.evidence)}');return false">scan</a>` : e.kind === 'manual' ? ` · without proof · <a href="#" onclick="Planner.undoDone('${e.id}');return false">undo</a>` : ''}${e.note ? ' · ' + esc(e.note) : ''}</div></div></div>`).join('');
   }
-  const dj = rep.disjoint.candidates.length ? rep.disjoint.candidates[0] : rep.disjoint.pending[0];
-  if (dj) {
-    const b = dj.teams[0].members.map(x => x.speciesId).join() === ids.join() ? dj.teams[1] : dj.teams[0];
-    const extra = b.members.filter(x => !own[x.speciesId]).map(x => x.name);
-    h += `<div class="sec">Second team, no overlap <small>for rotating</small></div>` + teamLine(b) + (extra.length ? `<div class="note">* ${esc(extra.join(', '))} once you have it.</div>` : '');
+  // second team: the best trio that shares no species with the recommended one (owned first, then pending pieces)
+  const base = new Set(ids.map(PVP.baseSpecies));
+  const poolOwned = Object.keys(m.ri.owned).filter(p => !base.has(PVP.baseSpecies(p)));
+  const poolAll = poolOwned.concat(Object.keys(m.ri.pending).filter(p => !base.has(PVP.baseSpecies(p))));
+  const second = L.bestTrios(poolOwned, 1)[0] || L.bestTrios(poolAll, 1)[0];
+  if (second) {
+    const extra = second.members.filter(x => !own[x.speciesId]).map(x => x.name);
+    h += `<div class="sec">Second team, no overlap <small>for rotating</small></div>` + teamLine(second) + (extra.length ? `<div class="note">* ${esc(extra.join(', '))} once you have it.</div>` : '');
   }
   const {cores: cs, rest} = cores(rep.todayAll.filter(t => t.members.map(x => x.speciesId).join() !== ids.join()));
   if (cs.length || rest.length) {
