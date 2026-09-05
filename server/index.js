@@ -6,6 +6,7 @@ import path from 'node:path';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { openDb } from './db.js';
+import { makeCoach } from './coach.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT) || 8080;
@@ -13,9 +14,10 @@ const PASSCODE = process.env.PASSCODE || '';
 const KINDS = new Set(['scans', 'roster', 'appr']);
 const USER = 'default';                       // one passcode = one user, for now
 const MAX_BYTES = 8 * 1024 * 1024;
+const COACH_PER_HOUR = Number(process.env.COACH_PER_HOUR) || 30;
 const VERSION = (() => { try { return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return 'dev'; } })();
 
-export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true } = {}) {
+export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true, coach = makeCoach(process.env.ANTHROPIC_API_KEY) } = {}) {
   const app = Fastify({ logger, bodyLimit: MAX_BYTES });
   // accept an empty JSON body (POST /api/auth sends none)
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
@@ -36,7 +38,30 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   app.get('/api/health', async () => {
     let dbOk = false;
     try { dbOk = await db.ping(); } catch { dbOk = false; }
-    return { ok: true, db: dbOk, storage: db.kind, sync: !!passcode, version: VERSION };
+    return { ok: true, db: dbOk, storage: db.kind, sync: !!passcode, coach: !!coach, version: VERSION };
+  });
+  // AI coach: the browser sends a compact roster/meta summary, the server asks Claude. Passcode-protected and rate-limited,
+  // because every call costs money on the server owner's API key.
+  const asks = [];
+  app.post('/api/coach', { preHandler: auth }, async (req, reply) => {
+    if (!coach) return reply.code(503).send({ error: 'coach_not_configured', message: 'Set ANTHROPIC_API_KEY on the server to enable the coach.' });
+    const now = Date.now();
+    while (asks.length && asks[0] < now - 3600e3) asks.shift();
+    if (asks.length >= COACH_PER_HOUR) return reply.code(429).send({ error: 'rate_limited', message: `at most ${COACH_PER_HOUR} questions per hour` });
+    const body = req.body || {};
+    if (!body.context || typeof body.context !== 'object') return reply.code(400).send({ error: 'missing_context' });
+    const context = JSON.stringify(body.context);
+    if (context.length > 60000) return reply.code(413).send({ error: 'context_too_large' });
+    const question = String(body.question || '').slice(0, 500);
+    asks.push(now);
+    try {
+      const out = await coach({ context, question });
+      if (out.refused) return reply.code(502).send({ error: 'refused', message: 'the model declined to answer' });
+      return { text: out.text, model: out.model, usage: out.usage };
+    } catch (e) {
+      req.log.error(e);
+      return reply.code(502).send({ error: 'coach_failed', message: e.message || 'the coach did not answer' });
+    }
   });
   app.post('/api/auth', { preHandler: auth }, async () => ({ ok: true }));
   app.get('/api/state', { preHandler: auth }, async () => ({ user: USER, state: await db.all(USER) }));
@@ -78,6 +103,6 @@ const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolv
 if (isMain) {
   const app = await buildServer();
   app.listen({ port: PORT, host: '0.0.0.0' })
-    .then(() => app.log.info(`PokeScan on :${PORT} (storage ${app.db.kind}, sync ${PASSCODE ? 'on' : 'OFF: set PASSCODE'})`))
+    .then(() => app.log.info(`PokeScan on :${PORT} (storage ${app.db.kind}, sync ${PASSCODE ? 'on' : 'OFF: set PASSCODE'}, coach ${process.env.ANTHROPIC_API_KEY ? 'on' : 'off: set ANTHROPIC_API_KEY'})`))
     .catch(e => { console.error(e); process.exit(1); });
 }

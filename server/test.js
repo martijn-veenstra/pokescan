@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { buildServer } from './index.js';
 
-const app = await buildServer({ passcode: 'test-code', logger: false });
+const fakeCoach = async ({ context, question }) => ({ text: `**Run this:** Azumarill / Tinkaton / Quagsire\n\n- question was: ${question}\n- context bytes: ${context.length}`, model: 'fake', usage: { in: 1, out: 1 } });
+const app = await buildServer({ passcode: 'test-code', logger: false, coach: fakeCoach });
 const H = { authorization: 'Bearer test-code', 'content-type': 'application/json' };
 await app.db.clear('default');
 
@@ -36,6 +37,22 @@ assert.equal(r.json().state.scans.data.length, 2);
 
 r = await app.inject({ method: 'PUT', url: '/api/state/nope', headers: H, payload: { data: 1 } });
 assert.equal(r.statusCode, 404);
+
+r = await app.inject({ method: 'GET', url: '/api/health' });
+assert.equal(r.json().coach, true, 'health reports the coach');
+r = await app.inject({ method: 'POST', url: '/api/coach', payload: { context: {} } });
+assert.equal(r.statusCode, 401, 'coach needs the passcode');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { question: 'x' } });
+assert.equal(r.statusCode, 400, 'coach needs a context');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { owned: ['Azumarill'] }, question: 'which lead?' } });
+assert.equal(r.statusCode, 200);
+assert.ok(r.json().text.includes('which lead?'), 'coach answer flows back');
+const noCoach = await buildServer({ passcode: 'test-code', logger: false, coach: null });
+r = await noCoach.inject({ method: 'GET', url: '/api/health' });
+assert.equal(r.json().coach, false);
+r = await noCoach.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {} } });
+assert.equal(r.statusCode, 503, 'no key -> 503');
+await noCoach.close();
 
 r = await app.inject({ method: 'GET', url: '/' });
 assert.equal(r.statusCode, 200);

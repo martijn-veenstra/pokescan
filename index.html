@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.4"></script>
+<script src="pvp.js?v=9.5"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -123,7 +123,8 @@ video,canvas{display:none}
 .plan{font-size:12px;color:var(--dim);margin-top:7px;line-height:1.55}
 .plan b{color:var(--ink);font-weight:600}.plan .ok{color:var(--green)}.plan .no{color:var(--coral)}
 .note{font-size:12px;color:var(--dim);margin:4px 0 8px}
-h1 .help.sync{margin-left:auto}h1 .help.sync.on{color:var(--green);border-color:#3BC489}h1 .help.sync.err{color:#F59A8B;border-color:#F0654F}
+h1 .help.prof{margin-left:auto;width:auto;padding:0 10px;gap:5px;font-size:12px;border-radius:15px}h1 .help.prof+.help{margin-left:0}
+h1 .help.sync{margin-left:0}h1 .help.sync.on{color:var(--green);border-color:#3BC489}h1 .help.sync.err{color:#F59A8B;border-color:#F0654F}
 h1 .help.sync+.help{margin-left:0}
 h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);
  color:var(--dim);font:700 15px Sora,sans-serif;display:flex;align-items:center;justify-content:center}
@@ -159,6 +160,12 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 .thirds{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:2px}
 .third{flex:none;background:#0E1626;border:1px solid var(--line);border-radius:10px;padding:6px 10px;display:flex;flex-direction:column;font-size:13px;min-width:84px}
 .third small{color:var(--dim)}.third.best{border-color:#3BC489;background:rgba(72,213,151,.10)}.third.best small{color:#7FE3B6}
+#profile{display:none;position:fixed;inset:0;background:rgba(6,10,20,.85);z-index:21;overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 12px 40px}
+#profile.open{display:block}#profile .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;max-width:560px;margin:0 auto;font-size:14px}
+#profile h2{font-family:Sora,sans-serif;font-size:16px;margin:0 0 8px;display:flex;justify-content:space-between}#profile .x{color:var(--dim);cursor:pointer}
+#profile h3{font-family:Sora,sans-serif;font-size:13px;margin:14px 0 4px;color:var(--green)}
+.thr{font-size:12.5px;color:var(--dim);margin-top:5px;line-height:1.45}.thr b{color:#F59A8B;font-weight:600}.thr .fix{color:var(--green)}
+.coach{cursor:default}.coach .ans{font-size:13.5px;color:var(--ink);line-height:1.55;margin-top:8px}.coach .ans p{margin:6px 0}.coach .ans ul{padding-left:18px;margin:4px 0}.coach .ans li{margin:2px 0}.coach .ans b{color:var(--green)}
 #syncbox{display:none;position:fixed;inset:0;background:rgba(6,10,20,.85);z-index:21;overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 12px 40px}
 #syncbox.open{display:block}#syncbox .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;max-width:560px;margin:0 auto;font-size:14px}
 #syncbox h2{font-family:Sora,sans-serif;font-size:16px;margin:0 0 8px;display:flex;justify-content:space-between}#syncbox .x{color:var(--dim);cursor:pointer}#syncbox p{margin:6px 0;line-height:1.5}
@@ -209,8 +216,8 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </style>
 </head>
 <body>
-<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner — nothing leaves your phone · v9.4</div>
+<h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.5</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -223,23 +230,10 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 <div id="view-meta" class="view"><div id="meta"><div class="note">Loading PvPoke data…</div></div></div>
 
 <div id="view-scans" class="view">
-<button class="btn" onclick="document.getElementById('panel').classList.toggle('open')">＋ Import scans</button>
-<div id="panel" style="display:none;background:var(--card);border-radius:14px;padding:12px;margin:8px 0">
-  <div class="row">
-    <label>Trainer level</label>
-    <input type="number" id="trainer" min="1" max="80" value="40">
-    <label style="margin-left:8px"><input type="checkbox" id="bb" onchange="localStorage.setItem('bb',this.checked?'1':'0');rankCache.clear();render()"> Best Buddy (L51)</label>
-  </div>
-  <input type="file" id="file" accept="video/*,image/*" multiple hidden>
-  <button class="btn" style="margin:6px 0 0" onclick="document.getElementById('file').click()">Choose recording / screenshots</button>
-</div>
-
-<div class="tools">
-  <button class="btn sec" onclick="exportCSV()">Export CSV</button>
-  <button class="btn sec" onclick="backupJSON()">Backup</button>
-  <button class="btn sec" onclick="document.getElementById('imp').click()">Restore</button>
-</div>
+<button class="btn" onclick="document.getElementById('file').click()">＋ Import scans <span style="display:block;font-weight:500;font-size:12px;opacity:.75">screenshots or a screen recording</span></button>
+<input type="file" id="file" accept="video/*,image/*" multiple hidden>
 <input type="file" id="imp" accept=".json,application/json" hidden>
+<input type="file" id="pfile" accept="image/*" hidden>
 <div class="row" style="gap:6px">
   <input id="q" placeholder="Search species" oninput="render()" style="flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px;font-size:14px">
   <select id="filter" onchange="render()">
@@ -270,7 +264,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 
 <div id="prog"><div class="bar"><div id="fill"></div></div><div id="stat"></div></div>
 <div id="empty" class="empty" style="display:none"><b>No scans on this device yet.</b><br>
-Tap <b>＋ Import scans</b> and pick Pokémon status-screen screenshots (or a screen recording of you swiping through them).
+Tap <b>＋ Import scans</b> and pick Pokémon status-screen screenshots (or a screen recording of you swiping through them). Set your trainer level once via the <b>Profile</b> button at the top.
 Everything is solved on the phone and kept here until you delete it — you never need to rescan a Pokémon unless you power it up or evolve it.<br>
 Scanned before on another browser or the home-screen app? Use <b>Backup</b> there and <b>Restore</b> here.
 Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#" onclick="toggleHelp();return false" style="color:var(--green)">Read the help</a>.</div>
@@ -285,6 +279,26 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 
 <div id="sheet" onclick="if(event.target===this)Planner.closeSheet()"></div>
 <div id="syncbox" class="sheetlike" onclick="if(event.target===this)Sync.toggle()"></div>
+<div id="profile" onclick="if(event.target===this)toggleProfile()"><div class="box">
+<h2>Trainer profile <span class="x" onclick="toggleProfile()">✕</span></h2>
+<div class="row" style="margin:6px 0">
+  <input id="tname" placeholder="trainer name" style="flex:1;min-width:120px;background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px;font-size:15px" onchange="localStorage.setItem('tname',this.value.trim());paintProfile()">
+  <label>Level</label>
+  <input type="number" id="trainer" min="1" max="80" value="40" onchange="localStorage.setItem('trainer',this.value);rankCache.clear();render();paintProfile()">
+</div>
+<label style="display:block;margin:4px 0 10px"><input type="checkbox" id="bb" onchange="localStorage.setItem('bb',this.checked?'1':'0');rankCache.clear();render()"> Best Buddy boost (+1 level, up to L51)</label>
+<button class="btn sec" style="margin:0" onclick="document.getElementById('pfile').click()">Read name and level from a profile screenshot</button>
+<p class="dim" style="font-size:12px;margin:6px 0 0">In Pokémon GO tap your avatar, screenshot the profile page (the one with your name and LEVEL) and pick it here. Profile screenshots mixed into a normal import are recognised too.</p>
+<div id="pstat" class="dim" style="font-size:12.5px;margin-top:6px"></div>
+<h3>Your data</h3>
+<div class="tools">
+  <button class="btn sec" onclick="exportCSV()">Export CSV</button>
+  <button class="btn sec" onclick="backupJSON()">Backup</button>
+  <button class="btn sec" onclick="document.getElementById('imp').click()">Restore</button>
+  <button class="btn sec" onclick="clearAll()">Clear scans</button>
+</div>
+<p class="dim" style="font-size:12px;margin:6px 0 0">Backup and Restore move your scans between browsers without a server. With sync connected (cloud button) every device already shares the same data.</p>
+</div></div>
 
 <div id="help" onclick="if(event.target===this)toggleHelp()"><div class="box">
 <h2>How to use PokeScan <span onclick="toggleHelp()" style="cursor:pointer;color:var(--dim)">✕</span></h2>
@@ -292,7 +306,7 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <h3>1 · Scan your Pokémon</h3>
 <ul>
 <li>In Pokémon GO open a Pokémon's status screen and take a screenshot, or screen-record while swiping through your storage.</li>
-<li>Set your <b>trainer level</b> once, tap <b>＋ Import scans</b>, pick the screenshots or the recording.</li>
+<li>Tap <b>Profile</b> (top right) once and set your trainer level, or read it from a screenshot of your trainer profile. Then tap <b>＋ Import scans</b> and pick the screenshots or the recording.</li>
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
 <li><b>Exact IVs:</b> screenshot (or record) the appraisal screen with the three orange bars. It shows name, CP, HP and the level arc too, so on its own it already makes a complete card with exact IVs. If a card for that Pokémon exists, the appraisal is attached to it instead; no duplicates either way.</li>
 <li>Rank chips read like Poké Genie: <b>GL #91 · 99.1%</b> is the IV rank among the 4096 spreads of that species at the 1500 cap and its stat product relative to rank 1.</li>
@@ -410,7 +424,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.4';
+const APP_VERSION='9.5';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -699,8 +713,12 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   if(!s.species) return null;
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
+  const attach=r=>{ applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species} ${r.cp} CP`); return key; };
   const r=results.find(x=>x.species===s.species && (!cp||x.cp===cp) && (!s.hp||x.hp===s.hp));
-  if(r){ applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species}`); return key; }
+  if(r) return attach(r);
+  // CP misread (a dropped digit is common)? same species and HP, and the digits we did read occur in the card's CP
+  const digits=String(cp||''), near=s.hp?results.filter(x=>x.species===s.species && x.hp===s.hp && x.cp && (!digits||String(x.cp).includes(digits))):[];
+  if(near.length===1) return attach(near[0]);
   if(s.hp && DATA.stats[s.species]){
     // the appraisal screen shows name, CP, HP and the level arc too: enough for a card of its own
     s.cp=cp||null; s.cpCandidates=s.cpCandidates||[];
@@ -709,7 +727,8 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
     if(s.combos.length){
       const lv=[...new Set(s.combos.map(c=>c[0]))]; s.level=lv.length===1?lv[0]:s.level;
       s.key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
-      if(results.some(x=>x.key===s.key)) return key;
+      const twin=results.find(x=>x.species===s.species && x.cp===s.cp && x.hp===s.hp);   // the inferred CP points at a card we already have
+      if(twin) return attach(twin);
       results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render();
       status(`${s.species} ${s.cp} CP · appraised ${ivs.join('/')}`); return key;
     }
@@ -717,6 +736,56 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   for(const k of apKeys(s.species,cp,s.hp)) APPR[k]=ivs; saveAppr(); status(`Appraisal ${ivs.join('/')} stored for ${s.species} ${cp??''}`);
   return key;
 }
+
+/* ---------- trainer profile screenshot: name and level ---------- */
+async function readProfile(ctx, W, H){
+  const wk=await getWorker();
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  const c2=$('cv2'), sc=Math.min(1, 700/W); c2.width=Math.round(W*sc); c2.height=Math.round(H*sc);
+  const g=c2.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c2.width,c2.height); g.drawImage(ctx.canvas,0,0,c2.width,c2.height);
+  const data=(await wk.recognize(c2)).data, text=data.text||'';
+  const up=text.toUpperCase();
+  if(!/LEVEL/.test(up) || !/TOTAL ACTIVITY|JOURNAL|BUDDY|SCRAPBOOK|FRIENDS|SOCIAL/.test(up)) return null;
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  let level=null, name=null;
+  // the level is the big blue number just above the word LEVEL: crop that spot, keep only blue pixels, read digits
+  const lw=(data.words||[]).find(w=>/^LEVEL$/i.test(w.text.replace(/[^A-Za-z]/g,'')));
+  if(lw){
+    const b=lw.bbox, wh=(b.y1-b.y0)/sc, x0=Math.max(0,Math.round(b.x0/sc-0.5*wh)), x1=Math.min(W,Math.round(b.x1/sc+3*wh));
+    const y1=Math.round(b.y0/sc), y0=Math.max(0,Math.round(y1-4.5*wh));
+    if(x1>x0 && y1>y0){
+      const isBlue=(px,i)=>px[i+2]>150 && px[i+2]-px[i]>70 && px[i+2]-px[i+1]>25;      // level digits ≈ (30,140,230), the XP bar is much lighter
+      const c3=binarize(ctx,W,H,x0,y0,x1-x0,y1-y0,3,isBlue);
+      await wk.setParameters({tessedit_char_whitelist:'0123456789', tessedit_pageseg_mode:'7'});
+      const t2=((await wk.recognize(c3)).data.text||'').replace(/\D/g,'');
+      const v=parseInt(t2); if(v>=1 && v<=80) level=v;
+      await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+    }
+  }
+  if(!level){                                                        // fall back to text: "LEVEL 41" or a lone 1–2 digit number on the line(s) above
+    const li=lines.findIndex(l=>/LEVEL/i.test(l));
+    if(li>=0){
+      const inline=lines[li].match(/LEVEL\s*[:.]?\s*(\d{1,2})(?![\d.,])/i); if(inline) level=parseInt(inline[1]);
+      for(let i=li-1;i>=Math.max(0,li-2)&&!level;i--){ const m3=lines[i].match(/^(\d{1,2})$/); if(m3) level=parseInt(m3[1]); }
+    }
+  }
+  const bi=lines.findIndex(l=>/^[&8]\s*[A-Za-z]/.test(l));         // "& Eevee/…" buddy line sits right under the name
+  const clean=l=>(l.replace(/[^A-Za-z0-9_ ]/g,'').trim().split(/\s+/)[0]||'');   // trainer names have no spaces; drop OCR noise after it
+  if(bi>0 && clean(lines[bi-1]).length>=3) name=clean(lines[bi-1]);
+  if(!name){ const mi=lines.findIndex(l=>/\bME\b/.test(l)&&/FRIENDS|SOCIAL/i.test(l));
+    for(let i=mi+1;i<Math.min(lines.length,mi+5)&&mi>=0;i++){ const c=clean(lines[i]); if(/^[A-Za-z][A-Za-z0-9_]{2,}$/.test(c)&&!/^(FRIENDS|SOCIAL|ME)$/i.test(c)){ name=c; break; } } }
+  if(!level && !name) return null;
+  return {level, name};
+}
+function applyProfile(p, from){
+  if(p.level){ $('trainer').value=p.level; localStorage.setItem('trainer',String(p.level)); rankCache.clear(); }
+  if(p.name){ $('tname').value=p.name; localStorage.setItem('tname',p.name); }
+  paintProfile(); render();
+  const msg=`Profile read: ${p.name||'name not found'}${p.level?` · level ${p.level}`:' · level not found'}`;
+  status(msg); const ps=$('pstat'); if(ps) ps.textContent=msg;
+}
+function paintProfile(){ const lv=localStorage.getItem('trainer'), nm2=localStorage.getItem('tname'); const el=$('proflbl'); if(el) el.textContent=nm2?`${nm2} · L${lv||'?'}`:lv?`L${lv}`:'Profile'; }
+function toggleProfile(){ const b=$('profile'); b.classList.toggle('open'); if(b.classList.contains('open')){ const ps=$('pstat'); if(ps) ps.textContent=''; } }
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
@@ -745,6 +814,19 @@ $('file').addEventListener('change', async e=>{
 });
 $('trainer').value=localStorage.getItem('trainer')||'40';
 $('bb').checked=localStorage.getItem('bb')!=='0';
+$('tname').value=localStorage.getItem('tname')||'';
+paintProfile();
+$('pfile').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const ps=$('pstat'); if(ps) ps.textContent='Reading the screenshot…';
+  try{
+    const bmp=await createImageBitmap(f);
+    const cv=$('cv'); cv.width=bmp.width; cv.height=bmp.height;
+    const ctx=cv.getContext('2d',{willReadFrequently:true}); ctx.drawImage(bmp,0,0);
+    const p=await withTimeout(readProfile(ctx,bmp.width,bmp.height), 60000, 'reading the screenshot took too long');
+    if(p) applyProfile(p, f.name); else if(ps) ps.textContent='That does not look like the trainer profile page. Open your avatar in Pokémon GO and screenshot the page with your name and LEVEL.';
+  }catch(err){ if(ps) ps.textContent='⚠ '+(err&&err.message||err); }
+});
 function del(i){ results.splice(i,1); save(); render(); }
 
 function status(s){ $('stat').textContent=s; }
@@ -756,44 +838,81 @@ async function scanImage(file,trainer){
   const cv=$('cv'); cv.width=bmp.width; cv.height=bmp.height;
   const ctx=cv.getContext('2d',{willReadFrequently:true});
   ctx.drawImage(bmp,0,0);
-  const ap=readAppraisal(ctx,bmp.width,bmp.height);
-  if(ap) await handleAppraisal(ctx,bmp.width,bmp.height,trainer,ap);
-  else await handleScan(ctx,bmp.width,bmp.height,trainer);
+  const W=bmp.width, H=bmp.height;
+  const ap=readAppraisal(ctx,W,H);
+  if(ap) await withTimeout(handleAppraisal(ctx,W,H,trainer,ap), 60000, 'reading the appraisal took too long');
+  else {
+    const key=await withTimeout(handleScan(ctx,W,H,trainer), 60000, 'reading the screenshot took too long');
+    if(key===null){                                            // not a status screen: maybe the trainer profile
+      const prof=await readProfile(ctx,W,H);
+      if(prof) applyProfile(prof, file.name); else status(`${file.name}: no Pokémon status screen found`);
+    }
+  }
   progress(1);
 }
+const withTimeout=(p,ms,msg)=>new Promise((res,rej)=>{ const to=setTimeout(async()=>{ await resetWorker(); rej(new Error(msg)); },ms); p.then(v=>{clearTimeout(to);res(v);},e=>{clearTimeout(to);rej(e);}); });
+async function resetWorker(){ const w=worker; worker=null; try{ if(w) await w.terminate(); }catch(e){} }
+function frameVec(cv){                                           // 16x16 grey thumbnail: cheap "does this frame look like that one"
+  const th=document.createElement('canvas'); th.width=th.height=16;
+  const g=th.getContext('2d'); g.drawImage(cv,0,0,16,16);
+  const d=g.getImageData(0,0,16,16).data, v=new Float32Array(256);
+  for(let i=0;i<256;i++) v[i]=gs(d,i*4);
+  return v;
+}
+const vecDiff=(a,b)=>{ let s2=0; for(let i=0;i<256;i++) s2+=Math.abs(a[i]-b[i]); return s2/256; };
 
 async function scanVideo(file,trainer){
-  const vid=$('vid'); vid.preload='auto'; vid.src=URL.createObjectURL(file);
-  await new Promise(r=>vid.onloadedmetadata=r);
+  const vid=$('vid'), url=URL.createObjectURL(file); vid.preload='auto'; vid.src=url;
+  await new Promise((res,rej)=>{
+    const to=setTimeout(()=>rej(new Error('the video did not load; is the format supported by this browser?')),20000);
+    vid.onloadedmetadata=()=>{ clearTimeout(to); res(); };
+    vid.onerror=()=>{ clearTimeout(to); rej(new Error('the video could not be decoded by this browser')); };
+  });
+  if(!isFinite(vid.duration)){                          // some recorders write no duration: seeking far past the end makes the browser find it
+    await new Promise(r=>{ const to=setTimeout(r,4000); vid.ondurationchange=()=>{ if(isFinite(vid.duration)){ clearTimeout(to); r(); } }; vid.currentTime=1e7; });
+    vid.ondurationchange=null;
+  }
+  if(!isFinite(vid.duration)||vid.duration<=0) throw new Error('the video has no readable duration');
   try{ await vid.play(); vid.pause(); }catch(e){}      // kick iOS decoder
   const cv=$('cv'); cv.width=vid.videoWidth; cv.height=vid.videoHeight;
   const ctx=cv.getContext('2d',{willReadFrequently:true});
-  const step=1/3; let prevSig=null, lastKey='', lastAp='';
-  for(let t=0.2; t<vid.duration; t+=step){
-    await new Promise(r=>{ const to=setTimeout(r,2500); vid.onseeked=()=>{clearTimeout(to);r();}; vid.currentTime=t; });
+  const step=1/3, dur=vid.duration;
+  let prev=null, lastRead=null, lastKey='', lastAp='', errs=0, reads=0, skipped=0;
+  const before=results.length;
+  for(let t=0.2; t<dur; t+=step){
+    const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{clearTimeout(to);r(true);}; vid.currentTime=t; });
+    if(!seeked){ skipped++; if(skipped>15) throw new Error('the video stopped seeking; try a shorter recording'); continue; }
     ctx.drawImage(vid,0,0);
-    // cheap frame signature on 16x16 thumb to detect stability
-    const th=document.createElement('canvas'); th.width=th.height=16;
-    th.getContext('2d').drawImage(cv,0,0,16,16);
-    const d=th.getContext('2d').getImageData(0,0,16,16).data;
-    let sig=0; for(let i=0;i<d.length;i+=16) sig+=d[i];
-    const stable = prevSig!==null && Math.abs(sig-prevSig)<sig*0.004;
-    prevSig=sig;
-    status(`Video ${Math.round(t)}s / ${Math.round(vid.duration)}s — ${results.length} scanned`);
-    progress(t/vid.duration);
-    if(!stable) continue;
-    const ap=readAppraisal(ctx,cv.width,cv.height);
-    if(ap){ const k=await handleAppraisal(ctx,cv.width,cv.height,trainer,ap,lastAp); if(k) lastAp=k; continue; }
-    // status-screen check: lower half is the bright white card (the sky can be any colour indoors)
-    const px=ctx.getImageData(0,0,cv.width,cv.height).data;
-    let top=0,bot=0,n1=0,n2=0;
-    for(let y=0;y<cv.height*0.1;y+=4) for(let x=0;x<cv.width;x+=8){ top+=gs(px,(Math.floor(y)*cv.width+x)*4); n1++; }
-    for(let y=Math.floor(cv.height*0.6);y<cv.height*0.9;y+=4) for(let x=0;x<cv.width;x+=8){ bot+=gs(px,(y*cv.width+x)*4); n2++; }
-    if(bot/n2<180) continue;
-    const key=await handleScan(ctx,cv.width,cv.height,trainer,lastKey);
-    if(key) lastKey=key;
+    const vec=frameVec(cv);
+    const stable = prev!==null && vecDiff(vec,prev)<3;        // two consecutive frames look alike: the swipe has stopped
+    prev=vec;
+    status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · ${results.length-before} new · ${reads} screens read`);
+    progress(t/dur);
+    if(!stable){ lastRead=null; continue; }
+    if(lastRead && vecDiff(vec,lastRead)<4) continue;        // still the same screen we already read: do not OCR it again
+    try{
+      const ap=readAppraisal(ctx,cv.width,cv.height);
+      if(ap){
+        status(`Video ${Math.round(t)}s · reading appraisal…`);
+        const k=await withTimeout(handleAppraisal(ctx,cv.width,cv.height,trainer,ap,lastAp), 25000, 'reading a frame took too long');
+        if(k) lastAp=k; lastRead=vec; reads++; continue;
+      }
+      // status-screen check: lower half is the bright white card (the sky can be any colour indoors)
+      const px=ctx.getImageData(0,0,cv.width,cv.height).data;
+      let bot=0,n2=0;
+      for(let y=Math.floor(cv.height*0.6);y<cv.height*0.9;y+=4) for(let x=0;x<cv.width;x+=8){ bot+=gs(px,(y*cv.width+x)*4); n2++; }
+      if(bot/n2<180){ lastRead=vec; continue; }
+      status(`Video ${Math.round(t)}s · reading screen…`);
+      const key=await withTimeout(handleScan(ctx,cv.width,cv.height,trainer,lastKey), 25000, 'reading a frame took too long');
+      if(key) lastKey=key;
+      lastRead=vec; reads++;
+    }catch(e){                                                   // one bad frame must not end the whole recording
+      errs++; console.error(e); status(`Video ${Math.round(t)}s · ${e.message} — continuing`);
+      lastRead=vec;
+      if(errs>=6) throw new Error(`gave up after ${errs} frame errors (${e.message})`);
+    }
   }
-  URL.revokeObjectURL(vid.src);
+  vid.removeAttribute('src'); vid.load(); URL.revokeObjectURL(url);
 }
 
 async function handleScan(ctx,W,H,trainer,skipKey){
@@ -858,7 +977,7 @@ document.getElementById('imp').addEventListener('change', async e=>{
     save(); render(); status(added+' restored');
   }catch(err){ status('restore failed'); }
 });
-function clearAll(){ results.length=0; save(); render(); }
+function clearAll(){ if(!confirm(`Delete all ${results.length} scans on this device?`)) return; results.length=0; save(); render(); if(window.Planner) Planner.refresh(); }
 function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
 function bestOf2(r){ return r.combos.reduce((a,b)=>pct(b)>pct(a)?b:a); }
 function toggleFav(i){ results[i].fav=!results[i].fav; save(); render(); }
@@ -919,9 +1038,6 @@ function render(){
     const plan=best?planFor(r,best):'';
     const barRow=(l,v)=>`<span>${l}</span><span class="tr"><i class="${v===15?'max':''}" style="width:${v/15*100}%"></i></span><span class="iv">${v}</span>`;
     const bars=best?`<div class="bars">${barRow('Atk',best[1])}${barRow('Def',best[2])}${barRow('HP',best[3])}</div>`:'';
-    let moves='';
-    if(mt&&r.txt) moves=`<div class="moves">${mt[2].map(m2=>{const p=pretty(m2);
-      return r.txt.includes(p)?`<b>✓ ${p}</b>`:`<s>✗ ${p}</s>`;}).join(' · ')}</div>`;
     const alts=r.combos.length>1?`<div class="alts">${r.combos.map(c=>`L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`:'';
     const more=r.combos.length>1?` <span style="font-size:12px;color:var(--dim)">· ${r.combos.length} mogelijk</span>`:'';
     const mvsel=window.Planner?Planner.movesRowForScan(r,i):'';
@@ -934,7 +1050,7 @@ function render(){
         <span class="flag">${flags}</span></div>
       ${bars}
       <div class="chips">${chips}</div>
-      ${plan}${moves}${alts}
+      ${plan}${alts}
       ${r.combos.length?'':'<div class="meta">Geen match — tik om te corrigeren</div>'}
       <div class="fix" onclick="event.stopPropagation()">
         ${mvsel?`<div style="width:100%"><div class="note" style="margin:0 0 4px">Moves on this Pokémon</div>${mvsel}</div>`:''}
@@ -1001,7 +1117,7 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="planner.js?v=9.4"></script>
-<script src="sync.js?v=9.4"></script>
+<script src="planner.js?v=9.5"></script>
+<script src="sync.js?v=9.5"></script>
 </body>
 </html>

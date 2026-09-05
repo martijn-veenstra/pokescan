@@ -230,6 +230,45 @@ function teamLine(t, title) {
               t.sharedWeaknesses.length ? `two lose to ${esc(t.sharedWeaknesses.join(', '))}` : ''].filter(Boolean).join(' · ');
   return `<div class="team" onclick="Planner.coverage(${JSON.stringify(t.members.map(m => m.speciesId)).replace(/"/g, '&quot;')})"><span class="sc">${t.teamScore.toFixed(1)}</span><span class="nm">${title ? esc(title) + ': ' : ''}${t.members.map(m => `${esc(m.name)} <span class="dim">#${m.rank}</span>`).join(' / ')}</span><div class="dt">${dt}</div></div>`;
 }
+function bestSwaps(L, team, m, ev) {         // one-member swaps from owned/pending pieces, best first
+  const {ri} = m; ev = ev || L.evaluate(team);
+  const pool = Object.keys(ri.owned).concat(Object.keys(ri.pending)).filter(p => !team.includes(p));
+  const swaps = [];
+  for (let i = 0; i < 3; i++) for (const p of pool) {
+    if (PVP.baseSpecies(p) === PVP.baseSpecies(team[i])) continue;
+    const t2 = team.slice(); t2[i] = p; if (new Set(t2.map(PVP.baseSpecies)).size < 3) continue;
+    const e2 = L.evaluate(t2), delta = Math.round((e2.score - ev.score) * 10) / 10;
+    const fixed = ev.shared.concat(ev.holes).filter(o => !e2.shared.includes(o) && !e2.holes.includes(o)).map(nm);
+    const opened = e2.holes.filter(o => !ev.holes.includes(o)).map(nm);
+    swaps.push({out: team[i], in: p, delta, fixed, opened, pending: !(p in ri.owned)});
+  }
+  return swaps.sort((a, b) => b.delta - a.delta);
+}
+function threats(L, team, ev) {               // meta Pokémon this team should fear, worst first
+  ev = ev || L.evaluate(team);
+  const rows = [];
+  for (const o of L.meta) {
+    const hole = ev.holes.includes(o), shared = ev.shared.includes(o);
+    if (!hole && !shared) continue;
+    const beats = team.filter(t => L.rating(t, o) < 400), answer = team.filter(t => L.rating(t, o) >= 500);
+    rows.push({id: o, rank: APP.pokemon[o].rank, hole, beats, answer: answer.sort((a, b) => L.rating(b, o) - L.rating(a, o))[0] || null});
+  }
+  return rows.sort((a, b) => (b.hole - a.hole) || a.rank - b.rank);
+}
+function partyCard(L, t, m, opts) {           // a saved party with its weaknesses and the meta Pokémon that exploit them
+  opts = opts || {};
+  const ids = t.members.map(x => x.speciesId), ev = L.evaluate(ids), th = threats(L, ids, ev), sw = bestSwaps(L, ids, m, ev)[0];
+  const cov = JSON.stringify(ids).replace(/"/g, '&quot;');
+  let h = `<div class="team" onclick="Planner.coverage(${cov})"><span class="sc">${t.teamScore.toFixed(1)}</span><span class="nm">${esc(t.name)}: ${t.members.map(x => `${esc(x.name)} <span class="dim">#${x.rank}</span>`).join(' / ')}</span>`;
+  if (opts.remove) h += `<span class="x" onclick="event.stopPropagation();Planner.dropTag('${esc(t.name).replace(/'/g, "\\'")}')">✕</span>`;
+  h += `<div class="dt">${th.length ? `${ev.holes.length} unanswered · ${ev.shared.length} beat two of three` : 'covers the whole meta, nothing beats two of your three'}</div>`;
+  for (const r of th.slice(0, opts.max || 5)) {
+    h += `<div class="thr"><b>${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? `beats all three${r.answer ? '' : ', nobody answers it'}` : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="fix">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`;
+  }
+  if (th.length > (opts.max || 5)) h += `<div class="thr">… ${th.length - (opts.max || 5)} more, tap for the full grid</div>`;
+  if (sw && sw.delta > 0) h += `<div class="thr">Fix: swap ${esc(nm(sw.out))} → <span class="fix">${esc(nm(sw.in))}</span>${sw.pending ? ' (pending)' : ''} for +${sw.delta}${sw.fixed.length ? ', covers ' + esc(sw.fixed.slice(0, 2).join(', ')) : ''}</div>`;
+  return h + '</div>';
+}
 function errorCard(where, e) {
   console.error(e);
   return `<div class="empty"><b>The ${where} view hit an error.</b><br><span style="font-family:ui-monospace,monospace;font-size:12px">${esc(e && e.message || e)}</span><br><br>
@@ -289,9 +328,57 @@ function renderTodayInner(el) {
     for (const c of cs) h += `<div class="core"><div class="ch"><span class="nm">${c.core.map(nm).map(esc).join(' + ')}</span><span class="sc">${c.best.toFixed(0)}</span></div><div class="thirds">${c.thirds.map(t => `<div class="third ${t.delta === 0 ? 'best' : ''}" onclick="Planner.coverage(${JSON.stringify(t.team.members.map(x => x.speciesId)).replace(/"/g, '&quot;')})"><span>${esc(nm(t.id))}</span><small>${t.delta === 0 ? 'best' : t.delta}</small></div>`).join('')}</div></div>`;
     for (const t of rest.slice(0, 3)) h += teamLine(t);
   }
-  if (rep.tagged.length) h += `<div class="sec">Your in-game parties</div>` + rep.tagged.map(t => teamLine(t, t.name)).join('');
+  if (rep.tagged.length) h += `<div class="sec">Your in-game parties <small>weak spots and who exploits them</small></div>` + rep.tagged.map(t => partyCard(L, t, m)).join('');
+  h += coachCard(m);
   h += `<div class="note">Heuristic, not a simulation: PvPoke's published matchups where available, type effectiveness and ranking score otherwise. Roles are a guess: the member with the fewest hard losses is the swap, the strongest remaining one closes.</div>`;
   el.innerHTML = h;
+}
+
+/* ---------- AI coach (server-side Claude API, only when the server has a key and sync is connected) ---------- */
+const COACH = Object.assign({q: '', text: '', hash: '', t: 0, busy: false, error: ''}, JSON.parse(localStorage.getItem('coach') || '{}'));
+const saveCoach = () => localStorage.setItem('coach', JSON.stringify({q: COACH.q, text: COACH.text, hash: COACH.hash, t: COACH.t}));
+function coachContext(m) {
+  const {L, rep, own, ri} = m;
+  const mon = id => { const e = APP.pokemon[id]; const mv = L.movesOf(id); return `${e.name} (#${e.rank}, ${mv.map(mvName).join('/')})`; };
+  const team = t => `${t.members.map(x => x.name).join(' / ')} — score ${t.teamScore.toFixed(0)}${t.unansweredMeta.length ? `, no answer to ${t.unansweredMeta.join(', ')}` : ''}${t.sharedWeaknesses.length ? `, two lose to ${t.sharedWeaknesses.join(', ')}` : ''}`;
+  const scanned = {}; for (const r of results) { const s = scanId(r); if (!s || !s.id || r.bench || r.superseded) continue; const lv = lvl(r); if (lv && (!scanned[s.id] || scanned[s.id] < lv)) scanned[s.id] = lv; }
+  return {
+    league: APP.league.title, gamemaster: APP.gamemasterTimestamp.slice(0, 10), trainerLevel: localStorage.getItem('trainer') || null,
+    owned: Object.keys(own).filter(id => APP.pokemon[id]).map(id => mon(id) + (scanned[id] ? ` at L${scanned[id]}` : '')),
+    pending: Object.keys(ri.pending).filter(id => APP.pokemon[id] && !own[id]).map(mon),
+    wanted: Object.keys(ri.candidates).filter(id => APP.pokemon[id]).map(mon),
+    bestTeams: rep.today.slice(0, 5).map(team), parties: rep.tagged.map(t => `${t.name}: ${team(t)}`),
+    nextMoves: openMoves(m).slice(0, 8).map(x => `${x.title} — ${x.sub}`),
+    topMeta: L.meta.slice(0, 30).map(id => `${nm(id)} #${APP.pokemon[id].rank}`),
+    scoring: 'Team score = mean best matchup rating vs the meta (PvPoke published matchups, type effectiveness otherwise) minus 12 per unanswered meta Pokémon and 6 per meta Pokémon that beats two members. Meta best is about ' + Math.round((APP.benchmark || {best: 721}).best) + '.',
+  };
+}
+function coachHash(o) { const s = JSON.stringify(o); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h); }
+function coachCard(m) {
+  if (!window.Sync || !Sync.coachAvailable()) return '';
+  const fresh = COACH.text && COACH.hash === coachHash(coachContext(m));
+  return `<div class="sec">Coach <small>Claude reads your roster and the meta</small></div>
+    <div class="team coach"><div class="nm">Ask the coach</div><div class="dt">Team ideas from what you own, what to build next and what to fear. Uses the numbers above, nothing from your phone leaves except this roster summary.</div>
+    <div class="add" style="margin-top:8px"><input id="coachq" placeholder="optional question, e.g. which lead for Azumarill teams?" value="${esc(COACH.q)}" style="flex:1;min-width:160px"><button onclick="Planner.askCoach()" ${COACH.busy ? 'disabled' : ''}>${COACH.busy ? 'Thinking…' : fresh ? 'Ask again' : 'Ask the coach'}</button></div>
+    ${COACH.error ? `<div class="note" style="color:#F59A8B">⚠ ${esc(COACH.error)}</div>` : ''}
+    ${COACH.text ? `<div class="ans">${mdLite(COACH.text)}</div><div class="note" style="margin-top:6px">${when(COACH.t)}${fresh ? '' : ' · your roster changed since this answer'}</div>` : ''}</div>`;
+}
+function mdLite(t) {                          // minimal markdown: paragraphs, bullets, bold
+  const blocks = esc(t).replace(/\r/g, '').split(/\n{2,}/);
+  return blocks.map(b => {
+    const lines = b.split('\n');
+    if (lines.every(l => /^\s*([-*•]|\d+[.)])\s+/.test(l))) return '<ul>' + lines.map(l => `<li>${l.replace(/^\s*([-*•]|\d+[.)])\s+/, '')}</li>`).join('') + '</ul>';
+    return `<p>${lines.join('<br>')}</p>`;
+  }).join('').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^<p>(#+\s*)(.+?)<\/p>/gm, '<p><b>$2</b></p>');
+}
+async function askCoach() {
+  const m = M(), ctx = coachContext(m), q = ($('coachq') || {value: ''}).value.trim();
+  COACH.q = q; COACH.busy = true; COACH.error = ''; renderToday();
+  try {
+    const text = await Sync.coach(ctx, q);
+    COACH.text = text; COACH.hash = coachHash(ctx); COACH.t = Date.now(); saveCoach();
+  } catch (e) { COACH.error = e.message || String(e); }
+  COACH.busy = false; renderToday();
 }
 
 /* ---------- coverage overlay (B) ---------- */
@@ -303,17 +390,7 @@ function coverageInner(L, team, m) {
   const {own, ri} = m, ev = L.evaluate(team);
   const rows = L.meta.filter((o, i) => i < 15 || ev.holes.includes(o) || ev.shared.includes(o));
   const cls = r => r >= 500 ? 'w' : r < 400 ? 'l' : 'e';
-  const pool = Object.keys(ri.owned).concat(Object.keys(ri.pending)).filter(p => !team.includes(p));
-  const swaps = [];
-  for (let i = 0; i < 3; i++) for (const p of pool) {
-    if (PVP.baseSpecies(p) === PVP.baseSpecies(team[i])) continue;
-    const t2 = team.slice(); t2[i] = p; if (new Set(t2.map(PVP.baseSpecies)).size < 3) continue;
-    const e2 = L.evaluate(t2), delta = Math.round((e2.score - ev.score) * 10) / 10;
-    const fixed = ev.shared.concat(ev.holes).filter(o => !e2.shared.includes(o) && !e2.holes.includes(o)).map(nm);
-    const opened = e2.holes.filter(o => !ev.holes.includes(o)).map(nm);
-    swaps.push({out: team[i], in: p, delta, fixed, opened, pending: !(p in ri.owned)});
-  }
-  swaps.sort((a, b) => b.delta - a.delta);
+  const swaps = bestSwaps(L, team, m, ev);
   const grid = `<div class="cov"><div class="cr head"><span>Meta threat</span>${team.map(t => `<span>${esc(nm(t))}</span>`).join('')}</div>` +
     rows.map(o => `<div class="cr ${ev.shared.includes(o) || ev.holes.includes(o) ? 'tint' : ''}"><span>${esc(nm(o))} <span class="dim">#${APP.pokemon[o].rank}</span></span>${team.map(t => `<i class="${cls(L.rating(t, o))} ${(L.isPublished ? L.isPublished(t, o) : true) ? '' : 'est'}" title="${Math.round(L.rating(t, o))}"></i>`).join('')}</div>`).join('') +
     `<div class="legend"><span><i class="w"></i>wins</span><span><i class="e"></i>even</span><span><i class="l"></i>loses</span><span><i class="w est"></i>faded = estimated from typing</span><span class="dim">${rows.length} of ${L.meta.length}</span></div></div>`;
@@ -392,7 +469,7 @@ function renderRosterInner(el) {
     <div class="tile add" onclick="Planner.toggleAdd()"><b>+</b><span class="st">add</span></div></div>`;
   h += `<div class="add" id="addrow" style="${UI.adding ? '' : 'display:none'}"><input id="addid" list="species" placeholder="species id, e.g. lickilicky"><select id="addkind"><option value="owned">owned</option><option value="pending">pending</option><option value="candidates">wanted</option></select><button onclick="Planner.add()">Add</button></div>`;
   if (UI.selected && (ts.some(t => t.id === UI.selected))) h += detail(m, UI.selected);
-  h += `<div class="sec">Your in-game parties <small>scored as-is</small></div>` + (m.rep.tagged.length ? m.rep.tagged.map(t => teamLine(t, t.name).replace('</div></div>', `<span class="x" onclick="event.stopPropagation();Planner.dropTag('${esc(t.name).replace(/'/g, "\\'")}')">✕</span></div></div>`)).join('') : '<div class="note">None yet.</div>');
+  h += `<div class="sec">Your in-game parties <small>scored as-is · weak spots</small></div>` + (m.rep.tagged.length ? m.rep.tagged.map(t => partyCard(m.L, t, m, {remove: true, max: 4})).join('') : '<div class="note">None yet. Add the three Pokémon of a battle party below to see what it fears.</div>');
   h += `<div class="add"><input id="tagname" placeholder="name" style="min-width:70px;flex:.6"><input id="tag1" list="species" placeholder="1"><input id="tag2" list="species" placeholder="2"><input id="tag3" list="species" placeholder="3"><button onclick="Planner.addTag()">Add</button></div>`;
   h += `<div class="tools"><button class="btn sec" onclick="Planner.exportRoster()">Export roster JSON</button><button class="btn sec" onclick="Planner.loadRepoRoster()">Load saved roster</button></div>`;
   el.innerHTML = h;
@@ -554,5 +631,5 @@ function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option v
 window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, coverage, coverageWith, closeSheet,
                   metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, select, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
-                  setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+                  askCoach, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();

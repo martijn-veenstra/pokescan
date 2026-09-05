@@ -5,7 +5,7 @@
 'use strict';
 const S = Object.assign({code: '', last: {}, base: {}}, JSON.parse(localStorage.getItem('sync') || '{}'));
 const save = () => localStorage.setItem('sync', JSON.stringify(S));
-let available = null, timer = null, busy = false, lastError = '';
+let available = null, timer = null, busy = false, lastError = '', health = null;
 const dirty = new Set();
 const $ = id => document.getElementById(id);
 const hdr = () => ({authorization: 'Bearer ' + S.code, 'content-type': 'application/json'});
@@ -14,6 +14,7 @@ async function detect() {
   try {
     const r = await fetch('/api/health', {cache: 'no-store'});
     const j = r.ok ? await r.json() : null;
+    health = j;
     available = !!(j && j.ok && j.sync);
   } catch { available = false; }
   paint();
@@ -110,9 +111,9 @@ async function connect(code) {
     await flush();
     S.connectedAt = Date.now(); save();
   } catch (e) { lastError = e.message; if (e.message === 'wrong passcode') { S.code = ''; save(); } }
-  paint();
+  paint(); if (window.Planner) Planner.renderToday();
 }
-function disconnect() { S.code = ''; S.base = {}; S.last = {}; save(); paint(); }
+function disconnect() { S.code = ''; S.base = {}; S.last = {}; save(); paint(); if (window.Planner) Planner.renderToday(); }
 async function syncNow() {
   if (!S.code) return;
   busy = true; paint();
@@ -140,14 +141,24 @@ function renderBox() {
     : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
 }
+async function coach(context, question) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
+  if (!S.code) throw new Error('connect sync first (cloud button)');
+  const r = await fetch('/api/coach', {method: 'POST', headers: hdr(), body: JSON.stringify({context, question})});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) throw new Error('wrong passcode');
+  if (r.status === 429) throw new Error('the coach is resting: ' + (j.message || 'too many questions this hour'));
+  if (!r.ok) throw new Error(j.message || j.error || ('server ' + r.status));
+  return j.text;
+}
 function toggle() { const box = $('syncbox'); box.classList.toggle('open'); if (box.classList.contains('open')) renderBox(); }
 async function init() {
   if (await detect() && S.code) {
     try { await pull(); } catch (e) { lastError = e.message; }
-    paint();
+    paint(); if (window.Planner) Planner.renderToday();
   }
 }
-window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, state: S, error: () => lastError, available: () => available};
+window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, state: S, error: () => lastError, available: () => available,
+               health: () => health, coachAvailable: () => !!(health && health.coach && S.code)};
 window.addEventListener('load', () => setTimeout(init, 300));
 window.addEventListener('online', () => { if (S.code) flush(); });
 })();

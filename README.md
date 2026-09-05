@@ -14,9 +14,20 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   would still need to catch; save as a party or add missing members to wanted; best-third suggestions),
   the derived meta teams with "Try in builder", and PvPoke's full rankings with search, type filter and
   one-tap slot / want actions.
-- **Scans** tab: import screenshots or a screen recording, solve level and IVs, see Great/Ultra League
-  rank and percentage, power-up cost, evolution preview and second-move cost. Appraisal screenshots pin
-  the exact IVs. Set the moves on each card, favourite, bench, search and filter.
+- **Scans** tab: one button imports screenshots or a screen recording; the app solves level and IVs and
+  shows Great/Ultra League rank and percentage, power-up cost, evolution preview and second-move cost.
+  Appraisal screenshots pin the exact IVs (on their own they make a complete card). Set the moves on
+  each card, favourite, bench, search and filter. A recording is read once per screen you pause on, a
+  frame that takes too long is skipped, and a bad frame never aborts the rest of the video.
+- **Profile** button (header): trainer name, level and Best Buddy boost, or read name and level from a
+  screenshot of your in-game trainer profile (also recognised when it is mixed into a normal import).
+  Export CSV, Backup, Restore and Clear live here too.
+- **Saved parties** (Today and Roster) list their weak spots: the meta Pokémon that nobody on the party
+  beats or that beat two of the three, with rank, who they beat, who to swap to, and the best one-member
+  fix from your roster.
+- **Coach** (Today, server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, a card
+  sends a compact roster and meta summary to Claude and shows team suggestions, what to build next and
+  what to fear. Answers are cached until the roster changes; the server rate-limits questions.
 
 Files: `index.html` (scanner and shell), `planner.js` (Today, coverage and roster views), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
 (PWA), `data/app-great.json` (bundled PvPoke data), `vendor/tesseract/` (bundled text recognition, so scanning works offline and without a CDN). `.github/workflows/update-data.yml` regenerates all
@@ -142,4 +153,6 @@ npm test                                                      # API tests (uses 
 Deploy: `Dockerfile` + `railway.json`. `.github/workflows/deploy-railway.yml` runs the tests and
 `railway up` on every push to main. It needs the repository secret `RAILWAY_TOKEN` (a Railway project
 token) and optionally the variable `RAILWAY_SERVICE` (default `pokescan`). On the Railway service set
-`DATABASE_URL` (reference to the Postgres service) and `PASSCODE`.
+`DATABASE_URL` (reference to the Postgres service) and `PASSCODE`. Optionally set `ANTHROPIC_API_KEY`
+to enable the coach (`POST /api/coach`, passcode-protected, at most `COACH_PER_HOUR` questions per hour,
+default 30; `/api/health` reports `coach: true`).
