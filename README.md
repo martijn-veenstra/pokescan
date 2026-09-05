@@ -10,6 +10,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Roster** tab: every Pokémon as a status tile (ready, powering up, pending, wanted, XL gated, benched).
   Tap for rank, cost to the cap, moves, what it beats and loses to, and actions. Owned tiles come from
   scans at or under 1500 CP; add others by name or load the roster committed in the repo.
+- **Meta** tab: a team builder (any three Pokémon, scored live with roles, coverage grid and what you
+  would still need to catch; save as a party or add missing members to wanted; best-third suggestions),
+  the derived meta teams with "Try in builder", and PvPoke's full rankings with search, type filter and
+  one-tap slot / want actions.
 - **Scans** tab: import screenshots or a screen recording, solve level and IVs, see Great/Ultra League
   rank and percentage, power-up cost, evolution preview and second-move cost. Appraisal screenshots pin
   the exact IVs. Set the moves on each card, favourite, bench, search and filter.

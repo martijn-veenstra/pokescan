@@ -6,7 +6,10 @@
 const CAP = 1500;
 const ROSTER = Object.assign({owned: {}, pending: {}, candidates: {}, tagged: {}, moves: {}, exclude: [], done: {}, snooze: {}, log: []},
                              JSON.parse(localStorage.getItem('roster') || '{}'));
-const UI = {selected: null, showAll: false, expect: null};
+const UI = {selected: null, showAll: false, expect: null,
+            build: JSON.parse(localStorage.getItem('build') || '{"slots":[null,null,null],"moves":{}}'), metaPanel: 'build', rankQ: '', rankType: '', rankLimit: 50};
+const saveBuild = () => localStorage.setItem('build', JSON.stringify(UI.build));
+const TYPES18 = ['normal', 'fire', 'water', 'grass', 'electric', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy'];
 const WEEK = 7 * 864e5;
 const when = t => new Date(t).toLocaleDateString('nl-NL', {day: 'numeric', month: 'short'});
 let dirty = true, model = null;
@@ -292,11 +295,12 @@ function renderTodayInner(el) {
 }
 
 /* ---------- coverage overlay (B) ---------- */
-function coverage(team) {
-  try { coverageInner(team); } catch (e) { $('sheet').innerHTML = `<div class="box">${errorCard('coverage', e)}</div>`; $('sheet').classList.add('open'); }
+function coverage(team) { const m = M(); coverageFor(m.L, team, m); }
+function coverageFor(L, team, m) {
+  try { coverageInner(L, team, m); } catch (e) { $('sheet').innerHTML = `<div class="box">${errorCard('coverage', e)}</div>`; $('sheet').classList.add('open'); }
 }
-function coverageInner(team) {
-  const m = M(), {L, own, ri} = m, ev = L.evaluate(team);
+function coverageInner(L, team, m) {
+  const {own, ri} = m, ev = L.evaluate(team);
   const rows = L.meta.filter((o, i) => i < 15 || ev.holes.includes(o) || ev.shared.includes(o));
   const cls = r => r >= 500 ? 'w' : r < 400 ? 'l' : 'e';
   const pool = Object.keys(ri.owned).concat(Object.keys(ri.pending)).filter(p => !team.includes(p));
@@ -394,8 +398,111 @@ function renderRosterInner(el) {
   el.innerHTML = h;
 }
 
+/* ---------- Meta tab: builder, meta teams, rankings ---------- */
+function ownership(m, id) {                    // where a species stands in your roster
+  if (m.own[id]) return m.own[id].manual ? 'owned' : 'owned';
+  if (id in m.ri.pending) return 'pending';
+  if (id in m.ri.candidates) return 'wanted';
+  return null;
+}
+const ownChip = st => st ? chip(st, st === 'owned' ? 'ok' : st === 'pending' ? 'gl' : '') : '';
+function builderLeague(m) {                    // roster movesets plus the builder's own per-slot choices
+  const ov = Object.assign({}, m.L.overrides);
+  for (const [id, mv] of Object.entries(UI.build.moves)) if (mv && mv.length) ov[id] = mv;
+  return new PVP.League(APP, ov);
+}
+function needLine(m, ids) {
+  const parts = ids.map(id => { const st = ownership(m, id);
+    if (st === 'owned') return null;
+    if (st === 'pending') return `${nm(id)} is pending`;
+    const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
+    return sc ? `catch a ${nm(pre)} ≤ ${sc.safe} CP for ${nm(id)}` : `find a ${nm(id)}`; }).filter(Boolean);
+  return parts.length ? `You still need: ${parts.join(' · ')}.` : 'You own all three.';
+}
+function renderMeta() {
+  const el = $('meta'); if (!el) return;
+  try { renderMetaInner(el); } catch (e) { el.innerHTML = errorCard('Meta', e); }
+}
+function renderMetaInner(el) {
+  if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
+  const m = M(), L = builderLeague(m);
+  const seg = ['build', 'teams', 'rank'].map(k => `<button class="${UI.metaPanel === k ? 'on' : ''}" onclick="Planner.metaPanel('${k}')">${{build: 'Builder', teams: 'Meta teams', rank: 'Rankings'}[k]}</button>`).join('');
+  let h = `<div class="tabs sub">${seg}</div>`;
+  if (UI.metaPanel === 'build') h += renderBuilder(m, L);
+  else if (UI.metaPanel === 'teams') h += renderMetaTeams(m);
+  else h += renderRankings(m);
+  el.innerHTML = h;
+}
+function renderBuilder(m, L) {
+  const slots = UI.build.slots, filled = slots.filter(Boolean);
+  let h = `<div class="note">Pick any three Pokémon: from the rankings, a meta team, or your roster. Scored with the same heuristic as Today.</div>`;
+  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">Slot ${i + 1}</span><span class="rn">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
+    : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">Slot ${i + 1}</span><span class="rn dim">+</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
+  h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
+  // per-slot move choice
+  if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`)}</div>`).join('');
+  if (filled.length === 3) {
+    const ev = L.evaluate(filled), d = L.describe(filled, ev), bm = APP.benchmark || {best: 721, median: 521};
+    const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
+    const rl = roles(L, filled);
+    h += `<div class="hero" onclick="Planner.coverageWith(${JSON.stringify(filled).replace(/"/g, '&quot;')})">
+      <div class="sec" style="margin:0 0 8px">This team <small>tap for coverage</small></div>
+      <div class="scorebar" style="margin-top:0"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
+      <div class="dim" style="font-size:12px;margin-top:8px">${rl.map(r => `${r.role}: <b style="color:var(--ink)">${esc(nm(r.id))}</b>`).join(' · ')}</div>
+      <div class="dim" style="font-size:12px;margin-top:6px">${d.unansweredMeta.length ? `No answer to ${chip(d.unansweredMeta.join(', '), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `Two lose to ${esc(d.sharedWeaknesses.join(', '))}.` : ''}</div>
+      <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
+    const missing = filled.filter(id => !ownership(m, id));
+    h += `<div class="acts"><button onclick="Planner.saveBuildAsTeam()">Save as in-game party</button>${missing.length ? `<button onclick="Planner.wantMissing()">Add ${missing.length} missing to wanted</button>` : ''}</div>`;
+  } else if (filled.length === 2) {
+    const ownedPool = Object.keys(m.ri.owned).filter(p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === 3);
+    const metaPool = APP.meta.slice(0, 40).filter(p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === 3);
+    const best = pool => pool.map(p => [L.evaluate(filled.concat(p)).score, p]).sort((a, b) => b[0] - a[0]).slice(0, 3);
+    const a = best(ownedPool), b = best(metaPool);
+    h += `<div class="sec">Best third <small>tap to fill the slot</small></div>`;
+    if (a.length) h += `<div class="note">From your roster</div><div class="thirds">${a.map(([sc, p]) => `<div class="third" onclick="Planner.fillSlot('${p}')"><span>${esc(nm(p))}</span><small>${sc.toFixed(0)}</small></div>`).join('')}</div>`;
+    h += `<div class="note">From the meta</div><div class="thirds">${b.map(([sc, p]) => `<div class="third" onclick="Planner.fillSlot('${p}')"><span>${esc(nm(p))}</span><small>${sc.toFixed(0)}${ownership(m, p) ? ' · ' + ownership(m, p) : ''}</small></div>`).join('')}</div>`;
+  }
+  return h;
+}
+function renderMetaTeams(m) {
+  const teams = APP.metaTeams || [];
+  if (!teams.length) return '<div class="note">No derived meta teams in the data file yet.</div>';
+  return `<div class="note">The ${teams.length} best trios from the top 40 of PvPoke's meta group, scored with the same heuristic. "Try" loads a team into the builder.</div>` +
+    teams.map((t, i) => `<div class="team" style="cursor:default"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span class="sc">${t.score.toFixed(1)}</span><span class="nm">${t.members.map(id => `${esc(nm(id))} <span class="dim">#${APP.pokemon[id] ? APP.pokemon[id].rank : '?'}</span>`).join(' / ')}</span></span><span class="dim" style="font-size:12px;white-space:nowrap">#${i + 1}</span></div>
+      <div class="dt">${t.holes.length ? `no answer to <b>${esc(t.holes.join(', '))}</b> · ` : ''}${t.shared.length ? `two lose to ${esc(t.shared.join(', '))} · ` : ''}${esc(needLine(m, t.members))}</div>
+      <div class="acts small"><button onclick="Planner.tryTeam(${JSON.stringify(t.members).replace(/"/g, '&quot;')})">Try in builder</button><button onclick="Planner.coverageWith(${JSON.stringify(t.members).replace(/"/g, '&quot;')})">Coverage</button></div></div>`).join('');
+}
+function renderRankings(m) {
+  const q = UI.rankQ.toLowerCase(), ty = UI.rankType;
+  const all = Object.entries(APP.pokemon).sort((a, b) => a[1].rank - b[1].rank)
+    .filter(([id, e]) => (!q || e.name.toLowerCase().includes(q) || id.includes(q)) && (!ty || e.types.includes(ty)));
+  const shown = all.slice(0, UI.rankLimit);
+  let h = `<div class="add"><input id="rankq" placeholder="Search ${Object.keys(APP.pokemon).length} ranked Pokémon" value="${esc(UI.rankQ)}" oninput="Planner.rankSearch(this.value)"><select onchange="Planner.rankType(this.value)"><option value="">any type</option>${TYPES18.map(t => `<option value="${t}" ${ty === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`;
+  h += `<div class="note">PvPoke ${esc(APP.league.title)} overall rankings · gamemaster ${esc(APP.gamemasterTimestamp.slice(0, 10))} · ${all.length} match${all.length === 1 ? '' : 'es'}</div>`;
+  h += shown.map(([id, e]) => `<div class="rank"><span class="rk">#${e.rank}</span><div class="rb"><div class="rn"><b>${esc(e.name)}</b> <span class="dim">${e.score}</span> ${ownChip(ownership(m, id))}</div><div class="dt">${e.types.join(' / ')} · ${e.moveset.map(mvName).map(esc).join(' · ')}</div></div>
+    <div class="ra"><button onclick="Planner.fillSlot('${id}')" title="add to builder">slot</button>${ownership(m, id) ? '' : `<button onclick="Planner.want('${id}')" title="add to wanted">want</button>`}</div></div>`).join('');
+  if (all.length > shown.length) h += `<div class="note" style="cursor:pointer" onclick="Planner.rankMore()">▸ show ${Math.min(100, all.length - shown.length)} more</div>`;
+  return h;
+}
+function metaPanel(k) { UI.metaPanel = k; renderMeta(); }
+function rankSearch(v) { UI.rankQ = v; UI.rankLimit = 50; const el = $('meta'); const pos = $('rankq') && $('rankq').selectionStart; renderMeta(); const q = $('rankq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
+function rankType(v) { UI.rankType = v; UI.rankLimit = 50; renderMeta(); }
+function rankMore() { UI.rankLimit += 100; renderMeta(); }
+function setSlot(i, id) { UI.build.slots[i] = id; saveBuild(); UI.metaPanel = 'build'; renderMeta(); }
+function fillSlot(id) { if (UI.build.slots.includes(id)) { UI.metaPanel = 'build'; renderMeta(); return; }
+  let i = UI.build.slots.indexOf(null); if (i < 0) i = 2; setSlot(i, id); }
+function addSlotFromInput() { const id = ($('slotid').value || '').trim().toLowerCase(); if (APP.pokemon[id]) fillSlot(id); else { $('slotid').value = ''; $('slotid').placeholder = 'unknown species id'; } }
+function clearSlots() { UI.build = {slots: [null, null, null], moves: {}}; saveBuild(); renderMeta(); }
+function tryTeam(ids) { UI.build.slots = ids.slice(0, 3); UI.metaPanel = 'build'; saveBuild(); renderMeta(); window.scrollTo(0, 0); }
+function setBuildMove(id, slot, val) { const m = M(), L = builderLeague(m); UI.build.moves[id] = place(L.movesOf(id).slice(), slot, val); saveBuild(); renderMeta(); }
+function coverageWith(ids) { const m = M(), L = builderLeague(m); coverageFor(L, ids, m); }
+function want(id) { if (!APP.pokemon[id]) return; ROSTER.candidates[id] = null; ROSTER.exclude = ROSTER.exclude.filter(x => x !== id); saveRoster(); refresh(); }
+function wantMissing() { for (const id of UI.build.slots) if (id && !ownership(M(), id)) ROSTER.candidates[id] = null; saveRoster(); refresh(); }
+function saveBuildAsTeam() { const ids = UI.build.slots.filter(Boolean); if (ids.length !== 3) return;
+  const name = prompt('Name for this party', ids.map(nm).join(' / ')); if (!name) return; ROSTER.tagged[name] = ids.slice(); saveRoster(); refresh(); status(`Saved "${name}" under your in-game parties`); }
+
 /* ---------- actions ---------- */
-function refresh() { dirty = true; renderToday(); renderRoster(); }
+function refresh() { dirty = true; renderToday(); renderRoster(); renderMeta(); }
 function markDirty() { dirty = true; }
 function select(id) { UI.selected = UI.selected === id ? null : id; renderRoster(); }
 function toggleAdd() { UI.adding = !UI.adding; renderRoster(); if (UI.adding) $('addid').focus(); }
@@ -444,7 +551,8 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {refresh, markDirty, renderToday, renderRoster, coverage, closeSheet, select, toggleAdd, add, drop, bench, unbench,
+window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, coverage, coverageWith, closeSheet,
+                  metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, select, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();

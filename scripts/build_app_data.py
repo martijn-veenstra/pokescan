@@ -103,9 +103,20 @@ def main(argv=None):
             gp = gm_pokemon[pre]
             extra[pre] = {"name": gp["speciesName"], "types": [t for t in gp["types"] if t != "none"]}
 
+    # Derived meta teams (data/pvpoke-team-comps.json, produced by generate_pvpoke_team_comps.py)
+    meta_teams = []
+    comps_path = "data/pvpoke-team-comps.json"
+    if os.path.exists(comps_path):
+        with open(comps_path, encoding="utf-8") as f:
+            comps = json.load(f).get("leagues", {}).get(args.league, {}).get("teams", [])
+        for t in comps:
+            meta_teams.append({"score": t["teamScore"], "members": [m["speciesId"] for m in t["members"]],
+                               "holes": t.get("unansweredMeta", []), "shared": t.get("sharedWeaknesses", [])})
+
     result = {
         "league": {"slug": args.league, "title": title, "cp": cp, "cup": cup},
         "benchmark": benchmark,
+        "metaTeams": meta_teams,
         "prevo": prevo,
         "source": "https://pvpoke.com/rankings/",
         "gamemasterTimestamp": gm.get("timestamp"),
