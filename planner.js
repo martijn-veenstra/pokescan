@@ -347,6 +347,36 @@ function renderTodayInner(el) {
   el.innerHTML = h;
 }
 
+/* ---------- Pokémon GO search strings ---------- */
+const FORM_FILTER = {shadow: 'shadow', galarian: 'galar', alolan: 'alola', hisuian: 'hisui', paldean: 'paldea'};
+const baseName = id => nm(id).replace(/\s*\(.*\)\s*$/, '').trim();
+const formFilters = id => id.split('_').slice(1).map(p => FORM_FILTER[p]).filter(Boolean);
+function searchFor(id) {                       // "+ninetales&shadow&cp-1500": the whole evolution family, this form, GL-eligible copies
+  return ['+' + baseName(id).toLowerCase()].concat(formFilters(id), 'cp-1500').join('&');
+}
+function candidateSearch(id) {                 // "jigglypuff&cp-479": wild pre-evolutions that evolve into a GL-legal copy
+  const pre = (APP.prevo || {})[id]; if (!pre || !DATA.stats[pre.split('_')[0].toUpperCase()]) return null;
+  const sc = safeCap(pre, id); if (!sc) return null;
+  return {q: [baseName(pre).toLowerCase()].concat(formFilters(pre), 'cp-' + sc.safe).join('&'), pre, cap: sc.safe};
+}
+function teamSearch(ids) { return ids.map(id => '+' + baseName(id).toLowerCase()).join(',') + '&cp-1500'; }
+async function copyText(q, btn) {
+  try { await navigator.clipboard.writeText(q); }
+  catch { const ta = document.createElement('textarea'); ta.value = q; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch {} ta.remove(); }
+  if (btn) { const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = t; }, 1500); }
+  status('Copied: ' + q);
+}
+const searchRow = (label, q, sub) => `<div class="srch"><span class="lb">${esc(label)}</span><span class="tx"><code>${esc(q)}</code>${sub ? `<div class="dt">${sub}</div>` : ''}</span><button onclick="Planner.copyText(${attr(q)},this)">Copy</button></div>`;
+function searchBlock(ids) {                    // for a team page: one string for the team, one per member, plus catch strings for missing members
+  const rows = [searchRow('Team', teamSearch(ids), 'every member\'s evolution family under 1500 CP')];
+  for (const id of ids) {
+    rows.push(searchRow(nm(id), searchFor(id)));
+    const c = candidateSearch(id); if (c) rows.push(searchRow('catch', c.q, `${esc(nm(c.pre))} that evolves into a GL-legal ${esc(nm(id))}`));
+  }
+  return `<div class="team srchs" style="cursor:default">${rows.join('')}</div>
+    <div class="note">Paste into the search box of your Pokémon storage. <b>+name</b> lists the whole evolution family, so a pre-evolution you can still evolve shows up too; <b>&amp;shadow</b>, <b>&amp;galar</b> filter the form; <b>cp-1500</b> keeps it to Great League copies. The team string cannot filter forms per member, so a normal Ninetales also matches a Shadow slot.</div>`;
+}
+
 /* ---------- Teams page and team detail ---------- */
 function renderTeams() {
   const el = $('teams'); if (!el) return;
@@ -409,18 +439,20 @@ function teamInner(m, ids, name) {
   const {L, rep, own} = m, ev = L.evaluate(ids), d = L.describe(ids, ev), rl = roles(L, ids), th = threats(L, ids, ev), sw = bestSwaps(L, ids, m, ev);
   const saved = savedName(ids, name), best = rep.today[0];
   const isBest = best && best.members.map(x => x.speciesId).slice().sort().join() === ids.slice().sort().join();
+  const metaRank = (APP.metaTeams || []).findIndex(t => t.members.slice().sort().join() === ids.slice().sort().join()) + 1;
   const back = {today: 'Today', teams: 'Teams', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.teamFrom] || 'Teams';
   const cov = attr(ids), bm = APP.benchmark || {best: 721, median: 521};
   const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
   const menu = ctxMenu([
     ['Coverage grid', `Planner.coverage(${cov})`],
     ['Try in builder', `Planner.tryTeam(${cov});showTab('meta')`],
+    ['Copy Pokémon GO search', `Planner.copyText(${attr(teamSearch(ids))})`],
     saved ? ['Rename party…', `Planner.renameTeam(${attr(saved)})`] : ['Save as in-game party…', `Planner.saveTeam(${cov})`],
     saved ? ['Delete party', `Planner.deleteTeam(${attr(saved)})`, true] : null,
   ]);
-  let h = `<div class="monhead"><button class="back" onclick="Planner.closeTeam()">‹ ${back}</button><div class="chips" style="margin:0">${saved ? chip('in-game party', 'gl') : ''}${isBest ? chip('recommended', 'ok') : ''}</div>${menu}</div>`;
+  let h = `<div class="monhead"><button class="back" onclick="Planner.closeTeam()">‹ ${back}</button><div class="chips" style="margin:0">${saved ? chip('in-game party', 'gl') : ''}${isBest ? chip('recommended', 'ok') : ''}${metaRank ? chip('meta team #' + metaRank, 'meta1') : ''}</div>${menu}</div>`;
   h += `<div class="hero" style="cursor:default">
-    <div class="sec" style="margin:0 0 10px">${esc(saved || ids.map(nm).join(' / '))} <small>${isBest ? 'best from your roster' : saved ? 'your in-game party' : 'team'}</small></div>
+    <div class="sec" style="margin:0 0 10px">${esc(saved || ids.map(nm).join(' / '))} <small>${isBest ? 'best from your roster' : saved ? 'your in-game party' : metaRank ? `meta team #${metaRank}` : 'team'}</small></div>
     <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${r.role}</span><span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
     <div class="dim" style="font-size:12px;margin-top:8px">${d.unansweredMeta.length ? `No answer to ${chip(few(d.unansweredMeta), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `${d.sharedWeaknesses.length} meta Pokémon beat two of three: ${esc(few(d.sharedWeaknesses))}.` : ''}</div>
@@ -441,6 +473,8 @@ function teamInner(m, ids, name) {
   h += `<div class="sec">Weak spots <small>meta Pokémon that beat two or all three</small></div>`;
   if (!th.length) h += `<div class="note">None: every meta Pokémon loses to at least two of your three.</div>`;
   else h += `<div class="team" style="cursor:default">` + th.slice(0, 8).map(r => `<div class="thr"><b style="cursor:pointer" onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? 'beats all three, nobody answers it' : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`).join('') + (th.length > 8 ? `<div class="thr">… ${th.length - 8} more in the coverage grid</div>` : '') + '</div>';
+  // search strings
+  h += `<div class="sec">Search in Pokémon GO <small>find them in your storage</small></div>` + searchBlock(ids);
   // swaps
   const swaps = sw.filter(x => x.delta > 0).slice(0, 4);
   if (swaps.length) h += `<div class="sec">If you swap one member <small>from what you own or are building</small></div><div class="swaps">` + swaps.map(x => `<div class="swap" style="cursor:pointer" onclick="Planner.openTeam(${attr(ids.map(id => id === x.out ? x.in : id))},null)"><span class="dim">${esc(nm(x.out))} → ${esc(nm(x.in))}${x.pending ? ' (pending)' : ''}</span><span class="up">+${x.delta}${x.fixed.length ? ' · fixes ' + esc(x.fixed.slice(0, 2).join(', ')) : ''}${x.opened.length ? ' · opens ' + esc(x.opened.slice(0, 2).join(', ')) : ''}</span></div>`).join('') + '</div>';
@@ -812,6 +846,7 @@ function monInner(m, id, noHead) {
     rows.push(['Your copy', `<b>${o.cp} CP</b> · L${o.level} · IVs ${o.ivs.join('/')}${o.scan && o.scan.appraisal ? ' <span class="okc">✓</span>' : ''} · GL rank #${o.glRank} (${o.glPct.toFixed(1)}%)<br><span class="dim">${o.toLevel > o.level ? (o.toLevel > 40 ? `needs L${o.toLevel}: XL candy` : `to the cap: L${o.toLevel} · ${fmt(c.dust)} dust · ${c.candy} candy`) : 'ready for GL, no power-up needed'}</span>`]); }
   rows.push(['In teams', `${teamsIn} of ${rep.todayAll.length} buildable`]);
   if (!o && sc) rows.push(['Catch', `a ${esc(nm(pre))} ≤ <b>${sc.safe}</b> CP evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs)`]);
+  if (!noHead) { const c = !o ? candidateSearch(id) : null; rows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span>${c ? `<span class="srchi"><code>${esc(c.q)}</code><button onclick="Planner.copyText(${attr(c.q)},this)">Copy</button></span>` : ''}<div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under 1500 CP${c ? `, and ${esc(nm(c.pre))} that evolve under the cap` : ''}</div>`]); }
   if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
   if (!noHead) { rows.push(...moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set')); rows.push(['', `<div class="dim" style="font-size:12px">${!known ? `not known yet · planning uses PvPoke's ${esc(rec.map(mvName).join(' · '))}` : (o ? 'moves on your copy' : 'moves for planning') + (notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke')}</div>`]); }
   h += kv(rows) + (noHead ? '' : moveUsage(id, known || []));
@@ -934,10 +969,8 @@ function renderBuilder(m, L) {
 function renderMetaTeams(m) {
   const teams = APP.metaTeams || [];
   if (!teams.length) return '<div class="note">No derived meta teams in the data file yet.</div>';
-  return `<div class="note">The ${teams.length} best trios from the top 40 of PvPoke's meta group, scored with the same heuristic. "Try" loads a team into the builder.</div>` +
-    teams.map((t, i) => `<div class="team" style="cursor:default"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span class="sc">${t.score.toFixed(1)}</span><span class="nm">${t.members.map(id => `<a href="#" onclick="Planner.openMon('${id}');return false">${esc(nm(id))}</a> <span class="dim">#${APP.pokemon[id] ? APP.pokemon[id].rank : '?'}</span>`).join(' / ')}</span></span><span class="dim" style="font-size:12px;white-space:nowrap">#${i + 1}</span></div>
-      <div class="dt">${t.holes.length ? `no answer to <b>${esc(t.holes.join(', '))}</b> · ` : ''}${t.shared.length ? `two lose to ${esc(t.shared.join(', '))} · ` : ''}${esc(needLine(m, t.members))}</div>
-      <div class="acts small"><button onclick="Planner.tryTeam(${JSON.stringify(t.members).replace(/"/g, '&quot;')})">Try in builder</button><button onclick="Planner.coverageWith(${JSON.stringify(t.members).replace(/"/g, '&quot;')})">Coverage</button></div></div>`).join('');
+  return `<div class="note">The ${teams.length} best trios from the top 40 of PvPoke's meta group, scored with the same heuristic. Tap one for its page: roles, weak spots, what you still need, Pokémon GO search strings, and Try in builder / Coverage in its ⋯ menu.</div>` +
+    teams.map((t, i) => teamRow(m, t.members, null, `meta #${i + 1}`)).join('');
 }
 function renderRankings(m) {
   const q = UI.rankQ.toLowerCase(), ty = UI.rankType;
@@ -1023,7 +1056,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {refresh, markDirty, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
