@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.10"></script>
+<script src="pvp.js?v=9.11"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -78,6 +78,14 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);
  white-space:pre-wrap;display:none}
 .mon.editing .alts{display:block}
 .flag{font-size:11.5px;color:var(--gold)}
+.mon.compact{padding:12px 15px 12px;cursor:pointer}
+.ivrow{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13.5px;align-items:baseline}
+.ivrow small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.ivrow b{font-family:Sora,sans-serif;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.ivrow .okc{color:var(--green);font-weight:700}.g .pctc{color:var(--green)}.m .pctc{color:var(--gold)}.b .pctc{color:var(--coral)}
+.scanhero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 15px;margin:8px 0}
+.scanhero .bars{margin-top:10px}.scanhero .kpis{margin-top:10px}
+.gloss{font-size:12px;color:var(--dim);line-height:1.5;margin:6px 0 0}
 .fix{margin-top:10px;display:none;gap:6px;flex-wrap:wrap}
 .mon.editing .fix{display:flex}
 .fix input{width:74px;background:#0E1626;border:1px solid var(--line);border-radius:9px;
@@ -227,7 +235,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.10</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.11</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -320,7 +328,7 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <li>Tap <b>Profile</b> (top right) once and set your trainer level, or read it from a screenshot of your trainer profile. Then tap <b>＋ Import scans</b> and pick the screenshots or the recording.</li>
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
 <li><b>Exact IVs:</b> screenshot (or record) the appraisal screen with the three orange bars. It shows name, CP, HP and the level arc too, so on its own it already makes a complete card with exact IVs. If a card for that Pokémon exists, the appraisal is attached to it instead; no duplicates either way.</li>
-<li>Rank chips read like Poké Genie: <b>GL #91 · 99.1%</b> is the IV rank among the 4096 spreads of that species at the 1500 cap and its stat product relative to rank 1.</li>
+<li>Cards show three numbers. <b>IVs</b> are the hidden Attack/Defence/HP values (0–15 each). <b>IV%</b> is their sum out of 45, the number Pokémon GO's appraisal stars hint at. <b>GL rank</b> is what matters for battling: the position of this IV spread among the 4096 possible spreads of that species at the 1500 cap, with its stat product relative to the #1 spread; #1 is the perfect Great League copy. Tap a card for everything else: bars, Ultra League rank, power-up cost, evolution preview, moves and corrections.</li>
 <li>When you rescan a Pokémon after a power-up or evolution, the old card is archived automatically (filter "Archived" to see it) and the step shows up under Recently completed.</li>
 <li>Every Pokémon has its own page: tap a roster tile, a name in the rankings or a meta team. It shows your copy, moves, the teams it makes with your roster, what it beats and loses to, and where to get it (raids, eggs, research, events from Leek Duck's schedule). Remove it from the roster there.</li>
 <li>Tap a card to set its moves, bench it, or correct species, CP, HP or level and re-solve. ☆ marks a favourite, ✕ deletes it. The search box and filter narrow the list; "best copy" marks the best of several copies of a species.</li>
@@ -436,7 +444,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.10';
+const APP_VERSION='9.11';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -1028,54 +1036,33 @@ function render(){
     const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
     const cls=hi>=90?'g':hi>=70?'m':'b';
     const mt=metaFor(r.species);
-    const best=r.combos.length?r.combos.reduce((a,b2)=>pct(b2)>pct(a)?b2:a):null;
+    const best=r.combos.length?bestOf2(r):null;
     const nice=(r.species||'?').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.level&&'level?'].filter(Boolean).join(' ');
-    let chips='';
-    if(r.superseded) chips+=`<span class="chip">archived · ${r.superseded.why||'superseded'}</span>`;
-    if(r.cpInferred) chips+=`<span class="chip gl">CP inferred from appraisal</span>`;
-    if(r.bench) chips+=`<span class="chip">benched</span>`;
-    else if(bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1) chips+=`<span class="chip meta1">best copy</span>`;
-    if(best){ const bb2=best[4]||DATA.stats[r.species][0];
-      const gl=pvpRank(bb2,best[1],best[2],best[3],1500), ul=pvpRank(bb2,best[1],best[2],best[3],2500);
-      chips+=`<span class="chip gl">GL #${gl.n} · ${gl.pct.toFixed(1)}% · L${gl.lv} · ${gl.cp} CP</span>`;
-      chips+=`<span class="chip ul">UL #${ul.n} · ${ul.pct.toFixed(1)}%</span>`;
-      if(r.cp>1500) chips+=`<span class="chip warn">over the GL cap</span>`;
-      else if(gl.lv>40) chips+=`<span class="chip warn">GL needs L${gl.lv} · XL candy</span>`;
-      else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv);
-        chips+=`<span class="chip warn">→ L${gl.lv}: ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy</span>`; }
-      else chips+=`<span class="chip meta1">ready for GL</span>`; }
-    if(mt) chips+=`<span class="chip meta1">meta #${mt[0]} · ${mt[1]}</span>`;
-    if(r.appraisal) chips+=r.apMismatch?`<span class="chip warn">appraisal ${r.appraisal.join('/')} ≠ CP/HP</span>`:`<span class="chip meta1">✓ appraised ${r.appraisal.join('/')}</span>`;
-    const plan=best?planFor(r,best):'';
-    const barRow=(l,v)=>`<span>${l}</span><span class="tr"><i class="${v===15?'max':''}" style="width:${v/15*100}%"></i></span><span class="iv">${v}</span>`;
-    const bars=best?`<div class="bars">${barRow('Atk',best[1])}${barRow('Def',best[2])}${barRow('HP',best[3])}</div>`:'';
-    const alts=r.combos.length>1?`<div class="alts">${r.combos.map(c=>`L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`:'';
-    const more=r.combos.length>1?` <span style="font-size:12px;color:var(--dim)">· ${r.combos.length} mogelijk</span>`:'';
-    const mvsel=window.Planner?Planner.movesRowForScan(r,i):'';
-    return `<div class="mon ${cls} ${r.bench?'benched':''}" id="m${i}">
+    const ivpct=ps.length?(lo===hi?hi.toFixed(0):lo.toFixed(0)+'–'+hi.toFixed(0))+'%':'—';
+    let status='', gl=null;
+    if(best){ const bb2=best[4]||DATA.stats[r.species][0]; gl=pvpRank(bb2,best[1],best[2],best[3],1500);
+      if(r.cp>1500) status='<span class="chip warn">over the GL cap</span>';
+      else if(gl.lv>40) status=`<span class="chip warn">needs L${gl.lv} · XL candy</span>`;
+      else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
+      else status='<span class="chip meta1">ready for GL</span>'; }
+    const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
+      !r.bench&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
+      mt?`<span class="chip">meta #${mt[0]}</span>`:''].join('');
+    const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
+    const multi=r.combos.length>1?`<span class="dim"> · ${r.combos.length} possible</span>`:'';
+    return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="Planner.openScan('${r.key.replace(/'/g,'')}')">
       <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${nice}</span>
-        <span class="cp"><b>${r.cp??'?'}</b> CP · ${r.hp??'?'} HP · L${r.level??'?'}
-        <span class="del" onclick="del(${i});event.stopPropagation()">✕</span></span></div>
-      <div class="top" style="margin-top:6px">
-        <span class="pctbig">${ps.length?(lo===hi?hi.toFixed(1):lo.toFixed(1)+'–'+hi.toFixed(1))+'%':'—'}${more}</span>
-        <span class="flag">${flags}</span></div>
-      ${bars}
-      <div class="chips">${chips}</div>
-      ${plan}${alts}
-      ${r.combos.length?'':'<div class="meta">Geen match — tik om te corrigeren</div>'}
-      <div class="fix" onclick="event.stopPropagation()">
-        ${mvsel?`<div style="width:100%"><div class="note" style="margin:0 0 4px">Moves on this Pokémon</div>${mvsel}</div>`:''}
-        <button class="sec2" onclick="toggleBench(${i})">${r.bench?'Unbench':'Bench'}</button>
-        ${r.superseded?`<button class="sec2" onclick="results[${i}].superseded=null;save();render();if(window.Planner)Planner.refresh()">Unarchive</button>`:''}
-        <input placeholder="species" value="${r.species||''}" id="sp${i}">
-        <input placeholder="CP" value="${r.cp||''}" id="cp${i}" inputmode="numeric">
-        <input placeholder="HP" value="${r.hp||''}" id="hp${i}" inputmode="numeric">
-        <input placeholder="level" value="${r.level||''}" id="lv${i}" inputmode="decimal">
-        <button onclick="refix(${i});event.stopPropagation()">Re-solve</button>
-      </div></div>`;
+        <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
+      <div class="ivrow">
+        <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}${multi}</span>
+        <span><small>IV%</small><b class="pctc">${ivpct}</b></span>
+        ${gl?`<span><small>GL rank</small><b>#${gl.n}</b> <span class="dim">${gl.pct.toFixed(1)}%</span></span>`:''}
+      </div>
+      <div class="chips" style="margin-top:8px">${status}${tags}</div>
+      ${r.combos.length?'':'<div class="meta">No match: tap to correct species, CP, HP or level.</div>'}
+    </div>`;
   }).join('');
-  results.forEach((_,i)=>{ const el=$('m'+i); if(el) el.addEventListener('click',()=>el.classList.toggle('editing')); });
 }
 /* ---------- planning helpers ---------- */
 function pvpokeIdFor(species, form){          // scanner species (UPPERCASE) + base-stat form -> PvPoke speciesId
@@ -1118,6 +1105,15 @@ function showTab(t){
 showTab(localStorage.getItem('tab')||'today');
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 
+function refixScan(r, vals){                       // used by the scan page: correct species/CP/HP/level and solve again
+  r.species=(vals.species||r.species||'').toUpperCase().trim();
+  r.cp=parseInt(vals.cp)||r.cp; r.hp=parseInt(vals.hp)||r.hp; r.level=parseFloat(vals.level)||null;
+  r.combos=solve(r.species,r.cp,r.hp,r.level,r.dust);
+  if(r.appraisal) applyAppraisal(r,r.appraisal);
+  if(r.combos.length){ const lv=[...new Set(r.combos.map(c=>c[0]))]; if(lv.length===1) r.level=lv[0]; }
+  r.key=`${r.species}|${r.cp}|${r.hp}|${r.level??''}|${r.dust??''}`;
+  save(); render(); return r.key;
+}
 function refix(i){
   const r=results[i];
   r.species=$('sp'+i).value.toUpperCase().trim()||r.species;
@@ -1130,8 +1126,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.10"></script>
-<script src="planner.js?v=9.10"></script>
-<script src="sync.js?v=9.10"></script>
+<script src="sources.js?v=9.11"></script>
+<script src="planner.js?v=9.11"></script>
+<script src="sync.js?v=9.11"></script>
 </body>
 </html>

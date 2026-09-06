@@ -14,10 +14,12 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   would still need to catch; save as a party or add missing members to wanted; best-third suggestions),
   the derived meta teams with "Try in builder", and PvPoke's full rankings with search, type filter and
   one-tap slot / want actions.
-- **Scans** tab: one button imports screenshots or a screen recording; the app solves level and IVs and
-  shows Great/Ultra League rank and percentage, power-up cost, evolution preview and second-move cost.
-  Appraisal screenshots pin the exact IVs (on their own they make a complete card). Set the moves on
-  each card, favourite, bench, search and filter. A recording is read once per screen you pause on, a
+- **Scans** tab: one button imports screenshots or a screen recording; the app solves level and IVs.
+  Each card is one compact row: IVs, IV% (sum out of 45) and GL rank (position among the 4096 IV spreads
+  at the 1500 cap, with stat product vs #1), plus one status chip (ready / power-up cost / XL / over cap).
+  Tap a card for its page: IV bars, Ultra League rank, all possible spreads, evolution preview, second-move
+  cost, moves, bench / archive / delete, and correcting a misread. Appraisal screenshots pin the exact
+  IVs (on their own they make a complete card). A recording is read once per screen you pause on, a
   frame that takes too long is skipped, and a bad frame never aborts the rest of the video.
 - **Profile** button (header): trainer name, level and Best Buddy boost, or read name and level from a
   screenshot of your in-game trainer profile (also recognised when it is mixed into a normal import).
