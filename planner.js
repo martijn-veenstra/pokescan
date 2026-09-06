@@ -605,7 +605,7 @@ function scanSection(m, r) {
     const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500), ul = pvpRank(bb, best[1], best[2], best[3], 2500);
     const barRow = (l, v) => `<span>${l}</span><span class="tr"><i class="${v === 15 ? 'max' : ''}" style="width:${v / 15 * 100}%"></i></span><span class="iv">${v}</span>`;
     h += `<div class="bars">${barRow('Atk', best[1])}${barRow('Def', best[2])}${barRow('HP', best[3])}</div>`;
-    h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b></div><div><small>GL rank</small><b>#${gl.n} <span class="dim" style="font-weight:500">${gl.pct.toFixed(1)}%</span></b></div><div><small>UL rank</small><b>#${ul.n} <span class="dim" style="font-weight:500">${ul.pct.toFixed(1)}%</span></b></div></div>`;
+    h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b><span class="sub">${best[1] + best[2] + best[3]} of 45</span></div><div><small>GL rank</small><b>#${gl.n}</b><span class="sub">${gl.pct.toFixed(1)}% of best</span></div><div><small>UL rank</small><b>#${ul.n}</b><span class="sub">${ul.pct.toFixed(1)}% of best</span></div></div>`;
     let st;
     if (r.cp > 1500) st = `${chip('over the GL cap', 'warn')} <span class="dim">cannot battle in Great League</span>`;
     else if (gl.lv > 40) st = `${chip(`needs L${gl.lv}`, 'warn')} <span class="dim">XL candy · ${gl.cp} CP at the cap</span>`;
