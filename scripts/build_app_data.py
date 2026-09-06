@@ -54,6 +54,14 @@ def main(argv=None):
         fast = [m["moveId"] for m in e.get("moves", {}).get("fastMoves", [])] or p.get("fastMoves", [])
         charged = [m["moveId"] for m in e.get("moves", {}).get("chargedMoves", [])] or p.get("chargedMoves", [])
         used_moves.update(e.get("moveset", []), fast, charged)
+        # how often PvPoke's simulations pick each move, as a share of its slot (fast moves among fast, charged among charged)
+        use = {}
+        for key in ("fastMoves", "chargedMoves"):
+            lst = e.get("moves", {}).get(key, [])
+            tot = sum((m.get("uses") or 0) for m in lst) or 1
+            for m in lst:
+                if m.get("uses"):
+                    use[m["moveId"]] = round(100 * m["uses"] / tot)
         entry = {
             "name": e.get("speciesName") or p.get("speciesName"),
             "dex": p.get("dex"),
@@ -63,6 +71,7 @@ def main(argv=None):
             "moveset": e.get("moveset", []),
             "fast": fast,
             "charged": charged,
+            "use": use,
             "matchups": [[m["opponent"], m["rating"]] + ([m["opRating"]] if "opRating" in m else [])
                          for m in e.get("matchups", [])],
             "counters": [[c["opponent"], c["rating"]] + ([c["opRating"]] if "opRating" in c else [])

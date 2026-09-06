@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.18"></script>
+<script src="pvp.js?v=9.19"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -95,6 +95,9 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);
 .kv{display:grid;grid-template-columns:78px minmax(0,1fr);gap:9px 12px;align-items:start;font-size:13.5px;margin-top:12px;line-height:1.45}
 .kv .k{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:3px}.kv .v{min-width:0}.kv .v .mv{margin:0}.kv .v b{font-weight:600}.kv .v .okc{color:var(--green);font-weight:700}
 .kv .v input{background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px;font-size:15px}
+.kv .v .mvsel{width:100%;min-width:0;font-size:14.5px;padding:9px 10px;background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+.kv .v.cont{margin-top:-4px}
+.use{display:grid;grid-template-columns:62px 1fr;gap:5px 10px;font-size:12.5px;color:var(--dim);margin-top:6px;background:#0E1626;border-radius:10px;padding:8px 10px;line-height:1.45}.use .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}.use b{color:var(--ink);font-weight:600}
 .ctx{position:relative;flex:none}.ctx .dots{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--dim);font-size:16px;line-height:1;cursor:pointer}
 .ctx .menu{position:absolute;right:0;top:34px;background:#0E1626;border:1px solid var(--line);border-radius:12px;min-width:220px;z-index:6;box-shadow:0 10px 28px rgba(0,0,0,.45);padding:4px}
 .ctx .menu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--ink);padding:10px 12px;font-size:14px;border-radius:8px}.ctx .menu button:active{background:var(--card)}.ctx .menu button.danger{color:#F59A8B}
@@ -251,7 +254,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.18</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.19</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -462,7 +465,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.18';
+const APP_VERSION='9.19';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -1361,8 +1364,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.18"></script>
-<script src="planner.js?v=9.18"></script>
-<script src="sync.js?v=9.18"></script>
+<script src="sources.js?v=9.19"></script>
+<script src="planner.js?v=9.19"></script>
+<script src="sync.js?v=9.19"></script>
 </body>
 </html>

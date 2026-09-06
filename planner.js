@@ -484,6 +484,22 @@ function movesRow(id, moves, handler) {
   const third = `<select onchange="${handler.replace('SLOT', 2)}"><option value="" ${!moves[2] ? 'selected' : ''}>no 2nd move</option>${withCur(e.charged, 2).map(mv => `<option value="${mv}" ${moves[2] === mv ? 'selected' : ''}>${esc(mvName(mv))}</option>`).join('')}</select>`;
   return `<div class="mv">${sel(0, e.fast)}${sel(1, e.charged)}${third}</div>`;
 }
+function moveRows(id, moves, handler) {  // Fast / Charged / 2nd charged as three full-width rows for a kv table
+  const e = APP.pokemon[id]; handler = handler || `Planner.setMove('${id}',SLOT,this.value)`;
+  const use = e.use || {}, tag = mv => use[mv] ? ` (${use[mv]}%)` : '';
+  const withCur = (list, slot) => moves[slot] && !list.includes(moves[slot]) ? [moves[slot], ...list] : list;
+  const sel = (slot, list0, none) => `<select class="mvsel" onchange="${handler.replace('SLOT', slot)}">${none ? `<option value="" ${!moves[slot] ? 'selected' : ''}>no 2nd charged move</option>` : ''}${withCur(list0, slot).map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}${tag(mv)}</option>`).join('')}</select>`;
+  return [['Fast', sel(0, e.fast)], ['Charged', sel(1, e.charged)], ['2nd charged', sel(2, e.charged, true)]];
+}
+function moveUsage(id) {                    // collapsible: how often PvPoke's simulations run each move
+  const e = APP.pokemon[id], use = e.use || {};
+  if (!Object.keys(use).length) return '';
+  const line = list => list.filter(m => use[m]).map(m => `${esc(mvName(m))} <b>${use[m]}%</b>`).join(' · ');
+  return `<div class="note" style="margin:6px 0 0;cursor:pointer" onclick="Planner.toggleUse()">${UI.moveUse ? '▾' : '▸'} Best moves by PvPoke usage</div>` +
+    (UI.moveUse ? `<div class="use"><span class="k">Fast</span><span>${line(e.fast)}</span><span class="k">Charged</span><span>${line(e.charged)}</span><span class="k">Set</span><span>${esc(e.moveset.map(mvName).join(' · '))} <span class="dim">is the ranked moveset</span></span></div>` : '');
+}
+function toggleUse() { UI.moveUse = !UI.moveUse; renderMon(); }
+
 /* ---------- Pokémon detail page ---------- */
 function family(id) {                          // the species and its pre-evolutions, as PvPoke ids (pre-evos may be unranked)
   const out = [id]; let cur = id;
@@ -577,7 +593,7 @@ function renderMon() {
   } catch (e) { el.innerHTML = errorCard('detail', e); }
 }
 const nice = sp => (sp || '?').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-const kv = rows => `<div class="kv">${rows.filter(r => r && r[1] !== '' && r[1] != null).map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('')}</div>`;
+const kv = rows => `<div class="kv">${rows.filter(r => r && r[1] !== '' && r[1] != null).map(([k, v]) => `<span class="k">${k}</span><span class="v ${k ? '' : 'cont'}">${v}</span>`).join('')}</div>`;
 function ctxMenu(items) {                      // ⋯ button with a dropdown; items: [label, onclick, danger?]
   const rows = items.filter(Boolean).map(([l, fn, danger]) => `<button class="${danger ? 'danger' : ''}" onclick="${fn}">${l}</button>`).join('');
   if (!rows) return '';
@@ -622,7 +638,8 @@ function scanSection(m, r) {
     if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
-    rows.push(['Moves', `${mv}<div class="dim" style="font-size:12px;margin-top:2px">${r.movesSeen ? '<span class="okc">✓</span> read from a screenshot' : 'not scanned yet: screenshot the status screen scrolled to the attacks'}</div>`]);
+    rows.push(...moveRows(id0, movesFor(r, id0), `Planner.setScanMove(${idx},SLOT,this.value)`));
+    rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : 'moves not scanned yet: screenshot the status screen scrolled to the attacks'}</div>${moveUsage(id0)}`]);
     const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
     rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">not known yet: scan the attacks, or pick it in the third box${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
     rows.push(['PvPoke', tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
@@ -695,7 +712,7 @@ function monInner(m, id, noHead) {
   rows.push(['In teams', `${teamsIn} of ${rep.todayAll.length} buildable`]);
   if (!o && sc) rows.push(['Catch', `a ${esc(nm(pre))} ≤ <b>${sc.safe}</b> CP evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs)`]);
   if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
-  if (!noHead) rows.push(['Moves', `${movesRow(id, moves)}<div class="dim" style="font-size:12px;margin-top:2px">${o ? 'on your copy' : 'for planning'}${notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke'}</div>`]);
+  if (!noHead) { rows.push(...moveRows(id, moves)); rows.push(['', `<div class="dim" style="font-size:12px">${o ? 'moves on your copy' : 'moves for planning'}${notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke'}</div>${moveUsage(id)}`]); }
   h += kv(rows);
   h += `<div class="acts" style="margin-top:6px"><button onclick="Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')">Try in builder</button>${!st && !benched ? `<button onclick="Planner.want('${id}',true)">Add to wanted</button>` : ''}</div></div>`;
   // roster fit
@@ -903,7 +920,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, coverage, coverageWith, closeSheet,
+window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
