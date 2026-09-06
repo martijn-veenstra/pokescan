@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.12"></script>
+<script src="pvp.js?v=9.13"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -71,6 +71,7 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);
 .chip.ul{background:rgba(245,184,76,.14);color:#F5CE8A}
 .chip.meta1{background:rgba(72,213,151,.13);color:#7FE3B6}
 .chip.warn{background:rgba(240,101,79,.13);color:#F59A8B}
+.chip.gold{background:rgba(245,184,76,.14);color:#F5CE8A}.chip.ok{background:rgba(72,213,151,.13);color:#7FE3B6}
 .moves{font-size:12.5px;margin-top:8px;color:var(--dim)}
 .moves b{color:var(--green);font-weight:600}
 .moves s{color:var(--coral);text-decoration:none}
@@ -237,7 +238,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.12</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.13</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -329,6 +330,7 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
 <li>In Pokémon GO open a Pokémon's status screen and take a screenshot, or screen-record while swiping through your storage.</li>
 <li>Tap <b>Profile</b> (top right) once and set your trainer level, or read it from a screenshot of your trainer profile. Then tap <b>＋ Import scans</b> and pick the screenshots or the recording.</li>
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, PvPoke meta rank, and what its evolution would be.</li>
+<li><b>Moves:</b> scroll the status screen down to the attacks and screenshot that too (or keep recording while you scroll). The moves land on the card, and "NEW ATTACK" tells the app the second charged move is still locked. Today then suggests Fast/Charged TMs and second moves for your team members, and a rescan of the attacks clears them.</li>
 <li><b>Exact IVs:</b> screenshot (or record) the appraisal screen with the three orange bars. It shows name, CP, HP and the level arc too, so on its own it already makes a complete card with exact IVs. If a card for that Pokémon exists, the appraisal is attached to it instead; no duplicates either way.</li>
 <li>Cards show three numbers. <b>IVs</b> are the hidden Attack/Defence/HP values (0–15 each). <b>IV%</b> is their sum out of 45, the number Pokémon GO's appraisal stars hint at. <b>GL rank</b> is what matters for battling: the position of this IV spread among the 4096 possible spreads of that species at the 1500 cap, with its stat product relative to the #1 spread; #1 is the perfect Great League copy. Tap a card for everything else: bars, Ultra League rank, power-up cost, evolution preview, moves and corrections.</li>
 <li>When you rescan a Pokémon after a power-up or evolution, the old card is archived automatically (filter "Archived" to see it) and the step shows up under Recently completed.</li>
@@ -446,7 +448,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.12';
+const APP_VERSION='9.13';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -759,6 +761,56 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   return key;
 }
 
+/* ---------- moves from OCR text (status screen scrolled to the attacks) ---------- */
+const normTxt=t=>' '+String(t||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').trim()+' ';
+function readMoves(species, txt){                  // {fast, charged:[..], second:true|false|undefined, found}
+  if(!APP||!species) return null;
+  const id=pvpokeIdFor(species, (DATA.stats[species]||[])[0]); if(!id) return null;
+  const e=APP.pokemon[id], t=normTxt(txt);
+  const pos=m=>{ const n=APP.moves[m]?normTxt(APP.moves[m].n).trim():''; if(!n) return -1; const i=t.indexOf(' '+n+' '); return i; };
+  const fast=e.fast.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+  const ch=e.charged.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+  const newAttack=/ new attack /.test(t)||/ nieuwe aanval /.test(t);
+  const found=fast.length+ch.length; if(!found) return null;
+  return {id, fast:fast[0]||null, charged:ch.slice(0,2), second: ch.length>=2?true:(newAttack?false:undefined), found};
+}
+function applyMoves(r, mv){                        // merge what a moves screen showed into a card; returns true when something changed
+  if(!mv||!r) return false;
+  const e=APP.pokemon[mv.id], cur=(r.moves&&r.moves.length)?r.moves.slice():[];
+  const fast=mv.fast||cur[0]||e.moveset[0];
+  let charged=mv.charged.slice();
+  if(charged.length<2 && mv.second!==false){ for(const m of cur.slice(1).concat(e.moveset.slice(1))) if(charged.length<2 && m && !charged.includes(m)) charged.push(m); }
+  const next=[fast,...charged];
+  const changed=JSON.stringify(next)!==JSON.stringify(cur)||(mv.second!==undefined&&r.secondMove!==mv.second);
+  r.moves=next; if(mv.second!==undefined) r.secondMove=mv.second; r.movesSeen=Date.now();
+  return changed;
+}
+function movesTarget(species, skipKey){            // which card a moves screen belongs to
+  const live=results.filter(x=>!x.superseded);
+  const prev=skipKey?live.find(x=>x.key===skipKey):null;
+  if(species){ if(prev&&prev.species===species) return prev; return live.find(x=>x.species===species)||null; }
+  return prev||null;
+}
+function attachMovesFromText(txt, speciesInText, skipKey){
+  const target=movesTarget(speciesInText, skipKey); if(!target) return null;
+  const mv=readMoves(target.species, txt); if(!mv) return null;
+  const changed=applyMoves(target, mv); save(); render();
+  const names=[mv.fast,...mv.charged].filter(Boolean).map(m=>APP.moves[m]?APP.moves[m].n:m);
+  status(`${target.species} moves: ${names.join(' · ')}${mv.second===false?' · no 2nd charged move yet':''}${changed?'':' (unchanged)'}`);
+  if(window.Planner) Planner.onMovesScan(target);
+  return target.key;
+}
+async function readMovesScreen(ctx, W, H, skipKey){   // full-frame OCR for a screenshot scrolled to the attacks
+  const wk=await getWorker();
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  const c2=$('cv2'), sc=Math.min(1, 800/W); c2.width=Math.round(W*sc); c2.height=Math.round(H*sc);
+  const g=c2.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c2.width,c2.height); g.drawImage(ctx.canvas,0,0,c2.width,c2.height);
+  const text=(await wk.recognize(c2)).data.text||'';
+  let species=null; for(const w2 of text.toUpperCase().match(/[A-Z]{3,}/g)||[]) if(DATA.stats[w2]){ species=w2; break; }
+  if(!/attack|aanval/i.test(text) && !species) return null;
+  return attachMovesFromText(text, species, skipKey);
+}
+
 /* ---------- trainer profile screenshot: name and level ---------- */
 async function readProfile(ctx, W, H){
   const wk=await getWorker();
@@ -822,11 +874,12 @@ $('file').addEventListener('change', async e=>{
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
   $('prog').style.display='block'; progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
-  let ok=0; const before=results.length;
+  let ok=0, batchKey=null; const before=results.length;
+  if(window.Planner) Planner.beforeImport();
   for(const f of files){
     try{
       if(f.type.startsWith('video')) await scanVideo(f,trainer);
-      else await scanImage(f,trainer);
+      else batchKey=await scanImage(f,trainer,batchKey);
       ok++;
     }catch(err){ showErr(`${f.name}: ${err&&err.message||err}`); await new Promise(r=>setTimeout(r,1500)); }
   }
@@ -854,7 +907,7 @@ function del(i){ results.splice(i,1); save(); render(); }
 function status(s){ $('stat').textContent=s; }
 function progress(p){ $('fill').style.width=(p*100).toFixed(1)+'%'; }
 
-async function scanImage(file,trainer){
+async function scanImage(file,trainer,batchKey){
   status('Scanning '+file.name);
   const bmp=await createImageBitmap(file);
   const cv=$('cv'); cv.width=bmp.width; cv.height=bmp.height;
@@ -862,15 +915,20 @@ async function scanImage(file,trainer){
   ctx.drawImage(bmp,0,0);
   const W=bmp.width, H=bmp.height;
   const ap=readAppraisal(ctx,W,H);
-  if(ap) await withTimeout(handleAppraisal(ctx,W,H,trainer,ap), 60000, 'reading the appraisal took too long');
+  let key=null;
+  if(ap) key=await withTimeout(handleAppraisal(ctx,W,H,trainer,ap,batchKey), 60000, 'reading the appraisal took too long');
   else {
-    const key=await withTimeout(handleScan(ctx,W,H,trainer), 60000, 'reading the screenshot took too long');
-    if(key===null){                                            // not a status screen: maybe the trainer profile
-      const prof=await readProfile(ctx,W,H);
-      if(prof) applyProfile(prof, file.name); else status(`${file.name}: no Pokémon status screen found`);
+    key=await withTimeout(handleScan(ctx,W,H,trainer,batchKey), 60000, 'reading the screenshot took too long');
+    if(key===null){                                            // not a status screen: the attacks section, or the trainer profile
+      key=await withTimeout(readMovesScreen(ctx,W,H,batchKey), 60000, 'reading the screenshot took too long');
+      if(key===null){
+        const prof=await readProfile(ctx,W,H);
+        if(prof) applyProfile(prof, file.name); else status(`${file.name}: no Pokémon status screen found`);
+      }
     }
   }
   progress(1);
+  return key||batchKey||null;
 }
 const withTimeout=(p,ms,msg)=>new Promise((res,rej)=>{ const to=setTimeout(async()=>{ await resetWorker(); rej(new Error(msg)); },ms); p.then(v=>{clearTimeout(to);res(v);},e=>{clearTimeout(to);rej(e);}); });
 async function resetWorker(){ const w=worker; worker=null; try{ if(w) await w.terminate(); }catch(e){} }
@@ -973,7 +1031,11 @@ async function scanVideo(file,trainer){
 
 async function handleScan(ctx,W,H,trainer,skipKey){
   const s=await scanFrame(ctx,W,H,trainer);
-  if(!s.species || !s.hp) return null;               // status screens always show HP
+  if(!s.species || !s.hp){                            // status screens always show HP; a screen scrolled to the attacks may not
+    if(/ attack | aanval /.test(normTxt(s.txt)) || (s.species && results.some(x=>x.species===s.species))) return attachMovesFromText(s.txt, s.species, skipKey);
+    return null;
+  }
+  const mvSeen=readMoves(s.species, s.txt);
   s.combos=[];
   const tries=[]; if(s.level){ tries.push(s.level, s.level-0.5, s.level+0.5); }
   tries.push(null); if(s.dust) tries.push(0);          // null = dust window; 0 = unconstrained
@@ -991,11 +1053,13 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   if(!s.cp && s.cpCandidates.length) s.cp=s.cpCandidates[0];
   if(!s.combos.length){                                   // unsolvable, probably a misread CP: fold into an existing card of the same Pokémon
     const digits=String(s.cp||''), twin=results.find(x=>x.species===s.species && x.hp===s.hp && x.cp && x.combos.length && (!digits||String(x.cp).includes(digits)));
-    if(twin){ status(`${s.species}: same Pokémon as the ${twin.cp} CP card`); return twin.key; }
+    if(twin){ if(mvSeen&&applyMoves(twin,mvSeen)){ save(); render(); if(window.Planner) Planner.onMovesScan(twin); } status(`${s.species}: same Pokémon as the ${twin.cp} CP card`); return twin.key; }
   }
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
-  if(key===skipKey || results.some(r=>r.key===key)) return key;   // dedupe
-  s.key=key;
+  const dup=results.find(r=>r.key===key);
+  if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } return key; }   // dedupe
+  if(key===skipKey) return key;
+  s.key=key; if(mvSeen) applyMoves(s,mvSeen);
   { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
     if(hit){ const ivs=APPR[hit]; ks.forEach(k=>delete APPR[k]); applyAppraisal(s,ivs); apKeys(s.species,s.cp,s.hp).forEach(k=>delete APPR[k]); saveAppr(); } }
   results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render();
@@ -1160,8 +1224,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.12"></script>
-<script src="planner.js?v=9.12"></script>
-<script src="sync.js?v=9.12"></script>
+<script src="sources.js?v=9.13"></script>
+<script src="planner.js?v=9.13"></script>
+<script src="sync.js?v=9.13"></script>
 </body>
 </html>

@@ -27,6 +27,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Saved parties** (Today and Roster) list their weak spots: the meta Pokémon that nobody on the party
   beats or that beat two of the three, with rank, who they beat, who to swap to, and the best one-member
   fix from your roster.
+- **Moves**: screenshot (or record) the status screen scrolled down to the attacks and the moves land on the
+  card; "NEW ATTACK" marks the second charged move as locked. Today then lists, for members of your best
+  teams and saved parties, the Fast TM / Charged TM towards PvPoke's moveset and "Unlock the 2nd charged
+  move" with its dust and candy cost, each with the team-score gain. A rescan of the attacks clears them
+  and logs the proof.
 - **Pokémon pages**: tap a roster tile, a name in the rankings or a meta team (or "want" in the rankings)
   for a full page: your copy and its IV rank, moves, the teams it makes with your roster and what it would
   lift or fix, what it beats and loses to in the meta, where to get it, and roster actions (wanted, pending,

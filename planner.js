@@ -36,7 +36,8 @@ function scanId(r) {
   const best = bestOf(r);
   return {best, base: best[4] || DATA.stats[r.species][0], id: pvpokeIdFor(r.species, best[4] || DATA.stats[r.species][0])};
 }
-function movesFor(r, id) { return (r && r.moves && r.moves.length) ? r.moves : (ROSTER.moves[id] || detectMoves(id, r && r.txt)); }
+function movesFor(r, id) { const m = (r && r.moves && r.moves.length) ? r.moves : (ROSTER.moves[id] || detectMoves(id, r && r.txt)); return m.filter(Boolean); }
+function hasSecond(r, id) { if (r && r.secondMove === false) return false; return movesFor(r, id).length >= 3; }
 function rosterOwned() {
   const own = {};
   if (!APP) return own;
@@ -140,6 +141,24 @@ function nextMoves(m) {
       out.push({id: 'pu:' + o.id, species: o.id, p: inTeam.has(o.id) ? 0 : 3, tag: inTeam.has(o.id) ? 'in team' : 'bench', cls: inTeam.has(o.id) ? 'ok' : 'dim',
                 title: `Power up ${nm(o.id)} to L${o.toLevel}`, sub: `${o.cp} → ${o.toCP} CP · ${fmt(c.dust)} dust · ${c.candy} candy`}); }
   }
+  // moves: team members should carry PvPoke's moveset and both charged moves
+  const teamIds = new Set(rep.today.slice(0, 3).flatMap(t => t.members.map(x => x.speciesId)).concat(Object.values(ROSTER.tagged).flat()));
+  for (const o of Object.values(own)) {
+    if (!teamIds.has(o.id)) continue;
+    const e = APP.pokemon[o.id], cur = (o.moves || []).filter(Boolean), rec = e.moveset, role = inTeam.has(o.id) ? 'in team' : 'in a party';
+    const gain = () => { const ov = Object.assign({}, L.overrides, {[o.id]: rec}); const L2 = new PVP.League(APP, ov); const t = (best ? best.members.map(x => x.speciesId) : null); return t && t.includes(o.id) ? Math.round((L2.evaluate(t).score - best.teamScore) * 10) / 10 : 0; };
+    const second = o.manual ? true : hasSecond(o.scan, o.id);
+    if (!second) { const c = e.thirdMove || [75000, 75], wantC = rec.slice(1).find(m => !cur.includes(m)) || rec[2], d = gain();
+      out.push({id: 'move2:' + o.id, species: o.id, p: inTeam.has(o.id) ? 1 : 3, tag: d > 0 ? '+' + d.toFixed(0) : role, cls: d > 0 ? 'gold' : 'ok', delta: d,
+                title: `Unlock the 2nd charged move on ${nm(o.id)}`, sub: `${fmt(c[0])} dust · ${c[1]} candy · then set ${mvName(wantC)}${e.buddy ? ` · or walk it ${e.buddy} km as buddy first` : ''}`}); }
+    if (cur[0] && cur[0] !== rec[0]) { const d = gain();
+      out.push({id: 'tm:fast:' + o.id, species: o.id, p: inTeam.has(o.id) ? 1 : 3, tag: d > 0 ? '+' + d.toFixed(0) : role, cls: d > 0 ? 'gold' : 'ok', delta: d,
+                title: `Fast TM ${nm(o.id)}: ${mvName(cur[0])} → ${mvName(rec[0])}`, sub: `PvPoke's fast move for it${d > 0 ? ` · lifts your team by ${d.toFixed(1)}` : ''} · Elite TM if it is a legacy move`}); }
+    const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
+    if (second && cur.length >= 3 && missingC.length) { const d = gain(), drop = cur.slice(1).find(m => !rec.includes(m));
+      out.push({id: 'tm:charged:' + o.id, species: o.id, p: inTeam.has(o.id) ? 1 : 3, tag: d > 0 ? '+' + d.toFixed(0) : role, cls: d > 0 ? 'gold' : 'ok', delta: d,
+                title: `Charged TM ${nm(o.id)}: ${drop ? mvName(drop) + ' → ' : ''}${mvName(missingC[0])}`, sub: `PvPoke runs ${rec.slice(1).map(mvName).join(' + ')}${d > 0 ? ` · lifts your team by ${d.toFixed(1)}` : ''} · Elite TM if it is a legacy move`}); }
+  }
   for (const g of rep.gains) {
     const delta = Math.round((g.bestTrio.teamScore - bestScore) * 10) / 10;
     const id = g.speciesId, a = auto[id], pre = (APP.prevo || {})[id];
@@ -194,12 +213,19 @@ function scanProof(moveId) {                   // "Scan proof" on a next move: r
   UI.expect = {id: moveId, title: mv ? mv.title : moveId, before: openMoves(m).map(x => x.id)};
   showTab('scans'); $('file').click();
 }
+function beforeImport() { UI.before = openMoves(M()).map(x => ({id: x.id, title: x.title})); UI.touched = []; }
+function onMovesScan(r) {                       // a moves screen updated a card
+  dirty = true; if (UI.touched && !UI.touched.includes(r.key)) UI.touched.push(r.key);
+}
 function afterImport(newScans) {               // called by the scanner when an import finishes
   dirty = true; const m = M(), after = new Set(openMoves(m).map(x => x.id));
   const ex = UI.expect; UI.expect = null;
+  const ev0 = newScans[0] ? newScans[0].key : (UI.touched || [])[0] || null;
+  for (const b of UI.before || []) if (!after.has(b.id) && /^(tm:|move2:|pu:)/.test(b.id) && (!ex || ex.id !== b.id) && !ROSTER.log.some(e => e.id === b.id && e.evidence)) logEntry({kind: 'proof', id: b.id, title: b.title, evidence: ev0});
+  UI.before = null;
   if (ex) {
     if (!after.has(ex.id)) {
-      if (!ROSTER.log.some(e => e.id === ex.id && e.evidence)) logEntry({kind: 'proof', id: ex.id, title: ex.title, evidence: newScans[0] ? newScans[0].key : null});
+      if (!ROSTER.log.some(e => e.id === ex.id && e.evidence)) logEntry({kind: 'proof', id: ex.id, title: ex.title, evidence: ev0});
       status(`✓ ${ex.title} — cleared by this scan`);
     } else {
       const sp = newScans.find(r => r.species) || null, mv = openMoves(m).find(x => x.id === ex.id);
@@ -455,7 +481,8 @@ function movesRow(id, moves, handler) {
   const e = APP.pokemon[id]; handler = handler || `Planner.setMove('${id}',SLOT,this.value)`;
   const withCur = (list, slot) => moves[slot] && !list.includes(moves[slot]) ? [moves[slot], ...list] : list;
   const sel = (slot, list0) => { const list = withCur(list0, slot); return `<select onchange="${handler.replace('SLOT', slot)}">${list.map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}</option>`).join('')}</select>`; };
-  return `<div class="mv">${sel(0, e.fast)}${sel(1, e.charged)}${sel(2, e.charged)}</div>`;
+  const third = `<select onchange="${handler.replace('SLOT', 2)}"><option value="" ${!moves[2] ? 'selected' : ''}>no 2nd move</option>${withCur(e.charged, 2).map(mv => `<option value="${mv}" ${moves[2] === mv ? 'selected' : ''}>${esc(mvName(mv))}</option>`).join('')}</select>`;
+  return `<div class="mv">${sel(0, e.fast)}${sel(1, e.charged)}${third}</div>`;
 }
 /* ---------- Pokémon detail page ---------- */
 function family(id) {                          // the species and its pre-evolutions, as PvPoke ids (pre-evos may be unranked)
@@ -571,8 +598,17 @@ function scanSection(m, r) {
     const plan = planFor(r, best); if (plan) h += plan;
   } else h += `<div class="note">No IV spread matches this CP and HP. Correct the values below and re-solve.</div>`;
   h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500.</div>`;
-  const mv = movesRowForScan(r, idx);
-  if (mv) h += `<div class="note" style="margin:10px 0 0">Moves on this Pokémon</div>${mv}`;
+  const mv = movesRowForScan(r, idx), sid0 = scanId(r);
+  if (mv) {
+    const id0 = sid0.id, e0 = APP.pokemon[id0], cur = movesFor(r, id0), rec = e0.moveset, second = hasSecond(r, id0);
+    const tips = [];
+    if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
+    const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
+    if (!second) tips.push(`2nd charged move locked: ${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : 'unlock it'}, then set <b>${esc(mvName(missingC[0] || rec[2]))}</b>`);
+    else if (missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
+    h += `<div class="note" style="margin:10px 0 0">Moves on this Pokémon${r.movesSeen ? ` <span class="okc" style="color:var(--green)">✓ read from a screenshot</span>` : ' <span class="dim">(not scanned yet: scroll the status screen to the attacks and screenshot it)</span>'}</div>${mv}`;
+    h += `<div class="note" style="margin:-2px 0 0">${tips.length ? tips.join(' · ') : `Matches PvPoke's ${esc(rec.map(mvName).join(' · '))}.`}</div>`;
+  }
   h += `<div class="acts" style="margin-top:8px"><button onclick="toggleBench(${idx});Planner.renderMon()">${r.bench ? 'Unbench' : 'Bench'}</button>${r.superseded ? `<button onclick="results[${idx}].superseded=null;save();render();Planner.refresh();Planner.renderMon()">Unarchive</button>` : `<button onclick="results[${idx}].superseded={why:'archived by hand',t:Date.now()};save();render();Planner.refresh();Planner.renderMon()">Archive</button>`}<button class="danger" onclick="Planner.deleteScan('${esc(r.key)}')">Delete scan</button></div>`;
   h += `<div class="note" style="margin:12px 0 4px">Correct a misread and solve again</div><div class="add"><input id="esp" list="species" placeholder="species" value="${esc(r.species || '')}" style="min-width:110px"><input id="ecp" placeholder="CP" inputmode="numeric" value="${r.cp || ''}" style="width:70px;flex:0"><input id="ehp" placeholder="HP" inputmode="numeric" value="${r.hp || ''}" style="width:64px;flex:0"><input id="elv" placeholder="level" inputmode="decimal" value="${r.level || ''}" style="width:64px;flex:0"><button onclick="Planner.resolveScan('${esc(r.key)}')">Re-solve</button></div></div>`;
   if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in your roster and the meta</div>`;
@@ -791,15 +827,17 @@ function add() { const id = $('addid').value.trim().toLowerCase(), kind = $('add
 function drop(kind, id) { delete ROSTER[kind][id]; saveRoster(); refresh(); }
 function bench(id) { if (ROSTER.owned[id] !== undefined) delete ROSTER.owned[id]; else if (!ROSTER.exclude.includes(id)) ROSTER.exclude.push(id); saveRoster(); refresh(); }
 function unbench(id) { ROSTER.exclude = ROSTER.exclude.filter(x => x !== id); saveRoster(); refresh(); }
-function place(cur, slot, val) {           // set a slot; if the move sits in the other charged slot, swap them
+function place(cur, slot, val) {           // set a slot; if the move sits in the other charged slot, swap them; '' = no second move
   const other = slot === 1 ? 2 : slot === 2 ? 1 : -1;
-  if (other > 0 && cur[other] === val) cur[other] = cur[slot];
-  cur[slot] = val; return cur;
+  if (val && other > 0 && cur[other] === val) cur[other] = cur[slot];
+  cur[slot] = val;
+  while (cur.length && !cur[cur.length - 1]) cur.pop();
+  return cur;
 }
 function setMove(id, slot, val) {
   const m = M(), o = m.own[id];
   const cur = place((o ? o.moves : (ROSTER.moves[id] || m.ri.pending[id] || APP.pokemon[id].moveset)).slice(), slot, val);
-  if (o && o.scan) { o.scan.moves = cur; save(); render(); } else ROSTER.moves[id] = cur;
+  if (o && o.scan) { o.scan.moves = cur; o.scan.secondMove = cur.length >= 3; save(); render(); } else ROSTER.moves[id] = cur;
   saveRoster(); refresh();
 }
 function addTag() { const name = $('tagname').value.trim(), team = [1, 2, 3].map(i => $('tag' + i).value.trim().toLowerCase());
@@ -826,11 +864,11 @@ function movesRowForScan(r, idx) {      // used by the Scans view: manual move s
 }
 function setScanMove(idx, slot, val) {
   const r = results[idx], s = scanId(r); if (!s || !s.id) return;
-  r.moves = place(movesFor(r, s.id).slice(), slot, val); save(); render(); refresh();
+  r.moves = place(movesFor(r, s.id).slice(), slot, val); r.secondMove = r.moves.length >= 3; save(); render(); refresh(); if (UI.scan === r.key) renderMon();
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, coverage, coverageWith, closeSheet,
+window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, coverage, coverageWith, closeSheet,
                   metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
