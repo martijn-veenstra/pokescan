@@ -491,12 +491,16 @@ function moveRows(id, moves, handler) {  // Fast / Charged / 2nd charged as thre
   const sel = (slot, list0, none) => `<select class="mvsel" onchange="${handler.replace('SLOT', slot)}">${none ? `<option value="" ${!moves[slot] ? 'selected' : ''}>no 2nd charged move</option>` : ''}${withCur(list0, slot).map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}${tag(mv)}</option>`).join('')}</select>`;
   return [['Fast', sel(0, e.fast)], ['Charged', sel(1, e.charged)], ['2nd charged', sel(2, e.charged, true)]];
 }
-function moveUsage(id) {                    // collapsible: how often PvPoke's simulations run each move
-  const e = APP.pokemon[id], use = e.use || {};
+function moveUsage(id, cur) {               // collapsible ranked table: how often PvPoke's simulations run each move
+  const e = APP.pokemon[id], use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
   if (!Object.keys(use).length) return '';
-  const line = list => list.filter(m => use[m]).map(m => `${esc(mvName(m))} <b>${use[m]}%</b>`).join(' · ');
+  const rows = (list, label) => {
+    const ranked = list.filter(m => use[m] !== undefined).sort((a, b) => (use[b] || 0) - (use[a] || 0));
+    if (!ranked.length) return '';
+    return `<div class="uh">${label}</div>` + ranked.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${esc(mvName(m))}</span><span class="bar"><i style="width:${Math.max(3, use[m])}%"></i></span><span class="pc">${use[m]}%</span><span class="tg">${mine.has(m) ? '<em class="y">yours</em>' : ''}${set.has(m) ? '<em class="s">ranked set</em>' : ''}</span></div>`).join('');
+  };
   return `<div class="note" style="margin:6px 0 0;cursor:pointer" onclick="Planner.toggleUse()">${UI.moveUse ? '▾' : '▸'} Best moves by PvPoke usage</div>` +
-    (UI.moveUse ? `<div class="use"><span class="k">Fast</span><span>${line(e.fast)}</span><span class="k">Charged</span><span>${line(e.charged)}</span><span class="k">Set</span><span>${esc(e.moveset.map(mvName).join(' · '))} <span class="dim">is the ranked moveset</span></span></div>` : '');
+    (UI.moveUse ? `<div class="use">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:6px">Share of PvPoke's simulated battles that used the move. <em class="s" style="font-style:normal">ranked set</em> = the moveset behind its rank #${e.rank}.</div></div>` : '');
 }
 function toggleUse() { UI.moveUse = !UI.moveUse; renderMon(); }
 
@@ -639,7 +643,7 @@ function scanSection(m, r) {
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
     rows.push(...moveRows(id0, movesFor(r, id0), `Planner.setScanMove(${idx},SLOT,this.value)`));
-    rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : 'moves not scanned yet: screenshot the status screen scrolled to the attacks'}</div>${moveUsage(id0)}`]);
+    rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : 'moves not scanned yet: screenshot the status screen scrolled to the attacks'}</div>${moveUsage(id0, cur)}`]);
     const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
     rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">not known yet: scan the attacks, or pick it in the third box${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
     rows.push(['PvPoke', tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
@@ -712,7 +716,7 @@ function monInner(m, id, noHead) {
   rows.push(['In teams', `${teamsIn} of ${rep.todayAll.length} buildable`]);
   if (!o && sc) rows.push(['Catch', `a ${esc(nm(pre))} ≤ <b>${sc.safe}</b> CP evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs)`]);
   if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
-  if (!noHead) { rows.push(...moveRows(id, moves)); rows.push(['', `<div class="dim" style="font-size:12px">${o ? 'moves on your copy' : 'moves for planning'}${notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke'}</div>${moveUsage(id)}`]); }
+  if (!noHead) { rows.push(...moveRows(id, moves)); rows.push(['', `<div class="dim" style="font-size:12px">${o ? 'moves on your copy' : 'moves for planning'}${notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke'}</div>${moveUsage(id, moves)}`]); }
   h += kv(rows);
   h += `<div class="acts" style="margin-top:6px"><button onclick="Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')">Try in builder</button>${!st && !benched ? `<button onclick="Planner.want('${id}',true)">Add to wanted</button>` : ''}</div></div>`;
   // roster fit
