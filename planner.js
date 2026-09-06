@@ -577,43 +577,75 @@ function renderMon() {
   } catch (e) { el.innerHTML = errorCard('detail', e); }
 }
 const nice = sp => (sp || '?').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const kv = rows => `<div class="kv">${rows.filter(r => r && r[1] !== '' && r[1] != null).map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('')}</div>`;
+function ctxMenu(items) {                      // ⋯ button with a dropdown; items: [label, onclick, danger?]
+  const rows = items.filter(Boolean).map(([l, fn, danger]) => `<button class="${danger ? 'danger' : ''}" onclick="${fn}">${l}</button>`).join('');
+  if (!rows) return '';
+  return `<div class="ctx"><button class="dots" aria-label="More" onclick="event.stopPropagation();Planner.toggleMenu(this)">⋯</button><div class="menu" hidden>${rows}</div></div>`;
+}
+function toggleMenu(btn) { const menu = btn.nextElementSibling, open = !menu.hidden; document.querySelectorAll('.ctx .menu').forEach(m => m.hidden = true); menu.hidden = open; }
+document.addEventListener('click', () => document.querySelectorAll('.ctx .menu').forEach(m => m.hidden = true));
+function toggleGloss() { UI.gloss = !UI.gloss; renderMon(); }
 function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
   const lo = ps.length ? Math.min(...ps) : 0, hi = ps.length ? Math.max(...ps) : 0;
   const back = {today: 'Today', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
-  let h = `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived · ' + (r.superseded.why || 'superseded')) : ''}${r.bench ? chip('benched') : ''}${r.appraisal ? (r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : chip('✓ appraised', 'meta1')) : ''}${r.cpInferred ? chip('CP inferred from appraisal', 'gl') : ''}</div></div>`;
-  h += `<div class="scanhero"><div class="dh" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px"><span class="star ${r.fav ? 'on' : ''}" onclick="toggleFav(${idx});Planner.renderMon()">${r.fav ? '★' : '☆'}</span>${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></div>`;
+  const key = esc(r.key), rm = `Planner.renderMon()`;
+  const menu = ctxMenu([
+    [r.fav ? '☆ Remove favourite' : '★ Favourite', `toggleFav(${idx});${rm}`],
+    [r.bench ? 'Unbench' : 'Bench (keep, but not for teams)', `toggleBench(${idx});${rm}`],
+    r.superseded ? ['Unarchive', `results[${idx}].superseded=null;save();render();Planner.refresh();${rm}`] : ['Archive', `results[${idx}].superseded={why:'archived by hand',t:Date.now()};save();render();Planner.refresh();${rm}`],
+    ['Correct a misread…', `Planner.editScan('${key}')`],
+    ['Delete scan', `Planner.deleteScan('${key}')`, true],
+  ]);
+  let h = `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
+  h += `<div class="scanhero"><div class="dh" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></div>`;
+  const rows = [];
   if (best) {
     const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500), ul = pvpRank(bb, best[1], best[2], best[3], 2500);
     const barRow = (l, v) => `<span>${l}</span><span class="tr"><i class="${v === 15 ? 'max' : ''}" style="width:${v / 15 * 100}%"></i></span><span class="iv">${v}</span>`;
     h += `<div class="bars">${barRow('Atk', best[1])}${barRow('Def', best[2])}${barRow('HP', best[3])}</div>`;
-    h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b></div><div><small>GL rank</small><b>#${gl.n} · ${gl.pct.toFixed(1)}%</b></div><div><small>UL rank</small><b>#${ul.n} · ${ul.pct.toFixed(1)}%</b></div></div>`;
+    h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b></div><div><small>GL rank</small><b>#${gl.n} <span class="dim" style="font-weight:500">${gl.pct.toFixed(1)}%</span></b></div><div><small>UL rank</small><b>#${ul.n} <span class="dim" style="font-weight:500">${ul.pct.toFixed(1)}%</span></b></div></div>`;
     let st;
-    if (r.cp > 1500) st = `<span class="chip warn">over the GL cap</span> <span class="dim">this copy cannot battle in Great League</span>`;
-    else if (gl.lv > 40) st = `<span class="chip warn">needs L${gl.lv}</span> <span class="dim">XL candy territory; ${gl.cp} CP at the cap</span>`;
-    else if (gl.lv > best[0]) { const c = costTo(best[0], gl.lv); st = `<span class="chip ul">power up to L${gl.lv}</span> <span class="dim">${fmt(c.dust)} dust · ${c.candy} candy → ${gl.cp} CP</span>`; }
-    else st = `<span class="chip meta1">ready for GL</span> <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
-    h += `<div class="chips" style="align-items:center">${st}</div>`;
-    if (r.combos.length > 1) h += `<div class="note" style="margin-top:8px">${r.combos.length} IV spreads fit this CP and HP; the best one is shown. An appraisal screenshot pins it down.</div><div class="alts">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`;
-    const plan = planFor(r, best); if (plan) h += plan;
-  } else h += `<div class="note">No IV spread matches this CP and HP. Correct the values below and re-solve.</div>`;
-  h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500.</div>`;
+    if (r.cp > 1500) st = `${chip('over the GL cap', 'warn')} <span class="dim">cannot battle in Great League</span>`;
+    else if (gl.lv > 40) st = `${chip(`needs L${gl.lv}`, 'warn')} <span class="dim">XL candy · ${gl.cp} CP at the cap</span>`;
+    else if (gl.lv > best[0]) { const c = costTo(best[0], gl.lv); st = `${chip(`power up to L${gl.lv}`, 'ul')} <span class="dim">${fmt(c.dust)} dust · ${c.candy} candy → ${gl.cp} CP</span>`; }
+    else st = `${chip('ready for GL', 'meta1')} <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
+    rows.push(['Status', st]);
+    if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} fit this CP and HP, best shown. An appraisal pins it down.<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
+  } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋯ → Correct a misread</span>`]);
   const mv = movesRowForScan(r, idx), sid0 = scanId(r);
   if (mv) {
     const id0 = sid0.id, e0 = APP.pokemon[id0], cur = movesFor(r, id0), rec = e0.moveset, second = hasSecond(r, id0);
     const tips = [];
     if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
-    if (!second) tips.push(`2nd charged move locked: ${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : 'unlock it'}, then set <b>${esc(mvName(missingC[0] || rec[2]))}</b>`);
-    else if (missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
-    h += `<div class="note" style="margin:10px 0 0">Moves on this Pokémon${r.movesSeen ? ` <span class="okc" style="color:var(--green)">✓ read from a screenshot</span>` : ' <span class="dim">(not scanned yet: scroll the status screen to the attacks and screenshot it)</span>'}</div>${mv}`;
-    h += `<div class="note" style="margin:-2px 0 0">${tips.length ? tips.join(' · ') : `Matches PvPoke's ${esc(rec.map(mvName).join(' · '))}.`}</div>`;
+    if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
+    rows.push(['Moves', `${mv}<div class="dim" style="font-size:12px;margin-top:2px">${r.movesSeen ? '<span class="okc">✓</span> read from a screenshot' : 'not scanned yet: screenshot the status screen scrolled to the attacks'}</div>`]);
+    rows.push(['2nd move', second ? `<span class="okc">✓</span> unlocked` : `${chip('locked', 'ul')} <span class="dim">${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>`]);
+    rows.push(['PvPoke', tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
   }
-  h += `<div class="acts" style="margin-top:8px"><button onclick="toggleBench(${idx});Planner.renderMon()">${r.bench ? 'Unbench' : 'Bench'}</button>${r.superseded ? `<button onclick="results[${idx}].superseded=null;save();render();Planner.refresh();Planner.renderMon()">Unarchive</button>` : `<button onclick="results[${idx}].superseded={why:'archived by hand',t:Date.now()};save();render();Planner.refresh();Planner.renderMon()">Archive</button>`}<button class="danger" onclick="Planner.deleteScan('${esc(r.key)}')">Delete scan</button></div>`;
-  h += `<div class="note" style="margin:12px 0 4px">Correct a misread and solve again</div><div class="add"><input id="esp" list="species" placeholder="species" value="${esc(r.species || '')}" style="min-width:110px"><input id="ecp" placeholder="CP" inputmode="numeric" value="${r.cp || ''}" style="width:70px;flex:0"><input id="ehp" placeholder="HP" inputmode="numeric" value="${r.hp || ''}" style="width:64px;flex:0"><input id="elv" placeholder="level" inputmode="decimal" value="${r.level || ''}" style="width:64px;flex:0"><button onclick="Planner.resolveScan('${esc(r.key)}')">Re-solve</button></div></div>`;
-  if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in your roster and the meta</div>`;
+  if (best) { const plan = planFor(r, best); const lines = plan ? plan.replace(/^<div class="plan">|<\/div>$/g, '').split('<br>').filter(l => !/2nd charged move/.test(l)) : [];
+    if (lines.length) rows.push(['Evolve', `<div class="plan" style="margin:0">${lines.join('<br>')}</div>`]); }
+  rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
+  h += kv(rows);
+  h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, GL rank and UL rank mean?</div>`;
+  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500.</div>`;
+  h += `</div>`;
+  if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in the meta</div>`;
   else h += `<div class="note">${esc(nice(r.species))} is not in PvPoke's Great League rankings, so there is no meta page for it.</div>`;
   return h;
+}
+function editScan(key) {
+  const r = results.find(x => x.key === key); if (!r) return;
+  $('sheet').innerHTML = `<div class="box"><h2><span>Correct a misread</span><span class="x" onclick="Planner.closeSheet()">✕</span></h2>
+    <p class="dim" style="margin:0 0 10px;font-size:13px">Fix what the scanner read and solve the IVs again. The appraisal, if any, stays attached.</p>
+    <div class="kv"><span class="k">Species</span><span class="v"><input id="esp" list="species" value="${esc(r.species || '')}" style="width:100%"></span>
+    <span class="k">CP</span><span class="v"><input id="ecp" inputmode="numeric" value="${r.cp || ''}" style="width:100%"></span>
+    <span class="k">HP</span><span class="v"><input id="ehp" inputmode="numeric" value="${r.hp || ''}" style="width:100%"></span>
+    <span class="k">Level</span><span class="v"><input id="elv" inputmode="decimal" placeholder="blank = unknown" value="${r.level || ''}" style="width:100%"></span></div>
+    <div class="acts" style="margin-top:14px"><button class="primary" onclick="Planner.resolveScan('${esc(key)}');Planner.closeSheet()">Re-solve</button><button onclick="Planner.closeSheet()">Cancel</button></div></div>`;
+  $('sheet').classList.add('open');
 }
 function resolveScan(key) {
   const r = results.find(x => x.key === key); if (!r) return;
@@ -630,39 +662,40 @@ function deleteScan(key) {
 function monInner(m, id, noHead) {
   const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
   const moves = o ? o.moves : (ROSTER.moves[id] || ri.pending[id] || e.moveset);
-  const rec = e.moveset, notRec = moves.filter(mv => !rec.includes(mv));
+  const rec = e.moveset, notRec = moves.filter(Boolean).filter(mv => !rec.includes(mv));
   const back = {today: 'Today', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
+  const rm = 'Planner.renderMon()';
+  const menu = ctxMenu([
+    o && o.scan && !noHead ? ["Open the best copy's scan", `Planner.openScan('${esc(o.scan.key)}')`] : null,
+    !st && !benched ? ['Add to wanted', `Planner.want('${id}',true)`] : null,
+    !st && !benched ? ['Add as pending (building it)', `Planner.addAs('pending','${id}')`] : null,
+    !st && !benched ? ['I own one (no scan)', `Planner.addAs('owned','${id}')`] : null,
+    st === 'wanted' ? ['Got it: move to pending', `Planner.addAs('pending','${id}')`] : null,
+    st === 'pending' && !a ? ['Built it: move to owned', `Planner.addAs('owned','${id}')`] : null,
+    o && !benched && !noHead ? ['Bench (keep out of teams)', `Planner.bench('${id}');${rm}`] : null,
+    a && !benched ? ['Not evolving it (bench)', `Planner.bench('${id}');${rm}`] : null,
+    benched ? ['Unbench', `Planner.unbench('${id}');${rm}`] : null,
+    o && o.manual ? ['Remove from roster', `Planner.dropMon('owned','${id}')`, true] : null,
+    ROSTER.pending[id] !== undefined && !o ? ['Remove from pending', `Planner.dropMon('pending','${id}')`, true] : null,
+    ROSTER.candidates[id] !== undefined && !o ? ['Remove from wanted', `Planner.dropMon('candidates','${id}')`, true] : null,
+  ]);
   let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st)}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
-  h += `<div class="detail"><div class="dh"><span class="nm" style="font-size:20px">${esc(e.name)}</span><span class="dim">meta #${e.rank} · ${e.score}</span></div>
-    <div class="chips" style="margin:0">${e.types.map(t => chip(t)).join('')}${weakTo(id).length ? `<span class="dim" style="font-size:12px;align-self:center">weak to ${esc(weakTo(id).join(', '))}</span>` : ''}</div>`;
-  // numbers
+  h += `<div class="detail" style="gap:6px"><div class="dh"><span class="nm" style="font-size:20px">${esc(e.name)}</span><span style="display:flex;align-items:center;gap:8px"><span class="dim">meta #${e.rank} · ${e.score}</span>${menu}</span></div>`;
   const teamsIn = rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
-  if (noHead) { /* the scan section above already shows this copy */ }
-  else if (o && !o.manual) { const c = costTo(o.level, o.toLevel);
-    h += `<div class="kpis"><div><small>Your copy</small><b>${o.cp} CP · L${o.level}</b></div><div><small>IV rank GL</small><b>#${o.glRank} · ${o.glPct.toFixed(1)}%</b></div><div><small>To the cap</small><b>${o.toLevel > o.level ? `L${o.toLevel} · ${(c.dust / 1000).toFixed(1)}k · ${c.candy || c.xl + ' XL'}` : 'ready'}</b></div></div>`;
-    h += `<div class="chips" style="margin:0">${chip(`IVs ${o.ivs.join('/')}`, 'gl')}${o.scan && o.scan.appraisal ? chip('✓ appraised', 'meta1') : ''}${o.toLevel > 40 && o.toLevel > o.level ? chip('XL candy needed', 'warn') : ''}${e.thirdMove ? chip(`2nd move ${e.thirdMove[0] / 1000}k · ${e.thirdMove[1]} candy`) : ''}</div>`; }
-  else if (a) h += `<div class="kpis"><div><small>From</small><b>${esc(a.from)}</b></div><div><small>After evolving</small><b>${a.cpNow} CP · to L${a.toLevel}</b></div><div><small>IV rank GL</small><b>#${a.glRank} · ${a.glPct.toFixed(1)}%</b></div></div>`;
-  else { const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
-    h += `<div class="kpis"><div><small>Status</small><b>${st || (benched ? 'benched' : 'not in roster')}</b></div><div><small>In teams</small><b>${teamsIn} of ${rep.todayAll.length}</b></div>${sc ? `<div><small>Catch ${esc(nm(pre))}</small><b>≤ ${sc.safe} CP</b></div>` : e.thirdMove ? `<div><small>2nd move</small><b>${e.thirdMove[0] / 1000}k · ${e.thirdMove[1]}</b></div>` : '<div><small>Types</small><b>' + esc(e.types.join(' / ')) + '</b></div>'}</div>`; }
-  // moves
-  if (!noHead) h += `<div class="note" style="margin:4px 0 0">Moves${o ? ' on your copy' : ' for planning'}</div>${movesRow(id, moves)}`;
-  if (notRec.length) h += `<div class="note" style="margin-top:${noHead ? 0 : -4}px">PvPoke recommends ${esc(rec.map(mvName).join(' · '))}.</div>`;
-  // actions
-  const acts = [
-    o && o.scan && !noHead ? `<button onclick="Planner.openScan('${esc(o.scan.key)}')">Best copy's scan</button>` : '',
-    `<button onclick="Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')">Try in builder</button>`,
-    o && !benched && !noHead ? `<button onclick="Planner.bench('${id}');Planner.renderMon()">Bench</button>` : '',
-    benched ? `<button onclick="Planner.unbench('${id}');Planner.renderMon()">Unbench</button>` : '',
-    a && !benched ? `<button onclick="Planner.bench('${id}');Planner.renderMon()">Not evolving it</button>` : '',
-    !st && !benched ? `<button onclick="Planner.want('${id}',true)">Add to wanted</button><button onclick="Planner.addAs('pending','${id}')">Add as pending</button><button onclick="Planner.addAs('owned','${id}')">I own one</button>` : '',
-    st === 'wanted' ? `<button onclick="Planner.addAs('pending','${id}')">Got it, pending</button>` : '',
-    st === 'pending' && !a ? `<button onclick="Planner.addAs('owned','${id}')">Built it, owned</button>` : '',
-    o && o.manual ? `<button class="danger" onclick="Planner.dropMon('owned','${id}')">Remove from roster</button>` : '',
-    ROSTER.pending[id] !== undefined && !o ? `<button class="danger" onclick="Planner.dropMon('pending','${id}')">Remove from pending</button>` : '',
-    ROSTER.candidates[id] !== undefined && !o ? `<button class="danger" onclick="Planner.dropMon('candidates','${id}')">Remove from wanted</button>` : '',
-    o && !o.manual && !noHead ? `<span class="note" style="margin:0;align-self:center">Owned through a scan: open the scan to delete it.</span>` : '',
-  ].filter(Boolean).join('');
-  h += `<div class="acts">${acts}</div></div>`;
+  const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
+  const rows = [
+    ['Types', `<span class="chips" style="margin:0;display:inline-flex">${e.types.map(t => chip(t)).join('')}</span>`],
+    ['Weak to', weakTo(id).length ? esc(weakTo(id).join(', ')) : 'nothing above neutral'],
+    ['Roster', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${a ? ` <span class="dim">evolves from your ${esc(a.from)}: ${a.cpNow} CP, fits to L${a.toLevel}, IV rank #${a.glRank}</span>` : ''}${o && o.manual ? ' <span class="dim">added by hand, no scan</span>' : ''}`],
+  ];
+  if (!noHead && o && !o.manual) { const c = costTo(o.level, o.toLevel);
+    rows.push(['Your copy', `<b>${o.cp} CP</b> · L${o.level} · IVs ${o.ivs.join('/')}${o.scan && o.scan.appraisal ? ' <span class="okc">✓</span>' : ''} · GL rank #${o.glRank} (${o.glPct.toFixed(1)}%)<br><span class="dim">${o.toLevel > o.level ? (o.toLevel > 40 ? `needs L${o.toLevel}: XL candy` : `to the cap: L${o.toLevel} · ${fmt(c.dust)} dust · ${c.candy} candy`) : 'ready for GL, no power-up needed'}</span>`]); }
+  rows.push(['In teams', `${teamsIn} of ${rep.todayAll.length} buildable`]);
+  if (!o && sc) rows.push(['Catch', `a ${esc(nm(pre))} ≤ <b>${sc.safe}</b> CP evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs)`]);
+  if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
+  if (!noHead) rows.push(['Moves', `${movesRow(id, moves)}<div class="dim" style="font-size:12px;margin-top:2px">${o ? 'on your copy' : 'for planning'}${notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke'}</div>`]);
+  h += kv(rows);
+  h += `<div class="acts" style="margin-top:6px"><button onclick="Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')">Try in builder</button>${!st && !benched ? `<button onclick="Planner.want('${id}',true)">Add to wanted</button>` : ''}</div></div>`;
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
   h += `<div class="sec">With your roster <small>${fit.owned ? `in ${fit.inTeams} of ${fit.of} buildable teams` : 'if you add it'}</small></div>`;
@@ -868,7 +901,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, coverage, coverageWith, closeSheet,
+window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, coverage, coverageWith, closeSheet,
                   metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
