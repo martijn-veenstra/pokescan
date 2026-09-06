@@ -3,10 +3,18 @@
 Pokémon GO screenshot scanner and Great League team planner. Runs entirely in the browser,
 installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 
-- **Today** tab: the best team you can build from what you own, with lead / swap / closer, a score bar
-  against the meta best, its threats, ranked next moves (power-ups, evolutions, catches with a safe CP,
-  what to park), a second team with no overlap, and other teams grouped by shared core. Tap a team for
-  the coverage grid (wins / even / loses against the meta, faded cells are estimated) and swap suggestions.
+- **Today** tab: the best team you can build from what you own, with lead / swap / closer and a score bar
+  against the meta best (tap it for the team page). "Do next" lists only what the Pokémon you actually run
+  still need: power-ups, Fast / Charged TM, unlocking the second charged move, pending party members to
+  catch or evolve. Everything else (bench power-ups, catches for a hypothetical team, what to park) sits
+  behind "N more ideas", so dust goes to the team first. Then your saved parties as one line each, where
+  to get wanted Pokémon, and the coach.
+- **Teams** tab: the recommended team, your in-game parties (add one by name and three species, or save
+  one from the builder), a second team with no overlap, and more buildable trios, one line each with score
+  and weak-spot counts. Every team opens its own page: roles with the moves used for scoring, members with
+  status, the to-dos for its members, the meta Pokémon that beat two or all three (with who to swap to),
+  one-member swaps from your roster, the coverage grid (wins / even / loses, faded cells are estimated),
+  and rename / delete for saved parties.
 - **Roster** tab: every Pokémon as a status tile (ready, powering up, pending, wanted, XL gated, benched).
   Tap for rank, cost to the cap, moves, what it beats and loses to, and actions. Owned tiles come from
   scans at or under 1500 CP; add others by name or load the roster committed in the repo.
@@ -27,9 +35,6 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Profile** button (header): trainer name, level and Best Buddy boost, or read name and level from a
   screenshot of your in-game trainer profile (also recognised when it is mixed into a normal import).
   Export CSV, Backup, Restore and Clear live here too.
-- **Saved parties** (Today and Roster) list their weak spots: the meta Pokémon that nobody on the party
-  beats or that beat two of the three, with rank, who they beat, who to swap to, and the best one-member
-  fix from your roster.
 - **Moves**: screenshot (or record) the status screen scrolled down to the attacks and the moves land on the
   card; "NEW ATTACK" marks the second charged move as locked. Today then lists, for members of your best
   teams and saved parties, the Fast TM / Charged TM towards PvPoke's moveset and "Unlock the 2nd charged

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.21"></script>
+<script src="pvp.js?v=9.22"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -97,6 +97,11 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);
 .kv .v input{background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px;font-size:15px}
 .kv .v .mvsel{width:100%;min-width:0;font-size:14.5px;padding:9px 10px;background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink)}.kv .v .mvsel.empty{color:var(--dim);border-style:dashed}
 .kv .v.cont{margin-top:-4px}
+.kv .k:has(+ .v > .mvsel),.kv .k:has(+ .v > input){align-self:center;padding-top:0}
+.team.row{display:flex;align-items:center;gap:10px;padding:9px 12px}.team.row .sc{margin:0;min-width:34px}.team.row .tx{flex:1;min-width:0}.team.row .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.team.row .dt{margin-top:1px}.team.row .go{color:var(--dim);font-size:18px;flex:none}
+.team.row .dt b{font-weight:600}.team.row .dt .good{color:var(--green)}
+.more{margin:8px 0 0;padding:10px 12px;border:1px dashed var(--line);border-radius:14px;color:var(--dim);font-size:13px;cursor:pointer}.more b{color:var(--ink);font-weight:600}
+.members .mb{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.members .mb:first-child{border-top:none;padding-top:2px}.members .rl{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);width:52px;flex:none}.members .mn{flex:1;min-width:0}.members .mn b{font-weight:600;cursor:pointer}.members .mn .dt{margin-top:1px}
 .use{font-size:13px;color:var(--ink);margin-top:8px;background:#0E1626;border-radius:12px;padding:8px 10px 10px;line-height:1.4}
 .use .uh{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:6px 0 4px}.use .uh:first-child{margin-top:0}
 .use .ur{display:grid;grid-template-columns:18px minmax(0,1fr) 72px 40px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
@@ -118,7 +123,7 @@ canvas{display:none}
 video{position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-events:none}
 .tabs{display:flex;gap:6px;margin:0 0 10px}
 .tabs button{flex:1;background:var(--card);border:1px solid var(--line);color:var(--dim);border-radius:12px;
- padding:10px;font-weight:700;font-family:Sora,sans-serif;font-size:14px}
+ padding:10px 4px;font-weight:700;font-family:Sora,sans-serif;font-size:13.5px;min-width:0}
 .tabs button.on{color:var(--ink);border-color:#3BC489;background:rgba(72,213,151,.10)}
 .tabs.sub{margin:0 0 8px}.tabs.sub button{padding:8px;font-size:13px;border-radius:10px}
 .role.slot{position:relative;cursor:pointer}.role.slot .x{position:absolute;top:4px;right:8px;color:var(--dim);font-size:12px}
@@ -173,6 +178,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 .mon.benched{opacity:.55}
 .fix .sec2{background:var(--card);color:var(--dim);border:1px solid var(--line)}
 .hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 15px;margin:8px 0}
+.hero .chip{white-space:normal;line-height:1.35}
 .roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .role{background:#0E1626;border-radius:14px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;gap:3px;min-width:0}
 .role .rl{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
@@ -259,16 +265,19 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.21</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.22</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
+  <button id="tab-teams" onclick="showTab('teams')">Teams</button>
   <button id="tab-roster" onclick="showTab('roster')">Roster</button>
   <button id="tab-meta" onclick="showTab('meta')">Meta</button>
   <button id="tab-scans" onclick="showTab('scans')">Scans</button>
 </div>
 
 <div id="view-today" class="view on"><div id="today"><div class="note">Loading PvPoke data…</div></div></div>
+<div id="view-teams" class="view"><div id="teams"><div class="note">Loading PvPoke data…</div></div></div>
+<div id="view-team" class="view"><div id="team"></div></div>
 <div id="view-meta" class="view"><div id="meta"><div class="note">Loading PvPoke data…</div></div></div>
 
 <div id="view-scans" class="view">
@@ -470,7 +479,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.21';
+const APP_VERSION='9.22';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -1341,9 +1350,9 @@ function planFor(r,best){
 }
 
 function showTab(t){
-  for(const k of ['today','roster','meta','scans','mon']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',k===t); $('view-'+k).classList.toggle('on',k===t); }
-  if(t!=='mon') localStorage.setItem('tab',t);
-  if(window.Planner){ if(t==='today') Planner.renderToday(); if(t==='roster') Planner.renderRoster(); if(t==='meta') Planner.renderMeta(); }
+  for(const k of ['today','teams','team','roster','meta','scans','mon']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',k===t||(k==='teams'&&t==='team')); $('view-'+k).classList.toggle('on',k===t); }
+  if(t!=='mon'&&t!=='team') localStorage.setItem('tab',t);
+  if(window.Planner){ if(t==='today') Planner.renderToday(); if(t==='teams') Planner.renderTeams(); if(t==='team') Planner.renderTeam(); if(t==='roster') Planner.renderRoster(); if(t==='meta') Planner.renderMeta(); }
 }
 showTab(localStorage.getItem('tab')||'today');
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
@@ -1369,8 +1378,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.21"></script>
-<script src="planner.js?v=9.21"></script>
-<script src="sync.js?v=9.21"></script>
+<script src="sources.js?v=9.22"></script>
+<script src="planner.js?v=9.22"></script>
+<script src="sync.js?v=9.22"></script>
 </body>
 </html>
