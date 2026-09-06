@@ -346,10 +346,11 @@ function wantedCard(m) {
   if (!src || !src.ready()) return h + `<div class="note">${src && src.error() ? 'Schedule not available: ' + esc(src.error()) : 'Loading the raid and egg schedule…'}</div>`;
   const all = [];
   for (const id of ids) for (const e of availability(id) || []) all.push(Object.assign({id}, e));
-  const now = all.filter(e => e.now), later = all.filter(e => !e.now).sort((a, b) => a.sort - b.sort);
-  const line = e => `<div class="thr av ${e.now ? 'now' : ''}" onclick="Planner.openMon('${e.id}')" style="cursor:pointer"><b>${esc(nm(e.id))}</b>${e.name !== nm(e.id) ? ` <span class="dim">as ${esc(e.name)}</span>` : ''} · ${esc(e.what)} <span>${esc(e.when)}</span>${e.remote ? ' · <span class="good">remote OK</span>' : e.kind === 'raid' ? ' · in person' : ''}${e.shiny ? ' · ✨' : ''}${e.note ? ` · <span class="dim">${esc(e.note)}</span>` : ''}</div>`;
-  if (now.length) h += `<div class="team" style="cursor:default"><div class="nm">Available now</div>${now.map(line).join('')}</div>`;
-  h += `<div class="team" style="cursor:default"><div class="nm">Coming up <span class="dim" style="font-weight:400;font-size:12px">announced raids and events</span></div>${later.length ? later.slice(0, 8).map(line).join('') : '<div class="thr">Nothing announced yet for your wanted list. Raid rotations are usually published one to three weeks ahead.</div>'}</div>`;
+  const byId = list => { const g = new Map(); for (const e of list) { if (!g.has(e.id)) g.set(e.id, []); g.get(e.id).push(e); } return [...g.entries()]; };
+  const now = byId(all.filter(e => e.now)).sort((a, b) => APP.pokemon[a[0]].rank - APP.pokemon[b[0]].rank);
+  const later = byId(all.filter(e => !e.now)).sort((a, b) => Math.min(...a[1].map(e => e.sort)) - Math.min(...b[1].map(e => e.sort)));
+  if (now.length) h += `<div class="team" style="cursor:default"><div class="nm">Available now</div>${now.map(([id, es]) => availBlock(id, es, {status: ownership(m, id)})).join('')}</div>`;
+  h += `<div class="team" style="cursor:default"><div class="nm">Coming up <span class="dim" style="font-weight:400;font-size:12px">announced raids and events</span></div>${later.length ? later.slice(0, 6).map(([id, es]) => availBlock(id, es, {status: ownership(m, id)})).join('') : '<div class="thr">Nothing announced yet for your wanted list. Raid rotations are usually published one to three weeks ahead.</div>'}</div>`;
   const none = ids.filter(id => !all.some(e => e.id === id));
   if (none.length) h += `<div class="note">Nothing scheduled for ${none.map(id => `<a href="#" onclick="Planner.openMon('${id}');return false">${esc(nm(id))}</a>`).join(', ')}: wild spawns, trades or GBL rewards.</div>`;
   h += `<div class="note">Leek Duck schedule via ScrapedDuck, updated ${when(src.updated())}. Only events with a published boss or spawn list can be matched. Remote OK = regular raid you can join with a Remote Raid Pass; Shadow raids are in person only.</div>`;
@@ -462,8 +463,37 @@ function availability(id) {                    // where to get this species (or 
   if (!window.Sources || !Sources.ready()) return null;
   return Sources.forSpecies(family(id).map(nm), {shadow: /_shadow$/.test(id)});
 }
-function availLines(list, max) {
-  return list.slice(0, max || 6).map(e => `<div class="thr av ${e.now ? 'now' : ''}"><b>${esc(e.name)}</b> · ${esc(e.what)} <span>${esc(e.when)}</span>${e.remote ? ' · <span class="good">remote OK</span>' : e.kind === 'raid' ? ' · in person' : ''}${e.shiny ? ' · ✨' : ''}${e.note ? ` · <span class="dim">${esc(e.note)}</span>` : ''}</div>`).join('');
+function bundleAvail(list, species) {          // fold a species' entries into at most one line per channel
+  const out = [], uniq = a => [...new Set(a.filter(Boolean))];
+  const forms = uniq(list.map(e => e.name)).filter(n => n !== species);
+  const grp = k => list.filter(e => e.kind === k);
+  const flags = es => `${es.some(e => e.remote) ? ' · <span class="good">remote OK</span>' : es.some(e => e.kind === 'raid') ? ' · in person' : ''}${es.some(e => e.shiny) ? ' ✨' : ''}`;
+  const asForm = es => { const f = uniq(es.map(e => e.name)).filter(n => n !== species); return f.length && f.length === uniq(es.map(e => e.name)).length ? `<span class="dim">as ${esc(f.join('/'))}:</span> ` : ''; };
+  const raids = grp('raid');
+  if (raids.length) {
+    const parts = uniq(raids.map(e => `${e.what}${e.when && e.when !== 'in raids now' ? ` <span>${esc(e.when)}</span>` : ''}`));
+    out.push({label: 'Raids', now: raids.some(e => e.now), html: asForm(raids) + parts.join(' · ') + flags(raids) + (raids.some(e => /mega/i.test(e.what)) ? ' <span class="dim">· Mega raid gives the normal form</span>' : '')});
+  }
+  const eggs = grp('egg');
+  if (eggs.length) {
+    const kms = uniq(eggs.map(e => (String(e.what + ' ' + e.note).match(/(\d+)\s*km/i) || [])[1])).map(Number).sort((a, b) => a - b);
+    const sync = eggs.some(e => /adventure sync/i.test(e.what + ' ' + e.note)), gift = eggs.some(e => /gift/i.test(e.what + ' ' + e.note));
+    out.push({label: 'Eggs', now: eggs.some(e => e.now), html: asForm(eggs) + (kms.length ? kms.map(k => k + ' km').join(', ') + ' eggs' : uniq(eggs.map(e => e.what)).join(' · ')) + (sync ? ' <span class="dim">(Adventure Sync)</span>' : '') + (gift ? ' <span class="dim">(gifts)</span>' : '') + flags(eggs)});
+  }
+  const wild = grp('event');
+  if (wild.length) out.push({label: 'Wild', now: wild.some(e => e.now), html: asForm(wild) + uniq(wild.map(e => `${esc(e.what.replace(/^wild spawns\s*\((.*)\)$/i, '$1 spawns'))}${e.when ? ` <span>${esc(e.when)}</span>` : ''}`)).join(' · ') + flags(wild)});
+  const res = grp('research');
+  if (res.length) out.push({label: 'Research', now: true, html: asForm(res) + uniq(res.map(e => `“${esc(e.when)}”`)).join(', ') + flags(res)});
+  return out;
+}
+function availBlock(id, list, opts) {          // a species block for Today: name, then its bundled channels
+  opts = opts || {};
+  const lines = bundleAvail(list, nm(id));
+  return `<div class="avb" onclick="Planner.openMon('${id}')"><div class="avh"><b>${esc(nm(id))}</b><span class="dim">#${APP.pokemon[id].rank}${opts.status ? ' · ' + opts.status : ''}</span></div>` +
+    lines.map(l => `<div class="avl ${l.now ? 'now' : ''}"><span class="lb">${l.label}</span><span class="tx">${l.html}</span></div>`).join('') + '</div>';
+}
+function availLines(list, species) {           // the same bundle, for a Pokémon page
+  return bundleAvail(list, species).map(l => `<div class="avl ${l.now ? 'now' : ''}"><span class="lb">${l.label}</span><span class="tx">${l.html}</span></div>`).join('');
 }
 function weakTo(id) {                          // attacking types that hit this Pokémon for more than neutral
   const t = APP.pokemon[id].types; return TYPES18.filter(a => PVP.eff(a, t) > 1).sort((a, b) => PVP.eff(b, t) - PVP.eff(a, t));
@@ -559,7 +589,7 @@ function monInner(m, id) {
     h += `<div class="sec">Where to get ${esc(e.name)} <small>Leek Duck schedule</small></div>`;
     if (av === null) h += `<div class="note">${window.Sources && Sources.error() ? 'Schedule not available: ' + esc(Sources.error()) : 'Loading the raid and egg schedule…'}</div>`;
     else if (!av.length) h += `<div class="note">Not in raids, eggs, research or announced events right now (checked ${esc(family(id).map(nm).join(', '))}). Wild spawns are not listed.</div>`;
-    else h += `<div class="team" style="cursor:default">${availLines(av, 8)}</div>`;
+    else h += `<div class="team avb" style="cursor:default">${availLines(av, e.name)}</div>`;
   }
   return h;
 }
