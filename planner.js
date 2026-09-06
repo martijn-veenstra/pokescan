@@ -484,11 +484,17 @@ function movesRow(id, moves, handler) {
   const third = `<select onchange="${handler.replace('SLOT', 2)}"><option value="" ${!moves[2] ? 'selected' : ''}>no 2nd move</option>${withCur(e.charged, 2).map(mv => `<option value="${mv}" ${moves[2] === mv ? 'selected' : ''}>${esc(mvName(mv))}</option>`).join('')}</select>`;
   return `<div class="mv">${sel(0, e.fast)}${sel(1, e.charged)}${third}</div>`;
 }
-function moveRows(id, moves, handler) {  // Fast / Charged / 2nd charged as three full-width rows for a kv table
+function knownMoves(r, id) {                // moves we actually know: read from a screenshot or set by hand; null when neither
+  if (r && r.moves && r.moves.length) return r.moves;
+  if (ROSTER.moves[id] && ROSTER.moves[id].length) return ROSTER.moves[id];
+  return null;
+}
+function moveRows(id, moves, handler, placeholder) {  // Fast / Charged / 2nd charged as three full-width rows; moves null = nothing known yet
   const e = APP.pokemon[id]; handler = handler || `Planner.setMove('${id}',SLOT,this.value)`;
+  const unknown = !moves; moves = moves || []; placeholder = placeholder || 'not scanned';
   const use = e.use || {}, tag = mv => use[mv] ? ` (${use[mv]}%)` : '';
   const withCur = (list, slot) => moves[slot] && !list.includes(moves[slot]) ? [moves[slot], ...list] : list;
-  const sel = (slot, list0, none) => `<select class="mvsel" onchange="${handler.replace('SLOT', slot)}">${none ? `<option value="" ${!moves[slot] ? 'selected' : ''}>no 2nd charged move</option>` : ''}${withCur(list0, slot).map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}${tag(mv)}</option>`).join('')}</select>`;
+  const sel = (slot, list0, none) => `<select class="mvsel ${unknown ? 'empty' : ''}" onchange="${handler.replace('SLOT', slot)}">${unknown ? `<option value="" selected disabled>— ${placeholder} —</option>` : ''}${none && !unknown ? `<option value="" ${!moves[slot] ? 'selected' : ''}>no 2nd charged move</option>` : none ? `<option value="">no 2nd charged move</option>` : ''}${withCur(list0, slot).map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}${tag(mv)}</option>`).join('')}</select>`;
   return [['Fast', sel(0, e.fast)], ['Charged', sel(1, e.charged)], ['2nd charged', sel(2, e.charged, true)]];
 }
 function moveUsage(id, cur) {               // collapsible ranked table: how often PvPoke's simulations run each move
@@ -636,18 +642,18 @@ function scanSection(m, r) {
   } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋯ → Correct a misread</span>`]);
   const mv = movesRowForScan(r, idx), sid0 = scanId(r); let usage = '';
   if (mv) {
-    const id0 = sid0.id, e0 = APP.pokemon[id0], cur = movesFor(r, id0), rec = e0.moveset;
+    const id0 = sid0.id, e0 = APP.pokemon[id0], known = knownMoves(r, id0), cur = known ? known.filter(Boolean) : [], rec = e0.moveset;
     const second = r.secondMove === false ? false : (r.secondMove === true || (r.moves && r.moves.filter(Boolean).length >= 3)) ? true : null;   // null: never scanned or set
     const tips = [];
     if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
-    rows.push(...moveRows(id0, movesFor(r, id0), `Planner.setScanMove(${idx},SLOT,this.value)`));
-    rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : 'moves not scanned yet: screenshot the status screen scrolled to the attacks'}</div>`]);
+    rows.push(...moveRows(id0, known, `Planner.setScanMove(${idx},SLOT,this.value)`));
+    rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : known ? 'set by hand' : 'not scanned yet: screenshot the status screen scrolled to the attacks, or pick them. Teams are scored with PvPoke\'s moveset until then.'}</div>`]);
     usage = moveUsage(id0, cur);
     const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
     rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">not known yet: scan the attacks, or pick it in the third box${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
-    rows.push(['PvPoke', tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
+    rows.push(['PvPoke', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
   }
   if (best) { const plan = planFor(r, best); const lines = plan ? plan.replace(/^<div class="plan">|<\/div>$/g, '').split('<br>').filter(l => !/2nd charged move/.test(l)) : [];
     if (lines.length) rows.push(['Evolve', `<div class="plan" style="margin:0">${lines.join('<br>')}</div>`]); }
@@ -685,8 +691,9 @@ function deleteScan(key) {
 }
 function monInner(m, id, noHead) {
   const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
-  const moves = o ? o.moves : (ROSTER.moves[id] || ri.pending[id] || e.moveset);
-  const rec = e.moveset, notRec = moves.filter(Boolean).filter(mv => !rec.includes(mv));
+  const known = o ? (o.manual ? (ROSTER.moves[id] || null) : knownMoves(o.scan, id)) : (ROSTER.moves[id] || ri.pending[id] || null);
+  const moves = known || e.moveset;
+  const rec = e.moveset, notRec = known ? known.filter(Boolean).filter(mv => !rec.includes(mv)) : [];
   const back = {today: 'Today', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
   const rm = 'Planner.renderMon()';
   const menu = ctxMenu([
@@ -717,8 +724,8 @@ function monInner(m, id, noHead) {
   rows.push(['In teams', `${teamsIn} of ${rep.todayAll.length} buildable`]);
   if (!o && sc) rows.push(['Catch', `a ${esc(nm(pre))} ≤ <b>${sc.safe}</b> CP evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs)`]);
   if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
-  if (!noHead) { rows.push(...moveRows(id, moves)); rows.push(['', `<div class="dim" style="font-size:12px">${o ? 'moves on your copy' : 'moves for planning'}${notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke'}</div>`]); }
-  h += kv(rows) + (noHead ? '' : moveUsage(id, moves));
+  if (!noHead) { rows.push(...moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set')); rows.push(['', `<div class="dim" style="font-size:12px">${!known ? `not known yet · planning uses PvPoke's ${esc(rec.map(mvName).join(' · '))}` : (o ? 'moves on your copy' : 'moves for planning') + (notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke')}</div>`]); }
+  h += kv(rows) + (noHead ? '' : moveUsage(id, known || []));
   h += `<div class="acts" style="margin-top:6px"><button onclick="Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')">Try in builder</button>${!st && !benched ? `<button onclick="Planner.want('${id}',true)">Add to wanted</button>` : ''}</div></div>`;
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
@@ -893,7 +900,8 @@ function place(cur, slot, val) {           // set a slot; if the move sits in th
 }
 function setMove(id, slot, val) {
   const m = M(), o = m.own[id];
-  const cur = place((o ? o.moves : (ROSTER.moves[id] || m.ri.pending[id] || APP.pokemon[id].moveset)).slice(), slot, val);
+  const base = o && o.scan ? (knownMoves(o.scan, id) || APP.pokemon[id].moveset) : (ROSTER.moves[id] || m.ri.pending[id] || APP.pokemon[id].moveset);
+  const cur = place(base.slice(), slot, val);
   if (o && o.scan) { o.scan.moves = cur; o.scan.secondMove = cur.length >= 3; save(); render(); } else ROSTER.moves[id] = cur;
   saveRoster(); refresh();
 }
@@ -921,7 +929,8 @@ function movesRowForScan(r, idx) {      // used by the Scans view: manual move s
 }
 function setScanMove(idx, slot, val) {
   const r = results[idx], s = scanId(r); if (!s || !s.id) return;
-  r.moves = place(movesFor(r, s.id).slice(), slot, val); r.secondMove = r.moves.length >= 3; save(); render(); refresh(); if (UI.scan === r.key) renderMon();
+  const base = (knownMoves(r, s.id) || APP.pokemon[s.id].moveset).slice();   // first pick on an unscanned card: the other slots take PvPoke's moves
+  r.moves = place(base, slot, val); r.secondMove = r.moves.length >= 3; save(); render(); refresh(); if (UI.scan === r.key) renderMon();
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
