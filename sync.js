@@ -143,14 +143,30 @@ function renderBox() {
     : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
 }
-async function coach(context, question) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
+async function coach(context, question, onProgress) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
   if (!S.code) throw new Error('connect sync first (cloud button)');
-  const r = await fetch('/api/coach', {method: 'POST', headers: hdr(), body: JSON.stringify({context, question})});
-  const j = await r.json().catch(() => ({}));
+  let r, j;
+  try { r = await fetch('/api/coach', {method: 'POST', headers: hdr(), body: JSON.stringify({context, question})}); }
+  catch (e) { throw new Error('could not reach the server (' + (e.message || e) + ')'); }
+  j = await r.json().catch(() => ({}));
   if (r.status === 401) throw new Error('wrong passcode');
   if (r.status === 429) throw new Error('the coach is resting: ' + (j.message || 'too many questions this hour'));
   if (!r.ok) throw new Error(j.message || j.error || ('server ' + r.status));
-  return j.text;
+  if (j.text) return j.text;
+  // the server hands back a job; poll it (a single long request would be cut off by the phone after about a minute)
+  const t0 = Date.now();
+  while (Date.now() - t0 < 5 * 60e3) {
+    await new Promise(res => setTimeout(res, 2500));
+    if (onProgress) onProgress(Math.round((Date.now() - t0) / 1000));
+    let p;
+    try { p = await fetch('/api/coach/' + j.jobId, {headers: hdr(), cache: 'no-store'}); } catch { continue; }   // a flaky network just retries
+    if (p.status === 401) throw new Error('wrong passcode');
+    if (p.status === 404) throw new Error('the server restarted while thinking; ask again');
+    const k = await p.json().catch(() => ({}));
+    if (k.status === 'done') return k.text;
+    if (k.status === 'error') throw new Error(k.error || 'the coach did not answer');
+  }
+  throw new Error('the coach took more than five minutes; try again later');
 }
 function toggle() { const box = $('syncbox'); box.classList.toggle('open'); if (box.classList.contains('open')) renderBox(); }
 async function init() {

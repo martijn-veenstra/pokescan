@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { timingSafeEqual, createHash } from 'node:crypto';
+import { timingSafeEqual, createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { openDb } from './db.js';
 import { makeCoach } from './coach.js';
@@ -50,7 +50,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   });
   // AI coach: the browser sends a compact roster/meta summary, the server asks Claude. Passcode-protected and rate-limited,
   // because every call costs money on the server owner's API key.
-  const asks = [];
+  const asks = [], jobs = new Map();
   app.post('/api/coach', { preHandler: auth }, async (req, reply) => {
     if (!coach) return reply.code(503).send({ error: 'coach_not_configured', message: 'Set ANTHROPIC_API_KEY on the server to enable the coach.' });
     const now = Date.now();
@@ -62,14 +62,20 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (context.length > 60000) return reply.code(413).send({ error: 'context_too_large' });
     const question = String(body.question || '').slice(0, 500);
     asks.push(now);
-    try {
-      const out = await coach({ context, question });
-      if (out.refused) return reply.code(502).send({ error: 'refused', message: 'the model declined to answer' });
-      return { text: out.text, model: out.model, usage: out.usage };
-    } catch (e) {
-      req.log.error(e);
-      return reply.code(502).send({ error: 'coach_failed', message: e.message || 'the coach did not answer' });
-    }
+    // The model can take a minute or more; phones drop a fetch after ~60 s. So: answer with a job id at once, let the app poll.
+    for (const [id, j] of jobs) if (now - j.t > 3600e3) jobs.delete(id);
+    const id = randomUUID(), job = { status: 'running', t: now };
+    jobs.set(id, job);
+    coach({ context, question }).then(out => {
+      if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to answer' });
+      else Object.assign(job, { status: 'done', text: out.text, model: out.model, usage: out.usage });
+    }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the coach did not answer' }); });
+    return reply.code(202).send({ jobId: id, status: 'running' });
+  });
+  app.get('/api/coach/:id', { preHandler: auth }, async (req, reply) => {
+    const job = jobs.get(req.params.id);
+    if (!job) return reply.code(404).send({ error: 'unknown_job' });
+    return { status: job.status, text: job.text, model: job.model, usage: job.usage, error: job.error };
   });
   app.post('/api/auth', { preHandler: auth }, async () => ({ ok: true }));
   app.get('/api/state', { preHandler: auth }, async () => ({ user: USER, state: await db.all(USER) }));

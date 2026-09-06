@@ -359,7 +359,7 @@ function wantedCard(m) {
 if (window.Sources) Sources.onChange(() => { renderToday(); if (UI.mon) renderMon(); });
 
 /* ---------- AI coach (server-side Claude API, only when the server has a key and sync is connected) ---------- */
-const COACH = Object.assign({q: '', text: '', hash: '', t: 0, busy: false, error: ''}, JSON.parse(localStorage.getItem('coach') || '{}'));
+const COACH = Object.assign({q: '', text: '', hash: '', t: 0, busy: false, error: '', secs: 0, showCtx: false}, JSON.parse(localStorage.getItem('coach') || '{}'));
 const saveCoach = () => localStorage.setItem('coach', JSON.stringify({q: COACH.q, text: COACH.text, hash: COACH.hash, t: COACH.t}));
 function coachContext(m) {
   const {L, rep, own, ri} = m;
@@ -384,8 +384,11 @@ function coachCard(m) {
   const fresh = COACH.text && COACH.hash === coachHash(coachContext(m));
   return `<div class="sec">Coach <small>Claude reads your roster and the meta</small></div>
     <div class="team coach"><div class="nm">Ask the coach</div><div class="dt">Team ideas from what you own, what to build next and what to fear. Uses the numbers above, nothing from your phone leaves except this roster summary.</div>
-    <div class="add" style="margin-top:8px"><input id="coachq" placeholder="optional question, e.g. which lead for Azumarill teams?" value="${esc(COACH.q)}" style="flex:1;min-width:160px"><button onclick="Planner.askCoach()" ${COACH.busy ? 'disabled' : ''}>${COACH.busy ? 'Thinking…' : fresh ? 'Ask again' : 'Ask the coach'}</button></div>
+    <div class="add" style="margin-top:8px"><input id="coachq" placeholder="optional question, e.g. which lead for Azumarill teams?" value="${esc(COACH.q)}" style="flex:1;min-width:160px"><button onclick="Planner.askCoach()" ${COACH.busy ? 'disabled' : ''}>${COACH.busy ? `Thinking… ${COACH.secs ? COACH.secs + 's' : ''}` : fresh ? 'Ask again' : 'Ask the coach'}</button></div>
+    ${COACH.busy ? '<div class="note">Claude is reading your roster; this takes 20 to 90 seconds. You can switch tabs, the answer is kept.</div>' : ''}
     ${COACH.error ? `<div class="note" style="color:#F59A8B">⚠ ${esc(COACH.error)}</div>` : ''}
+    <div class="note" style="cursor:pointer" onclick="Planner.toggleCoachCtx()">${COACH.showCtx ? '▾ hide' : '▸ show'} what is sent to Claude</div>
+    ${COACH.showCtx ? `<div class="note">The server adds a fixed instruction: Great League coach for a casual player, answer under 350 words with 2–3 teams from what you own (lead / swap / closer), what to build next, what to watch out for, only Pokémon from this summary. Then your question and this summary:</div><pre class="ctx">${esc(JSON.stringify(coachContext(m), null, 1))}</pre>` : ''}
     ${COACH.text ? `<div class="ans">${mdLite(COACH.text)}</div><div class="note" style="margin-top:6px">${when(COACH.t)}${fresh ? '' : ' · your roster changed since this answer'}</div>` : ''}</div>`;
 }
 function mdLite(t) {                          // minimal markdown: paragraphs, bullets, bold
@@ -396,11 +399,12 @@ function mdLite(t) {                          // minimal markdown: paragraphs, b
     return `<p>${lines.join('<br>')}</p>`;
   }).join('').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^<p>(#+\s*)(.+?)<\/p>/gm, '<p><b>$2</b></p>');
 }
+function toggleCoachCtx() { COACH.showCtx = !COACH.showCtx; renderToday(); }
 async function askCoach() {
   const m = M(), ctx = coachContext(m), q = ($('coachq') || {value: ''}).value.trim();
-  COACH.q = q; COACH.busy = true; COACH.error = ''; renderToday();
+  COACH.q = q; COACH.busy = true; COACH.error = ''; COACH.secs = 0; renderToday();
   try {
-    const text = await Sync.coach(ctx, q);
+    const text = await Sync.coach(ctx, q, secs => { COACH.secs = secs; const b = document.querySelector('#today .coach button'); if (b) b.textContent = `Thinking… ${secs}s`; });
     COACH.text = text; COACH.hash = coachHash(ctx); COACH.t = Date.now(); saveCoach();
   } catch (e) { COACH.error = e.message || String(e); }
   COACH.busy = false; renderToday();
@@ -771,5 +775,5 @@ function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option v
 window.Planner = {refresh, markDirty, renderToday, renderRoster, renderMeta, renderMon, openMon, closeMon, dropMon, addAs, coverage, coverageWith, closeSheet,
                   metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
-                  askCoach, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+                  askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();
