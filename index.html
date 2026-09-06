@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.14"></script>
+<script src="pvp.js?v=9.15"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -242,7 +242,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.14</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.15</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -453,7 +453,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.14';
+const APP_VERSION='9.15';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -651,13 +651,26 @@ async function scanFrame(ctx, W, H, trainer){
   const ch=Math.floor(0.55*H); c2.width=Math.floor(W/2); c2.height=Math.floor(ch/2);
   c2.getContext('2d').drawImage(ctx.canvas, 0, Math.floor(0.28*H), W, ch, 0,0, c2.width, c2.height);
   t=(await wk.recognize(c2)).data.text;
-  const flat=t.replace(/\n/g,' ');
-  m=flat.match(/(\d+)\s*\/\s*(\d+)\s*HP/i); if(m) out.hp=parseInt(m[2]);
+  let flat=t.replace(/\n/g,' ');
+  const parseHp=f=>{ const m2=f.match(/(\d+)\s*\/\s*(\d+)\s*HP/i); return m2?parseInt(m2[2]):undefined; };
+  out.hp=parseHp(flat);
+  if(!out.hp){                                            // small HP text on a video frame: look again at full scale
+    c2.width=W; c2.height=ch; c2.getContext('2d').drawImage(ctx.canvas, 0, Math.floor(0.28*H), W, ch, 0,0, W, ch);
+    const t2=(await wk.recognize(c2)).data.text.replace(/\n/g,' ');
+    out.hp=parseHp(t2); if(t2.length>flat.length*0.6) flat=t2+' '+flat;
+  }
   m=flat.match(/CP\s*(\d{2,4})/i); if(m) out.cpCandidates.push(parseInt(m[1]));
   out.hints=[];
-  for(const w2 of flat.toUpperCase().match(/[A-Z]{3,}/g)||[]){
-    if(!out.species && DATA.stats[w2]) out.species=w2;
+  const words=flat.toUpperCase().match(/[A-Z]{3,}/g)||[];
+  const candy=new Set(); words.forEach((w,i)=>{ if(DATA.stats[w] && /^CANDY|^SNOEP/.test(words[i+1]||'')) candy.add(w); });
+  for(const w2 of words){
+    if(!out.species && DATA.stats[w2] && !candy.has(w2)) out.species=w2;
     if(TYPES.includes(w2) && !out.hints.includes(w2)) out.hints.push(w2);
+  }
+  out.candySpecies=[...candy][0]||null;
+  if(!out.species){                                       // nickname or an IV overlay over the name: keep a truncated header token ("TINKAT…")
+    const hpAt=flat.toUpperCase().search(/\d\s*\/\s*\d+\s*HP/); const head=(hpAt>0?flat.slice(0,hpAt):flat).toUpperCase().match(/[A-Z]{4,}/g)||[];
+    out.nameToken=head.find(w=>!DATA.stats[w])||null;
   }
   out.txt = flat.toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').slice(0,300);
   out.dust = await dustFromPill(ctx, W, H);
@@ -680,8 +693,8 @@ async function scanFrame(ctx, W, H, trainer){
 function readAppraisal(ctx, W, H){
   const x0=0, x1=Math.floor(0.6*W), y0=Math.floor(0.45*H), y1=Math.floor(0.97*H);
   const w=x1-x0, h=y1-y0, d=ctx.getImageData(x0,y0,w,h).data;
-  const org=i=>{ const r=d[i],g=d[i+1],b=d[i+2]; return r>215&&g>130&&g<205&&b<140&&r-b>90; };   // bar fill ≈ (244,166,76)
-  const grey=i=>{ const r=d[i],g=d[i+1],b=d[i+2]; return r>200&&r<245&&Math.abs(r-g)<10&&Math.abs(g-b)<10; }; // empty track ≈ (226,226,228)
+  const org=i=>{ const r=d[i],g=d[i+1],b=d[i+2]; return r>200&&g>120&&g<212&&b<150&&r-b>70; };   // bar fill ≈ (244,166,76), looser for video frames
+  const grey=i=>{ const r=d[i],g=d[i+1],b=d[i+2]; return r>195&&r<248&&Math.abs(r-g)<14&&Math.abs(g-b)<14; }; // empty track ≈ (226,226,228)
   const maxGap=Math.round(0.015*W);
   // per row: longest run of track pixels (orange or grey, small white gaps allowed) starting in the left half
   function rowRun(y){
@@ -739,7 +752,9 @@ function applyAppraisal(r, ivs){
 function apKeys(species,cp,hp){ const k=[]; if(cp) k.push(species+'|'+cp); if(hp) k.push(species+'|hp'+hp); return k; }
 async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   const s=await scanFrame(ctx,W,H,trainer);              // species, HP and CP are still visible on the appraisal screen
-  if(!s.species) return null;
+  if(!s.species) s.species=inferSpecies(s, ivs);
+  if(!s.species){ note(`appraisal ${ivs.join('/')}: ${seen(s)} → species unknown`); return null; }
+  if(s.inferred) note(`appraisal: name hidden, took ${s.inferred}`);
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
   const attach=r=>{ gain('appr',r.species); applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species} ${r.cp} CP`); return key; };
@@ -765,6 +780,49 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   for(const k of apKeys(s.species,cp,s.hp)) APPR[k]=ivs; saveAppr(); status(`Appraisal ${ivs.join('/')} stored for ${s.species} ${cp??''}`);
   return key;
 }
+
+/* ---------- species inference when the name is hidden (nickname, IV overlay): candy line + evolution family + solvability ---------- */
+function familyOf(sp){
+  const out=new Set([sp]); if(!APP) return [...out];
+  const base=sp.toLowerCase();
+  const chain=id=>{ const c=[id]; let cur=id; for(let i=0;i<4;i++){ const pr=(APP.prevo||{})[cur]; if(!pr) break; c.push(pr); cur=pr; } return c; };
+  for(const id of Object.keys(APP.pokemon).concat(Object.keys(APP.unranked||{}))){
+    if(chain(id).some(x=>x.split('_')[0]===base)){ const up=id.split('_')[0].toUpperCase(); if(DATA.stats[up]) out.add(up); }
+  }
+  return [...out];
+}
+function prefixCandidates(token){
+  if(!token) return [];
+  for(let n=Math.min(token.length,8); n>=5; n--){ const pre=token.slice(0,n); const hits=Object.keys(DATA.stats).filter(k=>k.startsWith(pre)); if(hits.length&&hits.length<=6) return hits; }
+  return [];
+}
+function fitsSpecies(sp, cp, hp, level, ivs){
+  if(!DATA.stats[sp]||!cp) return false;
+  if(ivs){ for(const b of DATA.stats[sp]) for(let l=2;l<=110;l++){ const lv=l/2, m2=cpmAt(lv);
+      if(calcCP(b,ivs[0],ivs[1],ivs[2],m2)!==cp) continue;
+      if(hp && calcHP(b,ivs[2],m2)!==hp) continue;
+      if(!hp && level && Math.abs(lv-level)>3) continue;      // no HP read: the level arc must at least roughly agree
+      return true; } return false; }
+  if(!hp) return false;
+  for(const lv of level?[level,level-0.5,level+0.5,null]:[null]) if(solve(sp,cp,hp,lv,null,[]).length) return true;
+  return false;
+}
+function speciesCandidates(s){ return [...new Set((s.candySpecies?familyOf(s.candySpecies):[]).concat(prefixCandidates(s.nameToken)))]; }
+function inferSpecies(s, ivs){
+  const cps=[...new Set(s.cpCandidates||[])].filter(c=>c>=10);
+  const cands=speciesCandidates(s);
+  if(!cands.length) return null;
+  // a card we already hold with this CP is the strongest cue (the appraisal usually follows its own status screen)
+  const known=results.find(x=>!x.superseded && cands.includes(x.species) && cps.includes(x.cp) && (!s.hp||!x.hp||x.hp===s.hp));
+  if(known){ s.inferred=`${known.species} from the ${known.cp} CP card`; return known.species; }
+  const fit=cands.filter(sp=>cps.some(cp=>fitsSpecies(sp,cp,s.hp,s.level,ivs)));
+  let pick=fit.length===1?fit[0]:null;
+  if(!pick && fit.length>1){ const withMoves=fit.filter(sp=>{ const mv=readMoves(sp,s.txt); return mv&&mv.found; }); pick=withMoves.length===1?withMoves[0]:fit[fit.length-1]; }
+  if(pick) s.inferred=`${pick} from ${s.candySpecies?s.candySpecies+' candy':''}${s.nameToken?(s.candySpecies?' + ':'')+'"'+s.nameToken+'"':''}`;
+  return pick;                                              // nothing solves: better no card than a wrong one
+}
+function note(txt){ gain('note', txt); }
+function seen(s){ return `${s.species||(s.candySpecies?'?('+s.candySpecies+' candy)':s.nameToken?'"'+s.nameToken+'"':'?')} cp[${[...new Set(s.cpCandidates||[])].join(',')}] hp${s.hp||'?'} L${s.level||'?'}`; }
 
 /* ---------- moves from OCR text (status screen scrolled to the attacks) ---------- */
 const normTxt=t=>' '+String(t||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').trim()+' ';
@@ -1004,7 +1062,7 @@ async function scanVideo(file,trainer){
   const cv=$('cv'); cv.width=vid.videoWidth; cv.height=vid.videoHeight;
   const ctx=cv.getContext('2d',{willReadFrequently:true});
   const dur=vid.duration, before=results.length;
-  let prev=null, lastRead=null, lastKey='', lastAp='', errs=0, reads=0, frames=0, mode='';
+  let prev=null, prevAp=null, lastRead=null, lastKey='', lastAp='', errs=0, reads=0, frames=0, mode='';
   const diag=()=>`${vid.videoWidth}×${vid.videoHeight} · ${dur.toFixed(1)}s · mode ${mode||'-'} · ${frames} frames · ${reads} reads · readyState ${vid.readyState}${vid.error?` · mediaError ${vid.error.code}`:''} · t=${vid.currentTime.toFixed(1)}`;
   const fail=msg=>{ const e=new Error(msg); e.detail=diag(); return e; };
   if(!vid.videoWidth) throw fail('the browser decoded no picture from this video (HEVC not supported here?)');
@@ -1012,14 +1070,17 @@ async function scanVideo(file,trainer){
   const analyse=async(t)=>{
     ctx.drawImage(vid,0,0); frames++; gain('frames');
     const vec=frameVec(cv);
-    const stable = prev!==null && vecDiff(vec,prev)<3;        // two consecutive frames look alike: the swipe has stopped
+    // two consecutive frames look alike: the swipe has stopped. The animated Pokémon model and video compression alone
+    // move the 16x16 thumbnail by 4–6 grey levels; a swipe or screen change moves it by 15–75.
+    const stable = prev!==null && vecDiff(vec,prev)<9;
     prev=vec;
     status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · ${results.length-before} new · ${reads} screens read`);
     progress(Math.min(1,t/dur));
-    if(!stable){ lastRead=null; return false; }
-    if(lastRead && vecDiff(vec,lastRead)<4) return false;     // still the same screen we already read
+    if(!stable){ lastRead=null; prevAp=null; return false; }
+    if(lastRead && vecDiff(vec,lastRead)<11) return false;    // still the same screen we already read
     try{
       const ap=readAppraisal(ctx,cv.width,cv.height);
+      if(ap && (!prevAp || prevAp.join()!==ap.join())){ prevAp=ap; return false; }   // bars must read the same twice: no half-drawn panels
       if(ap){
         status(`Video ${Math.round(t)}s · reading appraisal…`);
         const k=await withTimeout(handleAppraisal(ctx,cv.width,cv.height,trainer,ap,lastAp), 25000, 'reading a frame took too long');
@@ -1090,10 +1151,17 @@ async function scanVideo(file,trainer){
 
 async function handleScan(ctx,W,H,trainer,skipKey){
   const s=await scanFrame(ctx,W,H,trainer);
+  if(!s.species && s.hp && s.cpCandidates.length) s.species=inferSpecies(s);
   if(!s.species || !s.hp){                            // status screens always show HP; a screen scrolled to the attacks may not
-    if(/ attack | aanval /.test(normTxt(s.txt)) || (s.species && results.some(x=>x.species===s.species))) return attachMovesFromText(s.txt, s.species, skipKey);
-    return null;
+    let sp=s.species;
+    if(!sp){ const cands=speciesCandidates(s), prev=skipKey?results.find(x=>x.key===skipKey):null;
+      if(prev && cands.includes(prev.species)) sp=prev.species; else { const c=results.find(x=>!x.superseded && cands.includes(x.species)); sp=c?c.species:s.candySpecies; } }
+    if(/ attack | aanval /.test(normTxt(s.txt)) || (sp && results.some(x=>x.species===sp))){ const k=attachMovesFromText(s.txt, sp, skipKey); note(`${seen(s)} → ${k?'moves attached to '+sp:'attacks screen, no card to attach to'}`); return k; }
+    if(s.species && !s.cpCandidates.length){ note(`${seen(s)} → CP not read, no card`); return null; }
+    note(`${seen(s)} → not a status screen`); return null;
   }
+  if(!s.cpCandidates.length){ note(`${seen(s)} → CP not read, no card`); return null; }
+  if(s.inferred) note(`name hidden, took ${s.inferred}`);
   const mvSeen=readMoves(s.species, s.txt);
   s.combos=[];
   const tries=[]; if(s.level){ tries.push(s.level, s.level-0.5, s.level+0.5); }
@@ -1112,16 +1180,17 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   if(!s.cp && s.cpCandidates.length) s.cp=s.cpCandidates[0];
   if(!s.combos.length){                                   // unsolvable, probably a misread CP: fold into an existing card of the same Pokémon
     const digits=String(s.cp||''), twin=results.find(x=>x.species===s.species && x.hp===s.hp && x.cp && x.combos.length && (!digits||String(x.cp).includes(digits)));
-    if(twin){ if(mvSeen&&applyMoves(twin,mvSeen)){ save(); render(); gain('moves',twin.species); if(window.Planner) Planner.onMovesScan(twin); } status(`${s.species}: same Pokémon as the ${twin.cp} CP card`); return twin.key; }
+    if(twin){ if(mvSeen&&applyMoves(twin,mvSeen)){ save(); render(); gain('moves',twin.species); if(window.Planner) Planner.onMovesScan(twin); } status(`${s.species}: same Pokémon as the ${twin.cp} CP card`); note(`${seen(s)} → same as the ${twin.cp} CP card`); return twin.key; }
+    note(`${seen(s)} → no IV spread fits (card kept for correction)`);
   }
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   const dup=results.find(r=>r.key===key);
-  if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } return key; }   // dedupe
+  if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
   if(key===skipKey) return key;
   s.key=key; if(mvSeen) applyMoves(s,mvSeen);
   { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
     if(hit){ const ivs=APPR[hit]; ks.forEach(k=>delete APPR[k]); applyAppraisal(s,ivs); apKeys(s.species,s.cp,s.hp).forEach(k=>delete APPR[k]); saveAppr(); } }
-  results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s);
+  results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s); note(`${seen(s)} → new card`);
   return key;
 }
 
@@ -1283,8 +1352,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.14"></script>
-<script src="planner.js?v=9.14"></script>
-<script src="sync.js?v=9.14"></script>
+<script src="sources.js?v=9.15"></script>
+<script src="planner.js?v=9.15"></script>
+<script src="sync.js?v=9.15"></script>
 </body>
 </html>
