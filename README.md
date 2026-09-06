@@ -21,6 +21,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   cost, moves, bench / archive / delete, and correcting a misread. Appraisal screenshots pin the exact
   IVs (on their own they make a complete card). A recording is read once per screen you pause on, a
   frame that takes too long is skipped, and a bad frame never aborts the rest of the video.
+- **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,
+  appraisals, moves, profile, screens read) or why it failed, with decoder details for videos. Kept on the
+  device, last 40 files.
 - **Profile** button (header): trainer name, level and Best Buddy boost, or read name and level from a
   screenshot of your in-game trainer profile (also recognised when it is mixed into a normal import).
   Export CSV, Backup, Restore and Clear live here too.
