@@ -605,7 +605,7 @@ function scanSection(m, r) {
     const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500), ul = pvpRank(bb, best[1], best[2], best[3], 2500);
     const barRow = (l, v) => `<span>${l}</span><span class="tr"><i class="${v === 15 ? 'max' : ''}" style="width:${v / 15 * 100}%"></i></span><span class="iv">${v}</span>`;
     h += `<div class="bars">${barRow('Atk', best[1])}${barRow('Def', best[2])}${barRow('HP', best[3])}</div>`;
-    h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b><span class="sub">${best[1] + best[2] + best[3]} of 45</span></div><div><small>GL rank</small><b>#${gl.n}</b><span class="sub">${gl.pct.toFixed(1)}% of best</span></div><div><small>UL rank</small><b>#${ul.n}</b><span class="sub">${ul.pct.toFixed(1)}% of best</span></div></div>`;
+    h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b><span class="sub">${best[1] + best[2] + best[3]} of 45</span></div><div><small>GL rank</small><b>#${gl.n}</b><span class="sub">${gl.pct.toFixed(1)}%</span></div><div><small>UL rank</small><b>#${ul.n}</b><span class="sub">${ul.pct.toFixed(1)}%</span></div></div>`;
     let st;
     if (r.cp > 1500) st = `${chip('over the GL cap', 'warn')} <span class="dim">cannot battle in Great League</span>`;
     else if (gl.lv > 40) st = `${chip(`needs L${gl.lv}`, 'warn')} <span class="dim">XL candy · ${gl.cp} CP at the cap</span>`;
@@ -616,13 +616,15 @@ function scanSection(m, r) {
   } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋯ → Correct a misread</span>`]);
   const mv = movesRowForScan(r, idx), sid0 = scanId(r);
   if (mv) {
-    const id0 = sid0.id, e0 = APP.pokemon[id0], cur = movesFor(r, id0), rec = e0.moveset, second = hasSecond(r, id0);
+    const id0 = sid0.id, e0 = APP.pokemon[id0], cur = movesFor(r, id0), rec = e0.moveset;
+    const second = r.secondMove === false ? false : (r.secondMove === true || (r.moves && r.moves.filter(Boolean).length >= 3)) ? true : null;   // null: never scanned or set
     const tips = [];
     if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
     rows.push(['Moves', `${mv}<div class="dim" style="font-size:12px;margin-top:2px">${r.movesSeen ? '<span class="okc">✓</span> read from a screenshot' : 'not scanned yet: screenshot the status screen scrolled to the attacks'}</div>`]);
-    rows.push(['2nd move', second ? `<span class="okc">✓</span> unlocked` : `${chip('locked', 'ul')} <span class="dim">${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>`]);
+    const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
+    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">not known yet: scan the attacks, or pick it in the third box${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
     rows.push(['PvPoke', tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
   }
   if (best) { const plan = planFor(r, best); const lines = plan ? plan.replace(/^<div class="plan">|<\/div>$/g, '').split('<br>').filter(l => !/2nd charged move/.test(l)) : [];
