@@ -36,8 +36,16 @@ function scanId(r) {
   const best = bestOf(r);
   return {best, base: best[4] || DATA.stats[r.species][0], id: pvpokeIdFor(r.species, best[4] || DATA.stats[r.species][0])};
 }
-function movesFor(r, id) { const m = (r && r.moves && r.moves.length) ? r.moves : (ROSTER.moves[id] || detectMoves(id, r && r.txt)); return m.filter(Boolean); }
-function hasSecond(r, id) { if (r && r.secondMove === false) return false; return movesFor(r, id).length >= 3; }
+function movesFor(r, id) {                     // moves used for scoring: what is on the Pokémon, padded with PvPoke's set while the 2nd charged move is unknown
+  const m = ((r && r.moves && r.moves.length) ? r.moves : (ROSTER.moves[id] || detectMoves(id, r && r.txt))).filter(Boolean);
+  if (m.length === 2 && !(r && r.secondMove === false) && APP.pokemon[id]) { const extra = APP.pokemon[id].moveset.slice(1).find(x => !m.includes(x)); if (extra) return m.concat(extra); }
+  return m;
+}
+function hasSecond(r, id) {                    // false only with evidence (NEW ATTACK seen or one charged move set by hand); unknown counts as unlocked so nobody is nagged without proof
+  if (r && r.secondMove === false) return false;
+  if (r && r.secondMove === true) return true;
+  return (r && r.moves && r.moves.length) ? r.moves.filter(Boolean).length >= 3 || r.secondMove === undefined : movesFor(r, id).length >= 3;
+}
 function rosterOwned() {
   const own = {};
   if (!APP) return own;
@@ -733,7 +741,7 @@ function scanSection(m, r) {
     rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : known ? 'set by hand' : 'not scanned yet: screenshot the status screen scrolled to the attacks, or pick them. Teams are scored with PvPoke\'s moveset until then.'}</div>`]);
     usage = moveUsage(id0, cur);
     const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
-    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">not known yet: scan the attacks, or pick it in the third box${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
+    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">${r.movesSeen ? 'one charged move read, but the NEW ATTACK button was not in the shot: screenshot the attacks with that button visible, or pick the 2nd move in the third box' : 'not known yet: scan the attacks, or pick it in the third box'}${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
     rows.push(['PvPoke', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
   }
   if (best) { const plan = planFor(r, best); const lines = plan ? plan.replace(/^<div class="plan">|<\/div>$/g, '').split('<br>').filter(l => !/2nd charged move/.test(l)) : [];

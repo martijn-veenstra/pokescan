@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.22"></script>
+<script src="pvp.js?v=9.23"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -265,7 +265,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.22</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.23</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -479,7 +479,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.22';
+const APP_VERSION='9.23';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -868,7 +868,7 @@ function applyMoves(r, mv){                        // merge what a moves screen 
   const e=APP.pokemon[mv.id], cur=(r.moves&&r.moves.length)?r.moves.slice():[];
   const fast=mv.fast||cur[0]||e.moveset[0];
   let charged=mv.charged.slice();
-  if(charged.length<2 && mv.second!==false){ for(const m of cur.slice(1).concat(e.moveset.slice(1))) if(charged.length<2 && m && !charged.includes(m)) charged.push(m); }
+  if(charged.length<2 && mv.second!==false){ for(const m of cur.slice(1)) if(charged.length<2 && m && !charged.includes(m)) charged.push(m); }   // only what was seen before; never PvPoke's default as if it were on the Pokémon
   const next=[fast,...charged];
   const changed=JSON.stringify(next)!==JSON.stringify(cur)||(mv.second!==undefined&&r.secondMove!==mv.second);
   r.moves=next; if(mv.second!==undefined) r.secondMove=mv.second; r.movesSeen=Date.now();
@@ -888,6 +888,13 @@ function attachMovesFromText(txt, speciesInText, skipKey){
   status(`${target.species} moves: ${names.join(' · ')}${mv.second===false?' · no 2nd charged move yet':''}${changed?'':' (unchanged)'}`);
   if(window.Planner) Planner.onMovesScan(target);
   return target.key;
+}
+async function readBand(ctx, W, H, y0, y1){        // OCR one horizontal band of the frame (fractions of the height), half scale
+  const wk=await getWorker();
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  const c2=$('cv2'), top=Math.floor(y0*H), h=Math.floor((y1-y0)*H); c2.width=Math.floor(W/2); c2.height=Math.floor(h/2);
+  const g=c2.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c2.width,c2.height); g.drawImage(ctx.canvas, 0, top, W, h, 0,0, c2.width, c2.height);
+  return (await wk.recognize(c2)).data.text||'';
 }
 async function readMovesScreen(ctx, W, H, skipKey){   // full-frame OCR for a screenshot scrolled to the attacks
   const wk=await getWorker();
@@ -1188,7 +1195,11 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   }
   if(!s.cpCandidates.length){ note(`${seen(s)} → CP not read, no card`); return null; }
   if(s.inferred) note(`name hidden, took ${s.inferred}`);
-  const mvSeen=readMoves(s.species, s.txt);
+  let mvSeen=readMoves(s.species, s.txt);
+  if(!mvSeen){                                          // attacks sit below the card region on a full status screen: read the bottom band too
+    const band=await readBand(ctx,W,H,0.76,1);
+    mvSeen=readMoves(s.species, band); if(mvSeen){ s.txt=(s.txt||'')+' '+band; note(`attacks read from the bottom of the screen`); }
+  }
   s.combos=[];
   const tries=[]; if(s.level){ tries.push(s.level, s.level-0.5, s.level+0.5); }
   tries.push(null); if(s.dust) tries.push(0);          // null = dust window; 0 = unconstrained
@@ -1378,8 +1389,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.22"></script>
-<script src="planner.js?v=9.22"></script>
-<script src="sync.js?v=9.22"></script>
+<script src="sources.js?v=9.23"></script>
+<script src="planner.js?v=9.23"></script>
+<script src="sync.js?v=9.23"></script>
 </body>
 </html>
