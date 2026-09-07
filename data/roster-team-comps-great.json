@@ -3,7 +3,7 @@
  "title": "Great League",
  "roster": "data/roster-great.json",
  "gamemasterTimestamp": "2026-09-01 18:36:39",
- "generatedAt": "2026-09-07T07:29:40Z",
+ "generatedAt": "2026-09-07T11:53:06Z",
  "method": "Same heuristic as generate_pvpoke_team_comps.py, restricted to the roster file. Team scores are comparable with data/pvpoke-team-comps.json and the community-teams analysis.",
  "today": [
   {
