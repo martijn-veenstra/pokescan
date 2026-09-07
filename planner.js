@@ -301,8 +301,13 @@ function hintFor(x) {                           // availability phrase for a "ge
   return hnt ? ` · <span class="good">${esc(hnt)}</span>` : '';
 }
 function moveCard(x) {
-  return `<div class="team move ${x.faded || x.tag === 'skip' ? 'faded' : ''}"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">${esc(x.sub)}${hintFor(x)}</div>
-      <div class="acts small">${x.species && x.tag !== 'skip' ? `<button onclick="Planner.scanProof('${x.id}')">Scan proof</button>` : ''}<button onclick="Planner.markDone('${x.id}')">${x.tag === 'skip' ? 'Dismiss' : 'Done anyway'}</button><button onclick="Planner.snooze('${x.id}')">Snooze 7d</button></div></div>${chip(x.tag, x.cls === 'dim' ? '' : x.cls)}</div>`;
+  const menu = ctxMenu([
+    x.species && x.tag !== 'skip' ? ['Scan proof', `Planner.scanProof('${x.id}')`] : null,
+    x.species ? ['Open ' + nm(x.species), `Planner.openMon('${x.species}')`] : null,
+    [x.tag === 'skip' ? 'Dismiss' : 'Done without proof', `Planner.markDone('${x.id}')`],
+    ['Snooze 7 days', `Planner.snooze('${x.id}')`],
+  ]);
+  return `<div class="team move ${x.faded || x.tag === 'skip' ? 'faded' : ''}"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">${esc(x.sub)}${hintFor(x)}</div></div><div class="side">${chip(x.tag, x.cls === 'dim' ? '' : x.cls)}${menu}</div></div>`;
 }
 function renderTodayInner(el) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
@@ -331,7 +336,7 @@ function renderTodayInner(el) {
   if (rest.length || snoozed.length) {
     const kinds = [[rest.filter(x => x.id.startsWith('pu:')).length, 'bench power-ups'], [rest.filter(x => x.id.startsWith('get:')).length, 'catches and evolutions'], [rest.filter(x => /^(tm:|move2:)/.test(x.id)).length, 'move changes'], [rest.filter(x => x.id.startsWith('park:')).length, 'to park'], [snoozed.length, 'snoozed']].filter(k => k[0]).map(k => `${k[0]} ${k[1]}`);
     h += `<div class="more" onclick="Planner.toggleMore()">${UI.showAll ? '▾' : '▸'} <b>${rest.length + snoozed.length} more ideas</b> · ${esc(kinds.join(', '))}<br><span style="font-size:12px">Not for the Pokémon you run, so no dust needed here unless you want to.</span></div>`;
-    if (UI.showAll) { h += rest.map(moveCard).join(''); h += snoozed.map(x => `<div class="team move faded"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">snoozed until ${when(ROSTER.snooze[x.id])} · <a href="#" onclick="Planner.unsnooze('${x.id}');return false">unsnooze</a></div></div></div>`).join(''); }
+    if (UI.showAll) { h += rest.map(moveCard).join(''); h += snoozed.map(x => `<div class="team move faded"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">snoozed until ${when(ROSTER.snooze[x.id])}</div></div><div class="side">${ctxMenu([['Unsnooze', `Planner.unsnooze('${x.id}')`], ['Done without proof', `Planner.markDone('${x.id}')`]])}</div></div>`).join(''); }
   }
   if (ROSTER.log.length) {
     h += `<div class="sec">Recently completed</div>` + ROSTER.log.slice(0, 4).map(e => `<div class="team move done"><span class="tick ${e.evidence ? 'full' : 'hollow'}">${e.evidence ? '✓' : '○'}</span><div class="mvt"><span class="nm">${esc(e.title)}</span><div class="dt">${when(e.t)}${e.evidence ? ` · <a href="#" onclick="Planner.showScanKey('${esc(e.evidence)}');return false">scan</a>` : e.kind === 'manual' ? ` · without proof · <a href="#" onclick="Planner.undoDone('${e.id}');return false">undo</a>` : ''}${e.note ? ' · ' + esc(e.note) : ''}</div></div></div>`).join('');
@@ -457,7 +462,6 @@ function teamInner(m, ids, name) {
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
     <div class="dim" style="font-size:12px;margin-top:8px">${d.unansweredMeta.length ? `No answer to ${chip(few(d.unansweredMeta), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `${d.sharedWeaknesses.length} meta Pokémon beat two of three: ${esc(few(d.sharedWeaknesses))}.` : ''}</div>
     <div style="font-size:13px;margin-top:8px">${esc(needLine(m, ids))}</div>
-    <div class="acts" style="margin-top:10px"><button onclick="Planner.coverage(${cov})">Coverage grid</button>${saved ? '' : `<button onclick="Planner.saveTeam(${cov})">Save as party</button>`}</div>
   </div>`;
   // members
   h += `<div class="sec">Members <small>role · moves used for scoring · status</small></div><div class="team members" style="cursor:default">` + rl.map(r => {
@@ -727,10 +731,10 @@ function renderMon() {
 }
 const nice = sp => (sp || '?').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const kv = rows => `<div class="kv">${rows.filter(r => r && r[1] !== '' && r[1] != null).map(([k, v]) => `<span class="k">${k}</span><span class="v ${k ? '' : 'cont'}">${v}</span>`).join('')}</div>`;
-function ctxMenu(items) {                      // ⋯ button with a dropdown; items: [label, onclick, danger?]
+function ctxMenu(items) {                      // ⋮ button with a dropdown; items: [label, onclick, danger?]
   const rows = items.filter(Boolean).map(([l, fn, danger]) => `<button class="${danger ? 'danger' : ''}" onclick="${fn}">${l}</button>`).join('');
   if (!rows) return '';
-  return `<div class="ctx"><button class="dots" aria-label="More" onclick="event.stopPropagation();Planner.toggleMenu(this)">⋯</button><div class="menu" hidden>${rows}</div></div>`;
+  return `<div class="ctx" onclick="event.stopPropagation()"><button class="dots" aria-label="More" onclick="Planner.toggleMenu(this)">⋮</button><div class="menu" hidden onclick="this.hidden=true">${rows}</div></div>`;
 }
 function toggleMenu(btn) { const menu = btn.nextElementSibling, open = !menu.hidden; document.querySelectorAll('.ctx .menu').forEach(m => m.hidden = true); menu.hidden = open; }
 document.addEventListener('click', () => document.querySelectorAll('.ctx .menu').forEach(m => m.hidden = true));
@@ -762,7 +766,7 @@ function scanSection(m, r) {
     else st = `${chip('ready for GL', 'meta1')} <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
     rows.push(['Status', st]);
     if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} fit this CP and HP, best shown. An appraisal pins it down.<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
-  } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋯ → Correct a misread</span>`]);
+  } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋮ → Correct a misread</span>`]);
   const mv = movesRowForScan(r, idx), sid0 = scanId(r); let usage = '';
   if (mv) {
     const id0 = sid0.id, e0 = APP.pokemon[id0], known = knownMoves(r, id0), cur = known ? known.filter(Boolean) : [], rec = e0.moveset;
@@ -820,6 +824,7 @@ function monInner(m, id, noHead) {
   const back = {today: 'Today', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
   const rm = 'Planner.renderMon()';
   const menu = ctxMenu([
+    ['Try in builder', `Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')`],
     o && o.scan && !noHead ? ["Open the best copy's scan", `Planner.openScan('${esc(o.scan.key)}')`] : null,
     !st && !benched ? ['Add to wanted', `Planner.want('${id}',true)`] : null,
     !st && !benched ? ['Add as pending (building it)', `Planner.addAs('pending','${id}')`] : null,
@@ -850,7 +855,7 @@ function monInner(m, id, noHead) {
   if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
   if (!noHead) { rows.push(...moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set')); rows.push(['', `<div class="dim" style="font-size:12px">${!known ? `not known yet · planning uses PvPoke's ${esc(rec.map(mvName).join(' · '))}` : (o ? 'moves on your copy' : 'moves for planning') + (notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke')}</div>`]); }
   h += kv(rows) + (noHead ? '' : moveUsage(id, known || []));
-  h += `<div class="acts" style="margin-top:6px"><button onclick="Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')">Try in builder</button>${!st && !benched ? `<button onclick="Planner.want('${id}',true)">Add to wanted</button>` : ''}</div></div>`;
+  h += `</div>`;
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
   h += `<div class="sec">With your roster <small>${fit.owned ? `in ${fit.inTeams} of ${fit.of} buildable teams` : 'if you add it'}</small></div>`;
@@ -947,14 +952,14 @@ function renderBuilder(m, L) {
     const ev = L.evaluate(filled), d = L.describe(filled, ev), bm = APP.benchmark || {best: 721, median: 521};
     const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
     const rl = roles(L, filled);
-    h += `<div class="hero" onclick="Planner.coverageWith(${JSON.stringify(filled).replace(/"/g, '&quot;')})">
-      <div class="sec" style="margin:0 0 8px">This team <small>tap for coverage</small></div>
+    const missing = filled.filter(id => !ownership(m, id));
+    const bmenu = ctxMenu([['Coverage grid', `Planner.coverageWith(${attr(filled)})`], ['Save as in-game party…', `Planner.saveBuildAsTeam()`], missing.length ? [`Add ${missing.length} missing to wanted`, `Planner.wantMissing()`] : null, ['Copy Pokémon GO search', `Planner.copyText(${attr(teamSearch(filled))})`], ['Clear slots', `Planner.clearSlots()`, true]]);
+    h += `<div class="hero" onclick="Planner.coverageWith(${attr(filled)})">
+      <div class="sec" style="margin:0 0 8px;display:flex;justify-content:space-between;align-items:center"><span>This team <small>tap for coverage</small></span>${bmenu}</div>
       <div class="scorebar" style="margin-top:0"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
       <div class="dim" style="font-size:12px;margin-top:8px">${rl.map(r => `${r.role}: <b style="color:var(--ink)">${esc(nm(r.id))}</b>`).join(' · ')}</div>
       <div class="dim" style="font-size:12px;margin-top:6px">${d.unansweredMeta.length ? `No answer to ${chip(d.unansweredMeta.join(', '), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `Two lose to ${esc(d.sharedWeaknesses.join(', '))}.` : ''}</div>
       <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
-    const missing = filled.filter(id => !ownership(m, id));
-    h += `<div class="acts"><button onclick="Planner.saveBuildAsTeam()">Save as in-game party</button>${missing.length ? `<button onclick="Planner.wantMissing()">Add ${missing.length} missing to wanted</button>` : ''}</div>`;
   } else if (filled.length === 2) {
     const ownedPool = Object.keys(m.ri.owned).filter(p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === 3);
     const metaPool = APP.meta.slice(0, 40).filter(p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === 3);
@@ -969,7 +974,7 @@ function renderBuilder(m, L) {
 function renderMetaTeams(m) {
   const teams = APP.metaTeams || [];
   if (!teams.length) return '<div class="note">No derived meta teams in the data file yet.</div>';
-  return `<div class="note">The ${teams.length} best trios from the top 40 of PvPoke's meta group, scored with the same heuristic. Tap one for its page: roles, weak spots, what you still need, Pokémon GO search strings, and Try in builder / Coverage in its ⋯ menu.</div>` +
+  return `<div class="note">The ${teams.length} best trios from the top 40 of PvPoke's meta group, scored with the same heuristic. Tap one for its page: roles, weak spots, what you still need, Pokémon GO search strings, and Try in builder / Coverage in its ⋮ menu.</div>` +
     teams.map((t, i) => teamRow(m, t.members, null, `meta #${i + 1}`)).join('');
 }
 function renderRankings(m) {
@@ -980,7 +985,7 @@ function renderRankings(m) {
   let h = `<div class="add"><input id="rankq" placeholder="Search ${Object.keys(APP.pokemon).length} ranked Pokémon" value="${esc(UI.rankQ)}" oninput="Planner.rankSearch(this.value)"><select onchange="Planner.rankType(this.value)"><option value="">any type</option>${TYPES18.map(t => `<option value="${t}" ${ty === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`;
   h += `<div class="note">PvPoke ${esc(APP.league.title)} overall rankings · gamemaster ${esc(APP.gamemasterTimestamp.slice(0, 10))} · ${all.length} match${all.length === 1 ? '' : 'es'}</div>`;
   h += shown.map(([id, e]) => `<div class="rank"><span class="rk">#${e.rank}</span><div class="rb" onclick="Planner.openMon('${id}')" style="cursor:pointer"><div class="rn"><b>${esc(e.name)}</b> <span class="dim">${e.score}</span> ${ownChip(ownership(m, id))}</div><div class="dt">${e.types.join(' / ')} · ${e.moveset.map(mvName).map(esc).join(' · ')}</div></div>
-    <div class="ra"><button onclick="Planner.fillSlot('${id}')" title="add to builder">slot</button>${ownership(m, id) ? '' : `<button onclick="Planner.want('${id}')" title="add to wanted">want</button>`}</div></div>`).join('');
+    <div class="ra">${ctxMenu([['Add to builder', `Planner.fillSlot('${id}')`], ownership(m, id) ? null : ['Add to wanted', `Planner.want('${id}')`], ['Copy Pokémon GO search', `Planner.copyText(${attr(searchFor(id))})`]])}</div></div>`).join('');
   if (all.length > shown.length) h += `<div class="note" style="cursor:pointer" onclick="Planner.rankMore()">▸ show ${Math.min(100, all.length - shown.length)} more</div>`;
   return h;
 }
