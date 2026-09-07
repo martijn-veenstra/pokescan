@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.26"></script>
+<script src="pvp.js?v=9.27"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -270,7 +270,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.26</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.27</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -344,7 +344,7 @@ Or skip scanning and go to <b>Team builder → Load saved roster</b>. <a href="#
   <label>Level</label>
   <input type="number" id="trainer" min="1" max="80" value="40" onchange="localStorage.setItem('trainer',this.value);rankCache.clear();render();paintProfile()">
 </div>
-<label style="display:block;margin:4px 0 10px"><input type="checkbox" id="bb" onchange="localStorage.setItem('bb',this.checked?'1':'0');rankCache.clear();render()"> Best Buddy boost (+1 level, up to L51)</label>
+<label style="display:block;margin:4px 0 10px"><input type="checkbox" id="bb" onchange="localStorage.setItem('bb',this.checked?'1':'0');rankCache.clear();render()"> Best Buddy boost (+1 level, up to L51; off = ranks like Poké Genie)</label>
 <button class="btn sec" style="margin:0" onclick="document.getElementById('pfile').click()">Read name and level from a profile screenshot</button>
 <p class="dim" style="font-size:12px;margin:6px 0 0">In Pokémon GO tap your avatar, screenshot the profile page (the one with your name and LEVEL) and pick it here. Profile screenshots mixed into a normal import are recognised too.</p>
 <div id="pstat" class="dim" style="font-size:12.5px;margin-top:6px"></div>
@@ -458,7 +458,7 @@ function solveForm(b, cp, hp, level, dust){
 
 /* ---------- PvP ranking (stat product under CP cap, max level 51 w/ best buddy) ---------- */
 const rankCache = new Map();
-function maxL(){ return localStorage.getItem('bb')==='0' ? 100 : 102; }
+function maxL(){ return localStorage.getItem('bb')==='1' ? 102 : 100; }   // L50 unless the Best Buddy boost is switched on (Poké Genie's default too)
 function maxLevelUnderCap(b, ia, id, is, cap){
   for(let l=maxL(); l>=2; l--){ const lv=l/2;
     if(calcCP(b,ia,id,is,cpmAt(lv))<=cap) return lv; }
@@ -484,7 +484,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.26';
+const APP_VERSION='9.27';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -1028,7 +1028,7 @@ $('file').addEventListener('change', async e=>{
   setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
 });
 $('trainer').value=localStorage.getItem('trainer')||'40';
-$('bb').checked=localStorage.getItem('bb')!=='0';
+$('bb').checked=localStorage.getItem('bb')==='1';
 renderLog();
 $('tname').value=localStorage.getItem('tname')||'';
 paintProfile();
@@ -1348,20 +1348,26 @@ function evoBaseStats(evoId){                 // PvPoke evolution id -> scanner 
   const want=info.types.slice().sort().join('/');
   return forms.find(f=>[f[3],f[4]].filter(Boolean).map(t=>t.toLowerCase()).sort().join('/')===want)||forms[0];
 }
-function planFor(r,best){
+function evosOf(id){                          // direct evolutions of a PvPoke id: ranked entries list them, otherwise the pre-evolution map read backwards
+  const e=APP.pokemon[id], out=new Set(e&&e.evo||[]);
+  for(const [k,v] of Object.entries(APP.prevo||{})) if(v===id) out.add(k);
+  return [...out];
+}
+function planFor(r,best){                       // the evolution chain of a scan with this IV spread: CP now, level and rank at the 1500 cap, cost
   if(!APP) return '';
-  const b=best[4]||DATA.stats[r.species][0], id=pvpokeIdFor(r.species,b); if(!id) return '';
+  const b=best[4]||DATA.stats[r.species][0], id=pvpokeIdFor(r.species,b)||Object.keys(APP.unranked).find(k=>k===r.species.toLowerCase()); if(!id) return '';
   const e=APP.pokemon[id], lines=[];
-  for(const evo of e.evo||[]){
+  const walk=(from,depth)=>{ for(const evo of evosOf(from)){
     const eb=evoBaseStats(evo); if(!eb) continue;
-    const name=(APP.pokemon[evo]||APP.unranked[evo]).name;
+    const name=(APP.pokemon[evo]||APP.unranked[evo]||{name:evo}).name;
     const cpNow=calcCP(eb,best[1],best[2],best[3],cpmAt(best[0]));
-    if(cpNow>1500){ lines.push(`→ <b>${name}</b> would be ${cpNow} CP: <span class="no">over the 1500 cap</span>`); continue; }
-    const rk=pvpRank(eb,best[1],best[2],best[3],1500), mr=APP.pokemon[evo]?` · meta #${APP.pokemon[evo].rank}`:'';
-    const c=costTo(best[0],rk.lv);
-    lines.push(`→ <b>${name}</b> ${cpNow} CP now, <span class="ok">fits</span> up to L${rk.lv} (${rk.cp} CP, IV #${rk.n}${mr}) · ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy`);
-  }
-  if(e.thirdMove) lines.push(`2nd charged move: ${(e.thirdMove[0]/1000)}k dust · ${e.thirdMove[1]} candy${e.buddy?` · buddy ${e.buddy} km`:''}`);
+    if(cpNow>1500){ lines.push(`→ <b>${name}</b> would be ${cpNow} CP: <span class="no">over the 1500 cap</span>`); }
+    else { const rk=pvpRank(eb,best[1],best[2],best[3],1500), mr=APP.pokemon[evo]?` · meta #${APP.pokemon[evo].rank}`:'', c=costTo(best[0],rk.lv);
+      lines.push(`→ <b>${name}</b> ${cpNow} CP now, <span class="ok">fits</span> up to L${rk.lv} (${rk.cp} CP, IV #${rk.n}, ${rk.pct.toFixed(1)}%${mr}) · ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy to power up, plus the candy to evolve`); }
+    if(depth<2) walk(evo,depth+1);
+  } };
+  walk(id,1);
+  if(e&&e.thirdMove) lines.push(`2nd charged move: ${(e.thirdMove[0]/1000)}k dust · ${e.thirdMove[1]} candy${e.buddy?` · buddy ${e.buddy} km`:''}`);
   return lines.length?`<div class="plan">${lines.join('<br>')}</div>`:'';
 }
 
@@ -1394,8 +1400,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.26"></script>
-<script src="planner.js?v=9.26"></script>
-<script src="sync.js?v=9.26"></script>
+<script src="sources.js?v=9.27"></script>
+<script src="planner.js?v=9.27"></script>
+<script src="sync.js?v=9.27"></script>
 </body>
 </html>

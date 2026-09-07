@@ -760,7 +760,9 @@ function scanSection(m, r) {
     h += `<div class="bars">${barRow('Atk', best[1])}${barRow('Def', best[2])}${barRow('HP', best[3])}</div>`;
     h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b><span class="sub">${best[1] + best[2] + best[3]} of 45</span></div><div><small>GL rank</small><b>#${gl.n}</b><span class="sub">${gl.pct.toFixed(1)}%</span></div><div><small>UL rank</small><b>#${ul.n}</b><span class="sub">${ul.pct.toFixed(1)}%</span></div></div>`;
     let st;
+    const cpMax = calcCP(bb, best[1], best[2], best[3], cpmAt(maxL() / 2));
     if (r.cp > 1500) st = `${chip('over the GL cap', 'warn')} <span class="dim">cannot battle in Great League</span>`;
+    else if (cpMax < 1500) st = `${chip(`caps at ${cpMax} CP`, 'warn')} <span class="dim">stays under 1500 even at L${maxL() / 2}: evolve it, see below</span>`;
     else if (gl.lv > 40) st = `${chip(`needs L${gl.lv}`, 'warn')} <span class="dim">XL candy · ${gl.cp} CP at the cap</span>`;
     else if (gl.lv > best[0]) { const c = costTo(best[0], gl.lv); st = `${chip(`power up to L${gl.lv}`, 'ul')} <span class="dim">${fmt(c.dust)} dust · ${c.candy} candy → ${gl.cp} CP</span>`; }
     else st = `${chip('ready for GL', 'meta1')} <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
@@ -787,7 +789,8 @@ function scanSection(m, r) {
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
   h += kv(rows) + usage;
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, GL rank and UL rank mean?</div>`;
-  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500.</div>`;
+  const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], 1500) : null;
+  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500. Poké Genie shows the same rank; its "Rank %" is the share of spreads below this one ${g0 ? ` (${(100 - g0.n / 40.96).toFixed(1)}% here)` : ''} and its "Stat Prod" is our percentage. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
   h += `</div>`;
   if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in the meta</div>`;
   else h += `<div class="note">${esc(nice(r.species))} is not in PvPoke's Great League rankings, so there is no meta page for it.</div>`;
