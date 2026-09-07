@@ -178,6 +178,8 @@ def build(gm):
         used_moves.update([r["fast"], r["charged"]])
     return {"types": out_types, "overall": top,
             "moves": {m: {"n": move_name(m), "t": moves[m]["type"]} for m in sorted(used_moves)},
+            # every move's PvE numbers, so the app can rate any Pokémon's own moveset for raids (type, power, duration s, energy)
+            "pvemoves": {m: {"t": v["type"], "p": v["power"], "d": v["dur"], "e": v["energy"]} for m, v in sorted(moves.items())},
             "model": {"attacker": "L40 15/15/15, shadow atk x1.2 / def x0.83", "boss": "tier-5 stand-in: 250 atk / 200 def, neutral 100-power move every 2.5 s",
                       "rank": "DPS^3 x TDO, boss weak to the type (x1.6)", "source": GM_URL}}
 

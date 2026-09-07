@@ -787,7 +787,7 @@ function scanSection(m, r) {
   if (best) { const plan = planFor(r, best); const lines = plan ? plan.replace(/^<div class="plan">|<\/div>$/g, '').split('<br>').filter(l => !/2nd charged move/.test(l)) : [];
     if (lines.length) rows.push(['Evolve', `<div class="plan" style="margin:0">${lines.join('<br>')}</div>`]); }
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
-  h += kv(rows) + usage;
+  h += kv(rows) + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, GL rank and UL rank mean?</div>`;
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], 1500) : null;
   if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500. Poké Genie shows the same rank; its "Rank %" is the share of spreads below this one ${g0 ? ` (${(100 - g0.n / 40.96).toFixed(1)}% here)` : ''} and its "Stat Prod" is our percentage. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
@@ -857,7 +857,7 @@ function monInner(m, id, noHead) {
   if (!noHead) { const c = !o ? candidateSearch(id) : null; rows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span>${c ? `<span class="srchi"><code>${esc(c.q)}</code><button onclick="Planner.copyText(${attr(c.q)},this)">Copy</button></span>` : ''}<div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under 1500 CP${c ? `, and ${esc(nm(c.pre))} that evolve under the cap` : ''}</div>`]); }
   if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
   if (!noHead) { rows.push(...moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set')); rows.push(['', `<div class="dim" style="font-size:12px">${!known ? `not known yet · planning uses PvPoke's ${esc(rec.map(mvName).join(' · '))}` : (o ? 'moves on your copy' : 'moves for planning') + (notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke')}</div>`]); }
-  h += kv(rows) + (noHead ? '' : moveUsage(id, known || []));
+  h += kv(rows) + (noHead ? '' : moveUsage(id, known || []) + raidUsage(id, known || []));
   h += `</div>`;
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
@@ -1000,8 +1000,41 @@ let PVE = null, pveLoading = null, pveError = '';
 function loadPve() {
   if (PVE || pveLoading) return;
   pveLoading = fetch('data/pve.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(d => { PVE = d; }).catch(e => { pveError = e.message || String(e); }).finally(() => { pveLoading = null; renderMeta(); });
+    .then(d => { PVE = d; }).catch(e => { pveError = e.message || String(e); }).finally(() => { pveLoading = null; renderMeta(); if (UI.mon || UI.scan) renderMon(); });
 }
+/* raid moveset rating: neutral cycle DPS of every fast + charged pair at L40, as a share of the best pair (Poké Genie's "Moveset Rating") */
+const CPM40 = 0.7903, RAID_BOSS_DEF = (200 + 15) * CPM40;
+function gmMove(m) {
+  if (!PVE || !PVE.pvemoves) return null;
+  const x = PVE.pvemoves[m] || PVE.pvemoves[m + '_FAST'];
+  if (x) return x;
+  if (m.startsWith('HIDDEN_POWER') && PVE.pvemoves.HIDDEN_POWER_FAST) return Object.assign({}, PVE.pvemoves.HIDDEN_POWER_FAST, {t: (APP.moves[m] || {}).t});
+  return null;
+}
+function raidCombos(id) {
+  const e = APP.pokemon[id], b = evoBaseStats(id); if (!e || !b || !PVE) return [];
+  const atk = (b[0] + 15) * CPM40, dmg = (p, stab) => Math.floor(0.5 * p * atk / RAID_BOSS_DEF * (stab ? 1.2 : 1)) + 1;
+  const out = [];
+  for (const f of e.fast) { const fm = gmMove(f); if (!fm || fm.e <= 0) continue;
+    for (const c of e.charged) { const cm = gmMove(c); if (!cm || cm.e >= 0) continue;
+      const n = -cm.e / fm.e, dps = (dmg(fm.p, e.types.includes(fm.t)) * n + dmg(cm.p, e.types.includes(cm.t))) / (fm.d * n + cm.d);
+      out.push({f, c, dps}); } }
+  out.sort((a, b) => b.dps - a.dps);
+  const top = out.length ? out[0].dps : 1;
+  return out.map(x => Object.assign(x, {pct: Math.round(100 * x.dps / top)}));
+}
+const raidGrade = p => p >= 90 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D';
+function raidUsage(id, cur) {                  // collapsible table under the PvP usage box
+  if (!PVE) { loadPve(); return ''; }
+  const rows = raidCombos(id); if (!rows.length) return '';
+  cur = (cur || []).filter(Boolean);
+  const mine = x => x.f === cur[0] && cur.slice(1).includes(x.c);
+  const yours = rows.filter(mine), best = yours.length ? yours.reduce((a, b) => b.pct > a.pct ? b : a) : null;
+  const head = best ? `${best.pct}% · grade ${raidGrade(best.pct)}` : cur.length ? 'your set is not rated' : '';
+  return `<div class="note" style="margin:6px 0 0;cursor:pointer" onclick="Planner.toggleRaidUse()">${UI.raidUse ? '▾' : '▸'} Raid moves by damage${head ? ` <span class="dim">· yours ${esc(head)}</span>` : ''}</div>` +
+    (UI.raidUse ? `<div class="use">${rows.slice(0, 10).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))} + ${esc(mvName(x.c))}</span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('')}<div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, best pair = 100%, like Poké Genie's Moveset Rating. Which type you need depends on the boss: see Meta › Raids.</div></div>` : '');
+}
+function toggleRaidUse() { UI.raidUse = !UI.raidUse; renderMon(); }
 function pveOwned(e) {                          // your scanned copies of this species (any CP): a mega or shadow counts through its base species
   const mine = results.filter(r => r.species === e.species && !r.superseded && r.cp);
   if (!mine.length) return null;
@@ -1107,7 +1140,7 @@ function setScanMove(idx, slot, val) {
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
 window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
-                  metaPanel, pveType, pveBasic, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
+                  metaPanel, pveType, pveBasic, toggleRaidUse, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();
