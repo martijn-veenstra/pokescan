@@ -20,8 +20,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   scans at or under 1500 CP; add others by name or load the roster committed in the repo.
 - **Meta** tab: a team builder (any three Pokémon, scored live with roles, coverage grid and what you
   would still need to catch; save as a party or add missing members to wanted; best-third suggestions),
-  the derived meta teams with "Try in builder", and PvPoke's full rankings with search, type filter and
-  one-tap slot / want actions.
+  the derived meta teams (each opens a team page), PvPoke's full rankings with search and type filter, and
+  **Raids**: the best PvE attackers per type (DPS, TDO, Elite TM moves, megas and shadows toggle) computed
+  by `scripts/build_pve_data.py` from the PokeMiners game master, with your scanned copies marked.
 - **Scans** tab: one button imports screenshots or a screen recording; the app solves level and IVs.
   Each card is one compact row: IVs, IV% (sum out of 45) and GL rank (position among the 4096 IV spreads
   at the 1500 cap, with stat product vs #1), plus one status chip (ready / power-up cost / XL / over cap).

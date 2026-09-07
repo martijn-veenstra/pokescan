@@ -21,6 +21,7 @@ jobs:
           python3 scripts/generate_pvpoke_rankings.py
           python3 scripts/generate_pvpoke_team_comps.py
           python3 scripts/build_app_data.py
+          python3 scripts/build_pve_data.py
           python3 scripts/evaluate_teams.py data/community-teams-great.json -o data/community-teams-great-analysis.json
           python3 scripts/generate_roster_team_comps.py --pretty
       - name: Commit and push if anything changed

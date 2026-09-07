@@ -933,10 +933,11 @@ function renderMeta() {
 function renderMetaInner(el) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
   const m = M(), L = builderLeague(m);
-  const seg = ['build', 'teams', 'rank'].map(k => `<button class="${UI.metaPanel === k ? 'on' : ''}" onclick="Planner.metaPanel('${k}')">${{build: 'Builder', teams: 'Meta teams', rank: 'Rankings'}[k]}</button>`).join('');
+  const seg = ['build', 'teams', 'rank', 'raids'].map(k => `<button class="${UI.metaPanel === k ? 'on' : ''}" onclick="Planner.metaPanel('${k}')">${{build: 'Builder', teams: 'Meta teams', rank: 'Rankings', raids: 'Raids'}[k]}</button>`).join('');
   let h = `<div class="tabs sub">${seg}</div>`;
   if (UI.metaPanel === 'build') h += renderBuilder(m, L);
   else if (UI.metaPanel === 'teams') h += renderMetaTeams(m);
+  else if (UI.metaPanel === 'raids') h += renderRaids(m);
   else h += renderRankings(m);
   el.innerHTML = h;
 }
@@ -990,6 +991,47 @@ function renderRankings(m) {
   return h;
 }
 function metaPanel(k) { UI.metaPanel = k; renderMeta(); }
+
+/* ---------- Raids: best PvE attackers per type, from data/pve.json (built weekly from the game master) ---------- */
+let PVE = null, pveLoading = null, pveError = '';
+function loadPve() {
+  if (PVE || pveLoading) return;
+  pveLoading = fetch('data/pve.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(d => { PVE = d; }).catch(e => { pveError = e.message || String(e); }).finally(() => { pveLoading = null; renderMeta(); });
+}
+function pveOwned(e) {                          // your scanned copies of this species (any CP): a mega or shadow counts through its base species
+  const mine = results.filter(r => r.species === e.species && !r.superseded && r.cp);
+  if (!mine.length) return null;
+  return mine.reduce((a, b) => b.cp > a.cp ? b : a);
+}
+function pveSearch(e) {
+  const base = e.name.replace(/\s*\(.*\)\s*$/, '').trim().toLowerCase();
+  return ['+' + base].concat(formFilters(e.id)).join('&');
+}
+function renderRaids(m) {
+  if (!PVE) { loadPve(); return `<div class="note">${pveError ? 'Raid data not available: ' + esc(pveError) : 'Loading the raid attacker rankings…'}</div>`; }
+  const type = UI.pveType || 'overall', basic = !!UI.pveBasic;
+  const rows0 = type === 'overall' ? PVE.overall : (PVE.types[type] || []);
+  const rows = (basic ? rows0.filter(r => !r.mega && !r.shadow) : rows0).slice(0, 20);
+  const mv = id => (PVE.moves[id] || {n: id}).n;
+  let h = `<div class="note">Best raid attackers when the boss is weak to the type, computed from the game master (${esc(PVE.generated || '')}). <b>DPS</b> damage per second, <b>TDO</b> total damage before fainting, both at level 40 against a typical tier-5 boss. Ranked by DPS³ × TDO, the usual raid metric.</div>`;
+  h += `<div class="tchips">${['overall'].concat(TYPES18).map(t => `<span class="chip ${t === type ? 'sel' : ''} ${t !== 'overall' ? 't-' + t : ''}" onclick="Planner.pveType('${t}')">${t === 'overall' ? 'Top' : t}</span>`).join('')}</div>`;
+  h += `<div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${type === 'overall' ? 'Top attackers across all types (Normal left out: nothing is weak to it)' : `Best <b>${esc(type)}</b> attackers`}</span><label class="tog"><input type="checkbox" ${basic ? 'checked' : ''} onchange="Planner.pveBasic(this.checked)"> no megas / shadows</label></div>`;
+  if (!rows.length) return h + `<div class="note">No entries.</div>`;
+  const maxDps = Math.max(...rows.map(r => r.dps)), maxTdo = Math.max(...rows.map(r => r.tdo));
+  h += rows.map((r, i) => {
+    const own = pveOwned(r), page = APP.pokemon[r.id] ? r.id : APP.pokemon[r.species.toLowerCase()] ? r.species.toLowerCase() : null;
+    const menu = ctxMenu([page ? ['Open page', `Planner.openMon('${page}')`] : null, ['Copy Pokémon GO search', `Planner.copyText(${attr(pveSearch(r))})`], own ? ['Open your scan', `Planner.openScan(${attr(own.key)})`] : null]);
+    const legacy = new Set(r.legacy || []);
+    const moveTxt = [r.fast, r.charged].map(id => `${esc(mv(id))}${legacy.has(id) ? ' <span class="dim">(Elite TM)</span>' : ''}`).join(' · ') + (r.offType ? ' <span class="dim">· off-type fast move</span>' : '');
+    return `<div class="rank pve"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn"><b>${esc(r.name)}</b>${type === 'overall' && r.type ? ` <span class="dim">${esc(r.type)}</span>` : ''} ${own ? chip('yours · ' + own.cp + ' CP', 'ok') : ''}</div><div class="dt">${moveTxt}</div>
+      <div class="pvb"><span class="lb">DPS</span><span class="bar"><i style="width:${Math.round(r.dps / maxDps * 100)}%"></i></span><span class="v">${r.dps.toFixed(1)}</span><span class="lb">TDO</span><span class="bar"><i class="t" style="width:${Math.round(r.tdo / maxTdo * 100)}%"></i></span><span class="v">${r.tdo}</span></div></div><div class="ra">${menu}</div></div>`;
+  }).join('');
+  h += `<div class="note">Model: ${esc(PVE.model ? PVE.model.attacker : '')}; boss ${esc(PVE.model ? PVE.model.boss : '')}. No dodging, weather or friendship. Megas need Mega Energy and last 8 hours; "yours" matches your scans by species, so a normal copy also lights up a Shadow or Mega row. Data: PokeMiners game master, rebuilt weekly.</div>`;
+  return h;
+}
+function pveType(t) { UI.pveType = t; renderMeta(); }
+function pveBasic(v) { UI.pveBasic = !!v; renderMeta(); }
 function rankSearch(v) { UI.rankQ = v; UI.rankLimit = 50; const el = $('meta'); const pos = $('rankq') && $('rankq').selectionStart; renderMeta(); const q = $('rankq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 function rankType(v) { UI.rankType = v; UI.rankLimit = 50; renderMeta(); }
 function rankMore() { UI.rankLimit += 100; renderMeta(); }
@@ -1062,7 +1104,7 @@ function setScanMove(idx, slot, val) {
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
 window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
-                  metaPanel, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
+                  metaPanel, pveType, pveBasic, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();
