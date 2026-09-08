@@ -352,6 +352,26 @@ function renderTodayInner(el) {
   el.innerHTML = h;
 }
 
+/* ---------- a species in the meta teams: member of one, or the best trios it forms with two meta partners ---------- */
+function metaFit(m, id) {
+  const {L} = m, teams = APP.metaTeams || [], bm = APP.benchmark || {best: 721};
+  const inTeams = teams.map((t, i) => ({t, i})).filter(x => x.t.members.includes(id));
+  let h = `<div class="sec">In meta teams <small>${inTeams.length ? `${inTeams.length} of the ${teams.length} derived meta teams` : `none of the ${teams.length} derived meta teams`}</small></div>`;
+  if (inTeams.length) return h + inTeams.slice(0, 3).map(x => teamRow(m, x.t.members, null, `meta #${x.i + 1}`)).join('') + (inTeams.length > 3 ? `<div class="note">… and ${inTeams.length - 3} more under Meta › Meta teams.</div>` : '');
+  // best trios with two partners from the top 40 of the meta
+  const pool = APP.meta.slice(0, 40).filter(p => p !== id && PVP.baseSpecies(p) !== PVP.baseSpecies(id));
+  const best = [];
+  for (let i = 0; i < pool.length; i++) for (let j = i + 1; j < pool.length; j++) {
+    if (PVP.baseSpecies(pool[i]) === PVP.baseSpecies(pool[j])) continue;
+    const ids = [id, pool[i], pool[j]]; best.push({ids, score: L.evaluate(ids).score});
+  }
+  best.sort((a, b) => b.score - a.score);
+  if (!best.length) return h + `<div class="note">Not enough meta partners to build a trio.</div>`;
+  const top = best[0], ref = teams[0] ? teams[0].score : bm.best;
+  h += `<div class="note">Best trio with ${esc(nm(id))} and two meta partners scores ${top.score.toFixed(0)}; the best meta team scores ${ref.toFixed(0)}. ${top.score >= ref - 15 ? 'It keeps up with the meta teams.' : top.score >= ref - 40 ? 'Usable, but a step below the meta teams.' : 'The meta teams do clearly better without it.'}</div>`;
+  return h + best.slice(0, 3).map(x => teamRow(m, x.ids, null, `${(x.score - ref).toFixed(0)} vs meta #1`)).join('');
+}
+
 /* ---------- Pokémon GO search strings ---------- */
 const FORM_FILTER = {shadow: 'shadow', galarian: 'galar', alolan: 'alola', hisuian: 'hisui', paldean: 'paldea'};
 const baseName = id => nm(id).replace(/\s*\(.*\)\s*$/, '').trim();
@@ -869,6 +889,7 @@ function monInner(m, id, noHead) {
   if (fit.teams.length) h += fit.teams.map(t => teamRow(m, t.members.map(x => x.speciesId), null)).join('');
   else if (fit.owned) h += `<div class="note">Not in any of the top ${fit.of} teams from what you own.</div>`;
   if (fit.owned && fit.partners.length) h += `<div class="note">Best partners: ${fit.partners.map(p => `<a href="#" onclick="Planner.openMon('${p}');return false">${esc(nm(p))}</a>`).join(', ')}</div>`;
+  h += metaFit(m, id);
   // matchups against the meta
   const rated = L.meta.filter(x => x !== id).map(x => ({o: x, r: L.rating(id, x)}));
   const wins = rated.filter(x => x.r >= 500).sort((p, q) => q.r - p.r), losses = rated.filter(x => x.r < 400).sort((p, q) => APP.pokemon[p.o].rank - APP.pokemon[q.o].rank);
