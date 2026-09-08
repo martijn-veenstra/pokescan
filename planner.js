@@ -372,6 +372,53 @@ function metaFit(m, id) {
   return h + best.slice(0, 3).map(x => teamRow(m, x.ids, null, `${(x.score - ref).toFixed(0)} vs meta #1`)).join('');
 }
 
+/* ---------- CP meter: the in-game arc, drag the knob to a level for the power-up cost ---------- */
+const MR = 86, MCX = 100, MCY = 104;
+function meterGeom(lv, maxLv) { const f = Math.max(0, Math.min(1, (lv - 1) / (maxLv - 1))), th = Math.PI * (1 - f); return {x: MCX + MR * Math.cos(th), y: MCY - MR * Math.sin(th)}; }
+function meterArc(lv, maxLv, from) { const a = meterGeom(from || 1, maxLv), p = meterGeom(lv, maxLv); return lv <= (from || 1) ? '' : `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} A ${MR} ${MR} 0 0 1 ${p.x.toFixed(1)} ${p.y.toFixed(1)}`; }
+function meterInfo(r, best, lv) {
+  const bb = best[4] || DATA.stats[r.species][0], cur = best[0], cp = calcCP(bb, best[1], best[2], best[3], cpmAt(lv));
+  if (lv <= cur) return {cp: r.cp || cp, txt: `L${cur} · drag the knob for power-up costs`, over: false};
+  const c = costTo(cur, lv);
+  return {cp, txt: `L${cur} → L${lv} · ${fmt(c.dust)} dust · ${c.candy} candy${c.xl ? ` · ${c.xl} XL candy` : ''}${cp > 1500 ? ' · over the GL cap' : ''}`, over: cp > 1500};
+}
+function cpMeter(r, best) {
+  const maxLv = maxL() / 2, cur = best[0], lv = UI.meter && UI.meter.key === r.key ? Math.max(cur, Math.min(maxLv, UI.meter.lv)) : cur;
+  const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500);
+  const capLv = Math.min(gl.lv, maxLv), p0 = meterGeom(cur, maxLv), pk = meterGeom(lv, maxLv), pc = meterGeom(capLv, maxLv), info = meterInfo(r, best, lv);
+  const out = (p, d) => { const dx = p.x - MCX, dy = p.y - MCY, n = Math.hypot(dx, dy) || 1; return {x: MCX + dx / n * (MR + d), y: MCY + dy / n * (MR + d)}; };
+  const a = out(pc, -6), b = out(pc, 6), l = out(pc, 14);
+  return `<div class="meter" id="meter" data-key="${esc(r.key)}"><svg viewBox="0 0 200 120" onpointerdown="Planner.meterDown(event)">
+    <path class="track" d="M ${MCX - MR} ${MCY} A ${MR} ${MR} 0 0 1 ${MCX + MR} ${MCY}"/>
+    <path class="fill" id="mfill" d="${meterArc(Math.min(lv, capLv), maxLv)}"/><path class="fill over" id="mover" d="${meterArc(lv, maxLv, capLv)}"/>
+    <line class="capt" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/><text class="capl" x="${l.x.toFixed(1)}" y="${(l.y + 3).toFixed(1)}" text-anchor="middle">1500</text>
+    <circle class="cur" cx="${p0.x.toFixed(1)}" cy="${p0.y.toFixed(1)}" r="3.5"/>
+    <circle class="knob" id="mknob" cx="${pk.x.toFixed(1)}" cy="${pk.y.toFixed(1)}" r="7"/>
+    <text class="lbl" x="100" y="72" text-anchor="middle">CP</text><text class="cp" id="mcp" x="100" y="102" text-anchor="middle">${info.cp}</text>
+    <text class="lv" x="${MCX - MR}" y="117" text-anchor="middle">L1</text><text class="lv" x="${MCX + MR}" y="117" text-anchor="middle">L${maxLv}</text>
+  </svg><div class="mi ${info.over ? 'over' : ''}" id="minfo">${esc(info.txt)}</div></div>`;
+}
+function meterLevel(ev, svg) {
+  const rc = svg.getBoundingClientRect(), k = 200 / rc.width, x = (ev.clientX - rc.left) * k, y = (ev.clientY - rc.top) * k;
+  let th = Math.atan2(MCY - y, x - MCX); if (th < 0) th = x < MCX ? Math.PI : 0;
+  return 1 + Math.round((1 - th / Math.PI) * (maxL() / 2 - 1) * 2) / 2;
+}
+function meterDown(ev) {
+  const svg = ev.currentTarget, el = svg.parentElement, key = el.dataset.key, r = results.find(x => x.key === key); if (!r || !r.combos.length) return;
+  const best = bestOf2(r); ev.preventDefault(); try { svg.setPointerCapture(ev.pointerId); } catch {}
+  const apply = e => { const lv = Math.max(best[0], meterLevel(e, svg)); UI.meter = {key, lv}; meterPaint(el, r, best, lv); };
+  apply(ev);
+  const move = e => apply(e), up = () => { svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); svg.removeEventListener('pointercancel', up); };
+  svg.addEventListener('pointermove', move); svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+}
+function meterPaint(el, r, best, lv) {
+  const maxLv = maxL() / 2, p = meterGeom(lv, maxLv), info = meterInfo(r, best, lv), k = el.querySelector('#mknob'), mi = el.querySelector('#minfo');
+  const bb = best[4] || DATA.stats[r.species][0], capLv = Math.min(pvpRank(bb, best[1], best[2], best[3], 1500).lv, maxLv);
+  el.querySelector('#mfill').setAttribute('d', meterArc(Math.min(lv, capLv), maxLv)); el.querySelector('#mover').setAttribute('d', meterArc(lv, maxLv, capLv));
+  k.setAttribute('cx', p.x.toFixed(1)); k.setAttribute('cy', p.y.toFixed(1));
+  el.querySelector('#mcp').textContent = info.cp; mi.textContent = info.txt; mi.classList.toggle('over', info.over);
+}
+
 /* ---------- Pokémon GO search strings ---------- */
 const FORM_FILTER = {shadow: 'shadow', galarian: 'galar', alolan: 'alola', hisuian: 'hisui', paldean: 'paldea'};
 const baseName = id => nm(id).replace(/\s*\(.*\)\s*$/, '').trim();
@@ -772,10 +819,11 @@ function scanSection(m, r) {
     ['Delete scan', `Planner.deleteScan('${key}')`, true],
   ]);
   let h = `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
-  h += `<div class="scanhero"><div class="dh" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></div>`;
+  h += `<div class="scanhero"><div class="dh" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim">${best ? '' : `<b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · `}${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></div>`;
   const rows = [];
   if (best) {
     const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500), ul = pvpRank(bb, best[1], best[2], best[3], 2500);
+    h += cpMeter(r, best);
     const barRow = (l, v) => `<span>${l}</span><span class="tr"><i class="${v === 15 ? 'max' : ''}" style="width:${v / 15 * 100}%"></i></span><span class="iv">${v}</span>`;
     h += `<div class="bars">${barRow('Atk', best[1])}${barRow('Def', best[2])}${barRow('HP', best[3])}</div>`;
     h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b><span class="sub">${best[1] + best[2] + best[3]} of 45</span></div><div><small>GL rank</small><b>#${gl.n}</b><span class="sub">${gl.pct.toFixed(1)}%</span></div><div><small>UL rank</small><b>#${ul.n}</b><span class="sub">${ul.pct.toFixed(1)}%</span></div></div>`;
@@ -1053,7 +1101,7 @@ function raidUsage(id, cur) {                  // collapsible table under the Pv
   const yours = rows.filter(mine), best = yours.length ? yours.reduce((a, b) => b.pct > a.pct ? b : a) : null;
   const head = best ? `${best.pct}% · grade ${raidGrade(best.pct)}` : cur.length ? 'your set is not rated' : '';
   return `<div class="note" style="margin:6px 0 0;cursor:pointer" onclick="Planner.toggleRaidUse()">${UI.raidUse ? '▾' : '▸'} Raid moves by damage${head ? ` <span class="dim">· yours ${esc(head)}</span>` : ''}</div>` +
-    (UI.raidUse ? `<div class="use">${rows.slice(0, 10).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))} + ${esc(mvName(x.c))}</span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('')}<div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, best pair = 100%, like Poké Genie's Moveset Rating. Which type you need depends on the boss: see Meta › Raids.</div></div>` : '');
+    (UI.raidUse ? `<div class="use raid">${rows.slice(0, 10).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('')}<div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, best pair = 100%, like Poké Genie's Moveset Rating. Which type you need depends on the boss: see Meta › Raids.</div></div>` : '');
 }
 function toggleRaidUse() { UI.raidUse = !UI.raidUse; renderMon(); }
 function pveOwned(e) {                          // your scanned copies of this species (any CP): a mega or shadow counts through its base species
@@ -1161,7 +1209,7 @@ function setScanMove(idx, slot, val) {
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
 window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
-                  metaPanel, pveType, pveBasic, toggleRaidUse, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
+                  metaPanel, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();
