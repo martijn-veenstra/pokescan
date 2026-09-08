@@ -909,24 +909,37 @@ function monInner(m, id, noHead) {
     ROSTER.candidates[id] !== undefined && !o ? ['Remove from wanted', `Planner.dropMon('candidates','${id}')`, true] : null,
   ]);
   let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st)}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
-  h += `<div class="detail" style="gap:6px"><div class="dh"><span class="nm" style="font-size:20px">${esc(e.name)}</span><span style="display:flex;align-items:center;gap:8px"><span class="dim">meta #${e.rank} · ${e.score}</span>${menu}</span></div>`;
-  if (!noHead && o && !o.manual && o.scan && o.scan.combos && o.scan.combos.length) h += cpMeter(o.scan, bestOf2(o.scan));   // your best copy: the in-game arc, drag for power-up costs
+  h += `<div class="detail" style="gap:8px"><div class="dh"><span class="nm" style="font-size:20px">${esc(e.name)}</span><span style="display:flex;align-items:center;gap:8px"><span class="dim">meta #${e.rank} · ${e.score}</span>${menu}</span></div>`;
+  const weak = weakTo(id);
+  h += `<div class="typerow"><span class="chips" style="margin:0">${e.types.map(t => chip(t, 't-' + t)).join('')}</span></div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
   const teamsIn = rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
   const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
-  const rows = [
-    ['Types', `<span class="chips" style="margin:0;display:inline-flex">${e.types.map(t => chip(t)).join('')}</span>`],
-    ['Weak to', weakTo(id).length ? esc(weakTo(id).join(', ')) : 'nothing above neutral'],
-    ['Roster', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${a ? ` <span class="dim">evolves from your ${esc(a.from)}: ${a.cpNow} CP, fits to L${a.toLevel}, IV rank #${a.glRank}</span>` : ''}${o && o.manual ? ' <span class="dim">added by hand, no scan</span>' : ''}`],
-  ];
-  if (!noHead && o && !o.manual) { const c = costTo(o.level, o.toLevel);
-    rows.push(['Your copy', `<b>${o.cp} CP</b> · L${o.level} · IVs ${o.ivs.join('/')}${o.scan && o.scan.appraisal ? ' <span class="okc">✓</span>' : ''} · GL rank #${o.glRank} (${o.glPct.toFixed(1)}%)<br><span class="dim">${o.toLevel > o.level ? (o.toLevel > 40 ? `needs L${o.toLevel}: XL candy` : `to the cap: L${o.toLevel} · ${fmt(c.dust)} dust · ${c.candy} candy`) : 'ready for GL, no power-up needed'}</span>`]); }
-  rows.push(['In teams', `${teamsIn} of ${rep.todayAll.length} buildable`]);
-  if (!o && sc) rows.push(['Catch', `a ${esc(nm(pre))} ≤ <b>${sc.safe}</b> CP evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs)`]);
-  if (!noHead) { const c = !o ? candidateSearch(id) : null; rows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span>${c ? `<span class="srchi"><code>${esc(c.q)}</code><button onclick="Planner.copyText(${attr(c.q)},this)">Copy</button></span>` : ''}<div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under 1500 CP${c ? `, and ${esc(nm(c.pre))} that evolve under the cap` : ''}</div>`]); }
-  if (e.thirdMove && !noHead) rows.push(['2nd move', `${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · buddy ${e.buddy} km` : ''}`]);
-  if (!noHead) { rows.push(...moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set')); rows.push(['', `<div class="dim" style="font-size:12px">${!known ? `not known yet · planning uses PvPoke's ${esc(rec.map(mvName).join(' · '))}` : (o ? 'moves on your copy' : 'moves for planning') + (notRec.length ? ` · PvPoke recommends ${esc(rec.map(mvName).join(' · '))}` : ' · matches PvPoke')}</div>`]); }
-  h += kv(rows) + (noHead ? '' : moveUsage(id, known || []) + raidUsage(id, known || []));
+  if (!noHead && o && !o.manual && o.scan && o.scan.combos && o.scan.combos.length) h += cpMeter(o.scan, bestOf2(o.scan));   // your best copy: the in-game arc, drag for power-up costs
+  if (!noHead && o && !o.manual) {                // three tiles for your best copy
+    const c = costTo(o.level, o.toLevel), appraised = o.scan && o.scan.appraisal;
+    const status = o.toLevel > o.level ? (o.toLevel > 40 ? [`needs L${o.toLevel}`, 'XL candy needed'] : [`power up to L${o.toLevel}`, `${fmt(c.dust)} dust · ${c.candy} candy`]) : ['ready for GL', `${o.cp} CP at L${o.level}`];
+    h += `<div class="kpis"><div><small>IVs</small><b>${o.ivs.join('/')}${appraised ? ' <span class="okc">✓</span>' : ''}</b><span class="sub">${appraised ? 'from the appraisal' : 'solved from CP and HP'}</span></div><div><small>GL rank</small><b>#${o.glRank}</b><span class="sub">${o.glPct.toFixed(1)}% stat product</span></div><div><small>Status</small><b>${status[0]}</b><span class="sub">${status[1]}</span></div></div>`;
+  } else if (!noHead && o && o.manual) h += `<div class="note" style="margin:0">Added by hand, no scan: import a screenshot of this Pokémon for its IVs, level and moves.</div>`;
+  else if (!noHead && a) h += `<div class="note" style="margin:0">Evolves from your <b>${esc(a.from)}</b>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.</div>`;
+  else if (!noHead && !o && sc) h += `<div class="note" style="margin:0">Catch a <b>${esc(nm(pre))}</b> ≤ <b>${sc.safe}</b> CP: it evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs).</div>`;
   h += `</div>`;
+  if (!noHead) {
+    // moves card
+    const cur = (known || []).filter(Boolean), secondOpen = !known || cur.length < 3;
+    const src = known ? (o ? (o.scan && o.scan.movesSeen ? 'read from your screenshot' : 'set by hand') : 'set for planning') : (o && !o.manual ? 'not scanned yet' : 'not set yet');
+    const mrows = moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set');
+    mrows.push(['PvPoke', !known ? `planning uses <b>${esc(rec.map(mvName).join(' · '))}</b> until the moves are known` : notRec.length ? `recommends <b>${esc(rec.map(mvName).join(' · '))}</b>` : `<span class="okc">✓</span> your moves match PvPoke's set`]);
+    if (secondOpen && e.thirdMove) mrows.push(['Unlock', `2nd charged move: ${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · or walk ${e.buddy} km as buddy` : ''}`]);
+    h += `<div class="sec">Moves <small>${src}</small></div><div class="team card" style="cursor:default">${kv(mrows)}${moveUsage(id, known || [])}${raidUsage(id, known || [])}</div>`;
+    // roster card
+    const rrows = [
+      ['Status', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${benched && st ? ' ' + chip('benched') : ''}${o && o.manual ? ' <span class="dim">added by hand</span>' : ''}`],
+      ['In teams', `${teamsIn} of ${rep.todayAll.length} buildable from your roster`],
+    ];
+    const cs = !o ? candidateSearch(id) : null;
+    rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span>${cs ? `<span class="srchi"><code>${esc(cs.q)}</code><button onclick="Planner.copyText(${attr(cs.q)},this)">Copy</button></span>` : ''}<div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under 1500 CP${cs ? `, and ${esc(nm(cs.pre))} that evolve under the cap` : ''}</div>`]);
+    h += `<div class="sec">In your roster</div><div class="team card" style="cursor:default">${kv(rrows)}</div>`;
+  }
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
   h += `<div class="sec">With your roster <small>${fit.owned ? `in ${fit.inTeams} of ${fit.of} buildable teams` : 'if you add it'}</small></div>`;
