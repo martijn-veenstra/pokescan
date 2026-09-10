@@ -143,10 +143,10 @@ function renderBox() {
     : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
 }
-async function coach(context, question, onProgress) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
+async function coach(context, question, onProgress, mode) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
   if (!S.code) throw new Error('connect sync first (cloud button)');
   let r, j;
-  try { r = await fetch('/api/coach', {method: 'POST', headers: hdr(), body: JSON.stringify({context, question})}); }
+  try { r = await fetch('/api/coach', {method: 'POST', headers: hdr(), body: JSON.stringify({context, question, mode: mode || 'roster'})}); }
   catch (e) { throw new Error('could not reach the server (' + (e.message || e) + ')'); }
   j = await r.json().catch(() => ({}));
   if (r.status === 401) throw new Error('wrong passcode');

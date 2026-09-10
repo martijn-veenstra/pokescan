@@ -620,6 +620,47 @@ function mdLite(t) {                          // minimal markdown: paragraphs, b
   }).join('').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^<p>(#+\s*)(.+?)<\/p>/gm, '<p><b>$2</b></p>');
 }
 function toggleCoachCtx() { COACH.showCtx = !COACH.showCtx; renderToday(); }
+
+/* builder coach: the same server call with the slots, their weak spots and the app's candidates attached */
+const BCOACH = Object.assign({q: '', text: '', key: '', t: 0, busy: false, error: '', secs: 0}, JSON.parse(localStorage.getItem('bcoach') || '{}'));
+const saveBCoach = () => localStorage.setItem('bcoach', JSON.stringify({q: BCOACH.q, text: BCOACH.text, key: BCOACH.key, t: BCOACH.t}));
+function builderContext(m, L, filled) {
+  const ctx = coachContext(m), ev = L.evaluate(filled);
+  const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;
+  const cand = pool => pool.map(p => { const e2 = L.evaluate(filled.concat(p)); return {p, score: e2.score, fixes: ev.holes.filter(o => !e2.holes.includes(o))}; }).sort((a, b) => b.score - a.score).slice(0, 6)
+    .map(x => `${nm(x.p)} (#${APP.pokemon[x.p].rank}${ownership(m, x.p) ? ', ' + ownership(m, x.p) : ''}) → team ${x.score.toFixed(0)}, answers ${x.fixes.slice(0, 4).map(nm).join(', ') || 'nothing new'}`);
+  const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct);
+  ctx.builder = {
+    slots: filled.map(id => `${nm(id)} (#${APP.pokemon[id].rank}, ${L.movesOf(id).map(mvName).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
+    openSlots: 3 - filled.length,
+    scoreSoFar: ev.score, weakSpots: ev.holes.slice(0, 15).map(o => `${nm(o)} #${APP.pokemon[o].rank}`),
+    twoOfThreeLoseTo: filled.length === 3 ? ev.shared.slice(0, 10).map(nm) : undefined,
+    candidatesFromRoster: filled.length < 3 ? cand(mine) : undefined,
+    candidatesFromMeta: filled.length < 3 ? cand(APP.meta.slice(0, 60).filter(distinct)) : undefined,
+  };
+  delete ctx.nextMoves;
+  return ctx;
+}
+function builderCoachCard(m, L, filled) {
+  if (!window.Sync || !Sync.available() || !Sync.state.code || !Sync.coachAvailable()) return '';
+  const key = filled.slice().sort().join('+'), fresh = BCOACH.text && BCOACH.key === key;
+  return `<div class="sec">Coach <small>${filled.length === 3 ? 'judge this team' : 'how to complete it'}</small></div>
+    <div class="team coach"><div class="dt">Claude gets the slots, their weak spots, the candidates above and your roster summary.</div>
+    <div class="add" style="margin-top:8px"><input id="bcoachq" placeholder="optional question, e.g. a lead that beats Azumarill?" value="${esc(BCOACH.q)}" style="flex:1;min-width:160px"><button onclick="Planner.askBuilderCoach()" ${BCOACH.busy ? 'disabled' : ''}>${BCOACH.busy ? `Thinking… ${BCOACH.secs ? BCOACH.secs + 's' : ''}` : fresh ? 'Ask again' : 'Ask the coach'}</button></div>
+    ${BCOACH.busy ? '<div class="note">This takes 20 to 90 seconds. You can switch tabs, the answer is kept.</div>' : ''}
+    ${BCOACH.error ? `<div class="note" style="color:#F59A8B">⚠ ${esc(BCOACH.error)}</div>` : ''}
+    ${BCOACH.text ? `<div class="ans">${mdLite(BCOACH.text)}</div><div class="note" style="margin-top:6px">${when(BCOACH.t)}${fresh ? '' : ' · the slots changed since this answer'}</div>` : ''}</div>`;
+}
+async function askBuilderCoach() {
+  const m = M(), L = builderLeague(m), filled = UI.build.slots.filter(Boolean); if (!filled.length) return;
+  const ctx = builderContext(m, L, filled), q = ($('bcoachq') || {value: ''}).value.trim();
+  BCOACH.q = q; BCOACH.busy = true; BCOACH.error = ''; BCOACH.secs = 0; renderMeta();
+  try {
+    const text = await Sync.coach(ctx, q, secs => { BCOACH.secs = secs; const b = document.querySelector('#meta .coach button'); if (b) b.textContent = `Thinking… ${secs}s`; }, 'builder');
+    BCOACH.text = text; BCOACH.key = filled.slice().sort().join('+'); BCOACH.t = Date.now(); saveBCoach();
+  } catch (e) { BCOACH.error = e.message || String(e); }
+  BCOACH.busy = false; renderMeta();
+}
 async function askCoach() {
   const m = M(), ctx = coachContext(m), q = ($('coachq') || {value: ''}).value.trim();
   COACH.q = q; COACH.busy = true; COACH.error = ''; COACH.secs = 0; renderToday();
@@ -1077,6 +1118,7 @@ function renderBuilder(m, L) {
       <div class="dim" style="font-size:12px;margin-top:8px">${rl.map(r => `${r.role}: <b style="color:var(--ink)">${esc(nm(r.id))}</b>`).join(' · ')}</div>
       <div class="dim" style="font-size:12px;margin-top:6px">${d.unansweredMeta.length ? `No answer to ${chip(d.unansweredMeta.join(', '), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `Two lose to ${esc(d.sharedWeaknesses.join(', '))}.` : ''}</div>
       <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
+    h += builderCoachCard(m, L, filled);
   } else {
     const ev = filled.length ? L.evaluate(filled) : null;
     const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;
@@ -1097,6 +1139,7 @@ function renderBuilder(m, L) {
       if (!sug.length) h += `<div class="note">${UI.buildPool === 'meta' ? 'No meta Pokémon left to add.' : 'Nothing in your roster fits; switch to Meta to see what to catch.'}</div>`;
       else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `answers <span class="good">${esc(few(x.fixes.map(nm)))}</span>` : 'answers nothing new'}${x.left ? ` · ${x.left} still unanswered` : ' · covers the whole meta'}</div></span><span class="go">+</span></div>`).join('');
       h += `<div class="note">Score = the team so far plus this Pokémon, on the same scale as Today. "Answers" lists the meta Pokémon that would no longer go unanswered.</div>`;
+      h += builderCoachCard(m, L, filled);
     }
   }
   return h;
@@ -1278,5 +1321,5 @@ function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option v
 window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
-                  askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+                  askCoach, askBuilderCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();

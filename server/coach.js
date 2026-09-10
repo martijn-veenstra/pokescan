@@ -15,10 +15,24 @@ Answer in short markdown, under 350 words:
 Only name Pokémon that appear in the summary, unless you mark them clearly as "to catch or build". Do not invent stats,
 moves or matchups; when unsure, say what the app's numbers show. No preamble, no closing offer.`;
 
+const SYSTEM_BUILDER = `You are a Pokémon GO Great League (1500 CP) coach for a casual player. The player is building one team in the
+PokeScan team builder. The JSON summary has a "builder" object: the slots filled so far (1 to 3 Pokémon with the moves used for
+scoring), the meta Pokémon those slots leave unanswered ("weakSpots"), and the app's own candidates for the open slots, from
+the player's roster and from the meta, each with the team score it would give. It also has the player's roster, pending and
+wanted Pokémon and the current top meta.
+
+Answer in short markdown, under 300 words:
+- If fewer than 3 slots are filled: propose 2 or 3 ways to complete the team. Prefer Pokémon the player OWNS; anything not owned
+  must be marked "to catch or build". For each: which weak spots it closes, and who leads / swaps / closes.
+- If 3 slots are filled: judge the team in one paragraph (roles, what it fears, one swap that would help), then stop.
+- If the player asked a question, answer it first, briefly.
+Only name Pokémon that appear in the summary. Do not invent stats, moves or matchups; lean on the app's numbers. No preamble,
+no closing offer.`;
+
 export function makeCoach(apiKey) {
   if (!apiKey) return null;
   const client = new Anthropic({ apiKey });
-  return async function coach({ context, question }) {
+  return async function coach({ context, question, mode }) {
     const user = `${question ? `Question: ${question}\n\n` : ''}Roster and meta summary (JSON):\n${context}`;
     const msg = await client.beta.messages.create({
       model: 'claude-opus-5',
@@ -26,7 +40,7 @@ export function makeCoach(apiKey) {
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: SYSTEM,
+      system: mode === 'builder' ? SYSTEM_BUILDER : SYSTEM,
       messages: [{ role: 'user', content: user }],
     });
     if (msg.stop_reason === 'refusal') return { refused: true };

@@ -60,13 +60,13 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (!body.context || typeof body.context !== 'object') return reply.code(400).send({ error: 'missing_context' });
     const context = JSON.stringify(body.context);
     if (context.length > 60000) return reply.code(413).send({ error: 'context_too_large' });
-    const question = String(body.question || '').slice(0, 500);
+    const question = String(body.question || '').slice(0, 500), mode = body.mode === 'builder' ? 'builder' : 'roster';
     asks.push(now);
     // The model can take a minute or more; phones drop a fetch after ~60 s. So: answer with a job id at once, let the app poll.
     for (const [id, j] of jobs) if (now - j.t > 3600e3) jobs.delete(id);
     const id = randomUUID(), job = { status: 'running', t: now };
     jobs.set(id, job);
-    coach({ context, question }).then(out => {
+    coach({ context, question, mode }).then(out => {
       if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to answer' });
       else Object.assign(job, { status: 'done', text: out.text, model: out.model, usage: out.usage });
     }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the coach did not answer' }); });

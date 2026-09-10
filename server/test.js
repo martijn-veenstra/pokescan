@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { buildServer } from './index.js';
 
-const fakeCoach = async ({ context, question }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Run this:** Azumarill / Tinkaton / Quagsire\n\n- question was: ${question}\n- context bytes: ${context.length}`, model: 'fake', usage: { in: 1, out: 1 } }; };
+const fakeCoach = async ({ context, question, mode }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Run this:** Azumarill / Tinkaton / Quagsire\n\n- question was: ${question}\n- mode: ${mode}\n- context bytes: ${context.length}`, model: 'fake', usage: { in: 1, out: 1 } }; };
 // fake Leek Duck: ScrapedDuck JSON plus one event page in Leek Duck's markup (GO Fest with rotating Mega raids)
 const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="raids">Raids</h2>
 <h3>Mega Raids · Saturday</h3><div class="pkmn-list-flex"><div class="pkmn-list-item"><div class="pkmn-list-img"><img src="x.png"></div><span class="pkmn-name">Mega Altaria</span><img class="shiny-icon" src="s.png"></div>
@@ -73,6 +73,13 @@ await new Promise(res => setTimeout(res, 300));
 r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId, headers: H });
 assert.equal(r.json().status, 'done');
 assert.ok(r.json().text.includes('which lead?'), 'coach answer flows back through the job');
+assert.ok(r.json().text.includes('mode: roster'), 'default coach mode is roster');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['Altaria'] } }, mode: 'builder' } });
+assert.equal(r.statusCode, 202, 'builder mode accepted');
+{ const id = r.json().jobId; let out; for (let i = 0; i < 20 && !out; i++) { await new Promise(res => setTimeout(res, 50)); const g = await app.inject({ method: 'GET', url: '/api/coach/' + id, headers: H }); if (g.json().status === 'done') out = g.json(); }
+  assert.ok(out && out.text.includes('mode: builder'), 'builder mode reaches the coach'); }
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {}, mode: 'evil' } });
+assert.equal(r.statusCode, 202, 'unknown modes fall back to roster');
 r = await app.inject({ method: 'GET', url: '/api/coach/nope', headers: H });
 assert.equal(r.statusCode, 404);
 r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId });
