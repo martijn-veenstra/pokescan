@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.37"></script>
+<script src="pvp.js?v=9.38"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -286,7 +286,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.37</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.38</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -500,7 +500,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.37';
+const APP_VERSION='9.38';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -811,12 +811,23 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   // CP misread (a dropped digit is common)? same species and HP, and the digits we did read occur in the card's CP
   const digits=String(cp||''), near=s.hp?results.filter(x=>x.species===s.species && x.hp===s.hp && x.cp && (!digits||String(x.cp).includes(digits))):[];
   if(near.length===1) return attach(near[0]);
-  if(s.hp && DATA.stats[s.species]){
-    // the appraisal screen shows name, CP, HP and the level arc too: enough for a card of its own
+  if((s.hp||cp) && DATA.stats[s.species]){
+    // the appraisal screen shows name, CP, the level arc and usually HP: with the IVs that is enough for a card of its own
     s.cp=cp||null; s.cpCandidates=s.cpCandidates||[];
-    s.combos=cp?solve(s.species,cp,s.hp,s.level||null,s.dust||null,s.hints):[];
-    applyAppraisal(s,ivs);                                  // pins the IVs, or infers the CP when it was misread
+    s.combos=(cp&&s.hp)?solve(s.species,cp,s.hp,s.level||null,s.dust||null,s.hints):[];
+    applyAppraisal(s,ivs);                                  // pins the IVs, or infers the CP from HP when it was misread
+    if(!s.combos.length && cp && !s.hp){                    // no HP read: IVs + CP (+ the level arc) still pin the level; a dropped digit is recovered too
+      const fixed=cpFromDigits(s.species,String(cp),null,s.level||null,ivs); const want=fixed||cp;
+      const res=[]; for(const b of DATA.stats[s.species]) for(let l=2;l<=110;l++){ const lv=l/2, m2=cpmAt(lv); if(calcCP(b,ivs[0],ivs[1],ivs[2],m2)===want && (!s.level||Math.abs(lv-s.level)<=3)) res.push([lv,ivs[0],ivs[1],ivs[2],b]); }
+      if(res.length){ if(s.level) res.sort((a,b)=>Math.abs(a[0]-s.level)-Math.abs(b[0]-s.level)); s.combos=[res[0]]; s.cp=want; if(fixed&&fixed!==cp) s.cpInferred=true; s.apMismatch=false; }
+    }
     if(s.combos.length){
+      const forms=DATA.stats[s.species]||[]; if(forms.length>1){   // same stats, several forms: the type hints decide, else the form PvPoke ranks higher
+        const c0=s.combos[0], same=forms.filter(b=>b[0]===c0[4][0]&&b[1]===c0[4][1]&&b[2]===c0[4][2]);
+        const hinted=same.filter(b=>(s.hints||[]).length&&[b[3],b[4]].filter(Boolean).every(t=>s.hints.includes(t)));
+        const pool=hinted.length?hinted:same, rk=b=>{ const id=pvpokeIdFor(s.species,b); return id&&APP.pokemon[id]?APP.pokemon[id].rank:9999; };
+        const best=pool.slice().sort((a,b)=>rk(a)-rk(b))[0]; if(best) s.combos=s.combos.map(c=>[c[0],c[1],c[2],c[3],best]); }
+      if(!s.hp){ const c0=s.combos[0]; s.hp=calcHP(c0[4],c0[3],cpmAt(c0[0])); note(`HP not read, taken from CP and IVs: ${s.hp}`); }
       const lv=[...new Set(s.combos.map(c=>c[0]))]; s.level=lv.length===1?lv[0]:s.level;
       s.key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
       const twin=results.find(x=>x.species===s.species && x.cp===s.cp && x.hp===s.hp);   // the inferred CP points at a card we already have
@@ -856,6 +867,22 @@ function fitsSpecies(sp, cp, hp, level, ivs){
   return false;
 }
 function speciesCandidates(s){ return [...new Set((s.candySpecies?familyOf(s.candySpecies):[]).concat(prefixCandidates(s.nameToken)))]; }
+function cpFromDigits(sp, digits, hp, level, ivs){   // the CP lost a digit ("794" read as "94"): the one CP that contains the digits, matches the HP and sits near the level arc
+  if(!DATA.stats[sp]||!digits) return null;
+  const cps=new Map(), lvs=[];
+  if(level){ for(let l=Math.max(2,Math.round((level-1.5)*2)); l<=Math.min(110,Math.round((level+1.5)*2)); l++) lvs.push(l/2); }
+  else if(hp||ivs){ for(let l=2;l<=110;l++) lvs.push(l/2); } else return null;
+  for(const b of DATA.stats[sp]) for(const lv of lvs){ const m=cpmAt(lv);
+    const sta=ivs?[ivs[2]]:[...Array(16).keys()];
+    for(const is of sta){ if(hp&&calcHP(b,is,m)!==hp) continue;
+      const pairs=ivs?[[ivs[0],ivs[1]]]:null;
+      const add=c=>{ const k=String(c); if(!k.includes(digits)) return; const cur=cps.get(c)||{end:false,near:false}; cur.end=cur.end||k.endsWith(digits); cur.near=cur.near||!level||Math.abs(lv-level)<=0.5; cps.set(c,cur); };
+      if(pairs) add(calcCP(b,pairs[0][0],pairs[0][1],is,m));
+      else for(let ia=0;ia<16;ia++) for(let id=0;id<16;id++) add(calcCP(b,ia,id,is,m)); } }
+  const all=[...cps.entries()];
+  for(const pick of [all.filter(([,v])=>v.near&&v.end), all.filter(([,v])=>v.end), all.filter(([,v])=>v.near), all]) if(pick.length===1) return pick[0][0];
+  return null;
+}
 function inferSpecies(s, ivs){
   const cps=[...new Set(s.cpCandidates||[])].filter(c=>c>=10);
   const cands=speciesCandidates(s);
@@ -866,6 +893,10 @@ function inferSpecies(s, ivs){
   const fit=cands.filter(sp=>cps.some(cp=>fitsSpecies(sp,cp,s.hp,s.level,ivs)));
   let pick=fit.length===1?fit[0]:null;
   if(!pick && fit.length>1){ const withMoves=fit.filter(sp=>{ const mv=readMoves(sp,s.txt); return mv&&mv.found; }); pick=withMoves.length===1?withMoves[0]:fit[fit.length-1]; }
+  if(!pick && cps.length===1){                              // nothing solves as read: maybe the CP lost a digit
+    const hits=cands.map(sp=>[sp,cpFromDigits(sp,String(cps[0]),s.hp,s.level,ivs)]).filter(x=>x[1]);
+    if(hits.length===1){ pick=hits[0][0]; s.cpCandidates=[hits[0][1]]; s.cpInferred=true; s.inferred=`${pick}, CP ${hits[0][1]} (read as ${cps[0]})`; return pick; }
+  }
   if(pick) s.inferred=`${pick} from ${s.candySpecies?s.candySpecies+' candy':''}${s.nameToken?(s.candySpecies?' + ':'')+'"'+s.nameToken+'"':''}`;
   return pick;                                              // nothing solves: better no card than a wrong one
 }
@@ -876,7 +907,11 @@ function seen(s){ return `${s.species||(s.candySpecies?'?('+s.candySpecies+' can
 const normTxt=t=>' '+String(t||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').trim()+' ';
 function readMoves(species, txt){                  // {fast, charged:[..], second:true|false|undefined, found}
   if(!APP||!species) return null;
-  const id=pvpokeIdFor(species, (DATA.stats[species]||[])[0]); if(!id) return null;
+  const ids=[...new Set((DATA.stats[species]||[null]).map(b=>pvpokeIdFor(species,b)).filter(Boolean))]; if(!ids.length) return null;
+  if(ids.length>1){ const best=ids.map(i=>readMovesFor(species,i,txt)).filter(Boolean).sort((a,b)=>b.found-a.found)[0]; return best||null; }   // regional forms: the one whose moves appear
+  return readMovesFor(species, ids[0], txt);
+}
+function readMovesFor(species, id, txt){
   const e=APP.pokemon[id], t=normTxt(txt);
   const pos=m=>{ const n=APP.moves[m]?normTxt(APP.moves[m].n).trim():''; if(!n) return -1; const i=t.indexOf(' '+n+' '); return i; };
   const fast=e.fast.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
@@ -1266,6 +1301,8 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   const dup=results.find(r=>r.key===key);
   if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
   if(key===skipKey) return key;
+  const same=results.find(x=>!x.superseded && x.species===s.species && x.cp===s.cp && x.hp===s.hp);   // the same copy, solved to a different level string (e.g. its appraisal card)
+  if(same){ if(mvSeen&&applyMoves(same,mvSeen)){ save(); render(); gain('moves',same.species); if(window.Planner) Planner.onMovesScan(same); } note(`${seen(s)} → same copy as the ${same.cp} CP card`); return same.key; }
   s.key=key; if(mvSeen) applyMoves(s,mvSeen);
   { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
     if(hit){ const ivs=APPR[hit]; ks.forEach(k=>delete APPR[k]); applyAppraisal(s,ivs); apKeys(s.species,s.cp,s.hp).forEach(k=>delete APPR[k]); saveAppr(); } }
@@ -1437,8 +1474,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.37"></script>
-<script src="planner.js?v=9.37"></script>
-<script src="sync.js?v=9.37"></script>
+<script src="sources.js?v=9.38"></script>
+<script src="planner.js?v=9.38"></script>
+<script src="sync.js?v=9.38"></script>
 </body>
 </html>
