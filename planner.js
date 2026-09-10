@@ -644,10 +644,10 @@ function builderContext(m, L, filled) {
 function builderCoachCard(m, L, filled) {
   if (!window.Sync || !Sync.available() || !Sync.state.code || !Sync.coachAvailable()) return '';
   const key = filled.slice().sort().join('+'), fresh = BCOACH.text && BCOACH.key === key;
-  return `<div class="sec">Coach <small>${filled.length === 3 ? 'judge this team' : 'how to complete it'}</small></div>
-    <div class="team coach"><div class="dt">Claude gets the slots, their weak spots, the candidates above and your roster summary.</div>
-    <div class="add" style="margin-top:8px"><input id="bcoachq" placeholder="optional question, e.g. a lead that beats Azumarill?" value="${esc(BCOACH.q)}" style="flex:1;min-width:160px"><button onclick="Planner.askBuilderCoach()" ${BCOACH.busy ? 'disabled' : ''}>${BCOACH.busy ? `Thinking… ${BCOACH.secs ? BCOACH.secs + 's' : ''}` : fresh ? 'Ask again' : 'Ask the coach'}</button></div>
-    ${BCOACH.busy ? '<div class="note">This takes 20 to 90 seconds. You can switch tabs, the answer is kept.</div>' : ''}
+  return `<div class="sec" id="bcoach">AI suggestion <small>${filled.length === 3 ? 'judging this team' : 'completing the team'}</small></div>
+    <div class="team coach"><div class="dt">The ✦ button sends Claude the slots, their weak spots, the candidates above and your roster summary. Add a question if you have one.</div>
+    <div class="add" style="margin-top:8px"><input id="bcoachq" placeholder="optional question, e.g. a lead that beats Azumarill?" value="${esc(BCOACH.q)}" style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')Planner.askBuilderCoach()"></div>
+    ${BCOACH.busy ? '<div class="note">Thinking… this takes 20 to 90 seconds. You can switch tabs, the answer is kept.</div>' : ''}
     ${BCOACH.error ? `<div class="note" style="color:#F59A8B">⚠ ${esc(BCOACH.error)}</div>` : ''}
     ${BCOACH.text ? `<div class="ans">${mdLite(BCOACH.text)}</div><div class="note" style="margin-top:6px">${when(BCOACH.t)}${fresh ? '' : ' · the slots changed since this answer'}</div>` : ''}</div>`;
 }
@@ -660,6 +660,7 @@ async function askBuilderCoach() {
     BCOACH.text = text; BCOACH.key = filled.slice().sort().join('+'); BCOACH.t = Date.now(); saveBCoach();
   } catch (e) { BCOACH.error = e.message || String(e); }
   BCOACH.busy = false; renderMeta();
+  const el = $('bcoach'); if (el && $('view-meta').classList.contains('on')) el.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 async function askCoach() {
   const m = M(), ctx = coachContext(m), q = ($('coachq') || {value: ''}).value.trim();
@@ -1104,6 +1105,11 @@ function renderBuilder(m, L) {
   h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">Slot ${i + 1}</span><span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
     : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">Slot ${i + 1}</span><span class="rn dim">+</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
+  if (filled.length) {                         // one tap: the coach completes or judges what is in the slots
+    const can = window.Sync && Sync.available() && Sync.state.code && Sync.coachAvailable();
+    h += can ? `<button class="btn ai" onclick="Planner.askBuilderCoach()" ${BCOACH.busy ? 'disabled' : ''}>${BCOACH.busy ? `✦ Thinking… ${BCOACH.secs ? BCOACH.secs + 's' : ''}` : `✦ Generate AI suggestion <span class="sub">${filled.length === 3 ? 'judge this team' : `complete it from ${3 - filled.length === 1 ? 'the open slot' : 'the open slots'}`}</span>`}</button>`
+             : `<button class="btn sec" disabled style="margin:10px 0 0">✦ Generate AI suggestion <span class="sub">${window.Sync && Sync.available() && Sync.state.code ? 'the server has no coach key' : 'connect sync (cloud button) to use the coach'}</span></button>`;
+  }
   // per-slot move choice
   if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`)}</div>`).join('');
   if (filled.length === 3) {
