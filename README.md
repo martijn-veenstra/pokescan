@@ -34,6 +34,12 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   screens and video frames of the same copy all land on that one card (a CP that lost a digit is recovered from HP
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
+- **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+  A status screen with the same IVs at a higher level, or of its evolution, moves the card to the new CP/HP/level and
+  keeps a history line; an appraisal or attacks screen attaches to it. A screenshot whose IVs do not match, or of
+  another species, becomes a separate card and the log says why.
+- **Coach in the builder**: the ✦ button and a conversation thread (follow-up questions carry the earlier advice);
+  Pokémon names in answers are tappable and fill an open builder slot, or open the Pokémon page.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,
   appraisals, moves, profile, screens read) or why it failed, with decoder details for videos. Kept on the
   device, last 40 files.

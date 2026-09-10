@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.39"></script>
+<script src="pvp.js?v=9.40"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -120,6 +120,8 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);
 .tile.moves{border-color:var(--gold)}.tile.moves .st{color:#F5CE8A}
 .tabs.sub.seg{margin:0;gap:4px}.tabs.sub.seg button{padding:5px 10px;font-size:12px;flex:none}
 .btn.ai{margin:10px 0 0;background:linear-gradient(135deg,#8B6CFF 0%,#3BC489 100%);color:#0B1220}.btn .sub{display:block;font-weight:500;font-size:12px;opacity:.8;color:inherit;margin:2px 0 0}.btn.ai:disabled{opacity:.7}.btn.sec:disabled{opacity:.6}
+.chat .msg{display:flex;flex-direction:column;gap:2px;margin:8px 0}.chat .msg.me{align-items:flex-end}.chat .msg.me .b{background:rgba(72,213,151,.14);border:1px solid rgba(72,213,151,.35);border-radius:14px 14px 4px 14px;padding:8px 12px;max-width:85%;font-size:13.5px}.chat .msg.ai .b{background:#0E1626;border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:10px 12px;max-width:95%}.chat .msg .dt{margin:0 4px}
+.pn{color:var(--green);text-decoration:underline dotted;font-weight:600}
 .more{margin:8px 0 0;padding:10px 12px;border:1px dashed var(--line);border-radius:14px;color:var(--dim);font-size:13px;cursor:pointer}.more b{color:var(--ink);font-weight:600}
 .members .mb{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.members .mb:first-child{border-top:none;padding-top:2px}.members .rl{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);width:52px;flex:none}.members .mn{flex:1;min-width:0}.members .mn b{font-weight:600;cursor:pointer}.members .mn .dt{margin-top:1px}
 .use{font-size:13px;color:var(--ink);margin-top:8px;background:#0E1626;border-radius:12px;padding:8px 10px 10px;line-height:1.4}
@@ -286,7 +288,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.39</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.40</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -500,7 +502,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.39';
+const APP_VERSION='9.40';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -806,6 +808,7 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
   const attach=r=>{ gain('appr',r.species); applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species} ${r.cp} CP`); return key; };
+  if(UPDATE){ const target=results.find(x=>x.key===UPDATE); if(target && target.species===s.species) return attach(target); }
   const r=sameCopy(s.species, cp||null, s.hp||null);
   if(r) return attach(r);
   if((s.hp||cp) && DATA.stats[s.species]){
@@ -958,6 +961,22 @@ function mergeScan(keep, other){                  // keep takes everything the o
   if(other.combos && other.combos.length && (!keep.combos.length || (other.combos.length<keep.combos.length && !keep.appraisal))) keep.combos=other.combos;
   if(!keep.txt && other.txt) keep.txt=other.txt;
 }
+function ivKeys(r){ return new Set((r.appraisal?[[0,...r.appraisal]]:r.combos).map(c=>c.slice(1,4).join('/'))); }
+function updateCard(target, s, mvSeen){          // the same Pokémon after a power-up or evolution: keep the card, move it to the new CP/HP/level, remember where it came from
+  const keys=ivKeys(target), fit=s.combos.filter(c=>keys.has(c.slice(1,4).join('/')));
+  if(!fit.length) return false;
+  const old={t:Date.now(), species:target.species, cp:target.cp, hp:target.hp, level:target.level};
+  target.history=(target.history||[]).concat([old]).slice(-12);
+  target.species=s.species; target.cp=s.cp; target.hp=s.hp; target.combos=fit; target.dust=s.dust||null; target.txt=s.txt; target.cpInferred=!!s.cpInferred; target.superseded=null;
+  const lv=[...new Set(fit.map(c=>c[0]))]; target.level=lv.length===1?lv[0]:null;
+  if(target.appraisal) applyAppraisal(target,target.appraisal);
+  if(old.species!==target.species){ target.moves=null; target.secondMove=undefined; target.movesSeen=null; }   // an evolution has its own moves
+  if(mvSeen) applyMoves(target,mvSeen);
+  target.key=`${target.species}|${target.cp}|${target.hp}|${target.level??''}|${target.dust??''}`;
+  save(); render(); gain('updated',`${old.species} ${old.cp} → ${target.species} ${target.cp} CP`);
+  if(window.Planner) Planner.onUpdated(target, old);
+  return true;
+}
 function movesTarget(species, skipKey, hp){        // which card an attacks screen belongs to
   const live=results.filter(x=>!x.superseded);
   const prev=skipKey?live.find(x=>x.key===skipKey):null;
@@ -1056,6 +1075,7 @@ function toggleProfile(){ const b=$('profile'); b.classList.toggle('open'); if(b
 const SCANLOG=(()=>{ try{ return JSON.parse(localStorage.getItem('scanlog')||'[]'); }catch(e){ return []; } })();
 let GAIN=null, showLog=localStorage.getItem('showlog')==='1';
 function gainStart(){ GAIN={new:[],moves:[],appr:[],profile:null,reads:0,frames:0,mode:'',note:[]}; }
+let UPDATE=null;                                   // key of the card an import is meant to update (set from its page); its own key follows the update
 function gain(kind,v){ if(!GAIN) return; if(kind==='reads'||kind==='frames') GAIN[kind]++; else if(Array.isArray(GAIN[kind])) GAIN[kind].push(v); else GAIN[kind]=v; }
 function logImport(e){
   SCANLOG.unshift(Object.assign({t:Date.now()},e)); if(SCANLOG.length>40) SCANLOG.length=40;
@@ -1069,6 +1089,7 @@ function gainSummary(g){
   if(g.new.length) parts.push(`${g.new.length} new: ${g.new.slice(0,4).map(label).join(', ')}${g.new.length>4?'…':''}`);
   if(g.appr.length) parts.push(`appraisal → ${[...new Set(g.appr)].join(', ')}`);
   if(g.moves.length) parts.push(`moves → ${[...new Set(g.moves)].join(', ')}`);
+  if(g.updated) parts.push(`updated: ${g.updated}`);
   if(g.profile) parts.push(`profile ${g.profile}`);
   if(g.reads||g.frames) parts.push(`${g.reads} screen${g.reads===1?'':'s'} read of ${g.frames} frames${g.mode?' · '+g.mode:''}`);
   if(g.note.length) parts.push([...new Set(g.note)].join(' · '));
@@ -1106,6 +1127,7 @@ $('file').addEventListener('change', async e=>{
   localStorage.setItem('trainer',$('trainer').value);
   $('prog').style.display='block'; progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
   let ok=0, batchKey=null; const before=results.length;
+  UPDATE=window.Planner&&Planner.updateKey?Planner.updateKey():null; if(UPDATE) batchKey=UPDATE;
   if(window.Planner) Planner.beforeImport();
   for(const f of files){
     const t0=Date.now(), isVid=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name); gainStart();
@@ -1121,6 +1143,8 @@ $('file').addEventListener('change', async e=>{
     }
   }
   { const folded=dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
+  const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
+  if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
   status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
   setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
@@ -1325,6 +1349,15 @@ async function handleScan(ctx,W,H,trainer,skipKey){
     if(twin){ if(mvSeen&&applyMoves(twin,mvSeen)){ save(); render(); gain('moves',twin.species); if(window.Planner) Planner.onMovesScan(twin); } status(`${s.species}: same Pokémon as the ${twin.cp} CP card`); note(`${seen(s)} → same as the ${twin.cp} CP card`); return twin.key; }
     note(`${seen(s)} → no IV spread fits (card kept for correction)`);
   }
+  if(UPDATE && s.combos.length){                          // imported from a card's page: this screenshot is meant to update that card
+    const target=results.find(x=>x.key===UPDATE);
+    if(target){
+      const tid=pvpokeIdFor(target.species,(DATA.stats[target.species]||[])[0]), evos=tid?evosOf(tid).map(x=>x.split('_')[0].toUpperCase()):[];
+      const sameFam=target.species===s.species||evos.includes(s.species);
+      if(sameFam && updateCard(target,s,mvSeen)){ UPDATE=target.key; note(`${seen(s)} → updated the ${target.species} card`); return target.key; }
+      note(sameFam?`${seen(s)} does not share IVs with the ${target.species} ${target.cp} CP card: kept as a separate copy`:`${seen(s)} is not a ${target.species}: kept as a separate card`);
+    }
+  }
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   const dup=results.find(r=>r.key===key);
   if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
@@ -1502,8 +1535,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.39"></script>
-<script src="planner.js?v=9.39"></script>
-<script src="sync.js?v=9.39"></script>
+<script src="sources.js?v=9.40"></script>
+<script src="planner.js?v=9.40"></script>
+<script src="sync.js?v=9.40"></script>
 </body>
 </html>
