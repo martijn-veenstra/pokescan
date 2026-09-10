@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <script src="vendor/tesseract/tesseract.min.js"></script>
-<script src="pvp.js?v=9.38"></script>
+<script src="pvp.js?v=9.39"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;800&display=swap" rel="stylesheet">
 <style>
@@ -286,7 +286,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 </head>
 <body>
 <h1><svg width="26" height="16" viewBox="0 0 26 16"><path d="M2 15 A 11.5 11.5 0 0 1 24 15" fill="none" stroke="#EAF1F7" stroke-width="2" stroke-linecap="round" opacity=".85"/><circle cx="20.6" cy="7.2" r="2.6" fill="#48D597"/></svg>PokeScan<button class="help prof" id="profbtn" onclick="toggleProfile()" aria-label="Trainer profile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span id="proflbl">Profile</span></button><button class="help sync" id="syncbtn" style="display:none" onclick="Sync.toggle()" aria-label="Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 7.97"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></button><button class="help" onclick="toggleHelp()" aria-label="Help">?</button></h1>
-<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.38</div>
+<div class="sub">On-device batch IV scanner &amp; Great League planner · v9.39</div>
 
 <div class="tabs">
   <button id="tab-today" class="on" onclick="showTab('today')">Today</button>
@@ -500,7 +500,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.38';
+const APP_VERSION='9.39';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -515,7 +515,7 @@ async function loadMeta(){
     META={}; for(const [id,e] of Object.entries(APP.pokemon)) META[id]=[e.rank, e.score, e.moveset];
     const di=$('datainfo'); if(di) di.textContent=`PvPoke ${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} meta Pokémon`;
     const dl=$('species'); if(dl) dl.innerHTML=Object.keys(APP.pokemon).map(id=>`<option value="${id}">`).join('');
-    try{ migrateScans(); }catch(e){ console.warn('migration skipped', e); }
+    try{ migrateScans(); dedupeScans(); }catch(e){ console.warn('migration skipped', e); }
   }catch(e){
     clearTimeout(slow);
     showLoadError('data/app-great.json did not load ('+(e&&e.message||e)+').');
@@ -806,11 +806,8 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
   const attach=r=>{ gain('appr',r.species); applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species} ${r.cp} CP`); return key; };
-  const r=results.find(x=>x.species===s.species && (!cp||x.cp===cp) && (!s.hp||x.hp===s.hp));
+  const r=sameCopy(s.species, cp||null, s.hp||null);
   if(r) return attach(r);
-  // CP misread (a dropped digit is common)? same species and HP, and the digits we did read occur in the card's CP
-  const digits=String(cp||''), near=s.hp?results.filter(x=>x.species===s.species && x.hp===s.hp && x.cp && (!digits||String(x.cp).includes(digits))):[];
-  if(near.length===1) return attach(near[0]);
   if((s.hp||cp) && DATA.stats[s.species]){
     // the appraisal screen shows name, CP, the level arc and usually HP: with the IVs that is enough for a card of its own
     s.cp=cp||null; s.cpCandidates=s.cpCandidates||[];
@@ -931,14 +928,44 @@ function applyMoves(r, mv){                        // merge what a moves screen 
   r.moves=next; if(mv.second!==undefined) r.secondMove=mv.second; r.movesSeen=Date.now();
   return changed;
 }
-function movesTarget(species, skipKey){            // which card a moves screen belongs to
+/* ---------- one card per physical Pokémon ----------
+   Identity = species + CP + HP (both as shown on the status screen). Every path (status screen, appraisal, attacks screen,
+   video frame) asks sameCopy() before creating a card, so the pieces land on one card. A power-up changes CP and HP, so it
+   makes a new card and archives the old one (onNewScan in planner.js recognises the IV overlap). Two copies of one species
+   with identical CP and HP are treated as one card; that is the one case we cannot tell apart from a screenshot. */
+function sameCopy(species, cp, hp, skipKey){
+  const live=results.filter(x=>!x.superseded && x.species===species);
+  if(skipKey){ const prev=live.find(x=>x.key===skipKey); if(prev && (!cp||prev.cp===cp||!prev.cp) && (!hp||!prev.hp||prev.hp===hp)) return prev; }
+  if(cp){ const m=live.filter(x=>x.cp===cp && (!hp||!x.hp||x.hp===hp)); if(m.length) return m[0]; }
+  if(hp){ const digits=String(cp||''), m=live.filter(x=>x.hp===hp && x.cp && (!digits||String(x.cp).includes(digits)));   // CP lost a digit?
+    if(m.length===1) return m[0]; }
+  return null;
+}
+function dedupeScans(){                          // fold cards that describe the same physical Pokémon into one; returns how many were folded
+  const live=results.filter(x=>!x.superseded && x.cp && x.hp), seen=new Map(); let n=0;
+  for(const r of live){ const k=`${r.species}|${r.cp}|${r.hp}`; const first=seen.get(k); if(!first){ seen.set(k,r); continue; }
+    mergeScan(first, r); results.splice(results.indexOf(r),1); n++; }
+  if(n){ save(); render(); if(window.Planner) Planner.markDirty(); }
+  return n;
+}
+function mergeScan(keep, other){                  // keep takes everything the other card knew
+  if(other.appraisal && !keep.appraisal){ applyAppraisal(keep, other.appraisal); }
+  if(other.movesSeen && (!keep.movesSeen || other.movesSeen>keep.movesSeen)){ keep.moves=other.moves; keep.secondMove=other.secondMove; keep.movesSeen=other.movesSeen; }
+  else if(!keep.moves && other.moves){ keep.moves=other.moves; keep.secondMove=other.secondMove; }
+  if(other.secondMove!==undefined && keep.secondMove===undefined) keep.secondMove=other.secondMove;
+  keep.fav=keep.fav||other.fav; keep.bench=keep.bench||other.bench;
+  if(!keep.level && other.level) keep.level=other.level;
+  if(other.combos && other.combos.length && (!keep.combos.length || (other.combos.length<keep.combos.length && !keep.appraisal))) keep.combos=other.combos;
+  if(!keep.txt && other.txt) keep.txt=other.txt;
+}
+function movesTarget(species, skipKey, hp){        // which card an attacks screen belongs to
   const live=results.filter(x=>!x.superseded);
   const prev=skipKey?live.find(x=>x.key===skipKey):null;
-  if(species){ if(prev&&prev.species===species) return prev; return live.find(x=>x.species===species)||null; }
+  if(species){ if(prev&&prev.species===species) return prev; return sameCopy(species,null,hp||null)||live.find(x=>x.species===species)||null; }
   return prev||null;
 }
-function attachMovesFromText(txt, speciesInText, skipKey){
-  const target=movesTarget(speciesInText, skipKey); if(!target){ if(speciesInText) gain('note',`attacks of ${speciesInText} seen, but there is no ${speciesInText} card to put them on`); return null; }
+function attachMovesFromText(txt, speciesInText, skipKey, hp){
+  const target=movesTarget(speciesInText, skipKey, hp); if(!target){ if(speciesInText) gain('note',`attacks of ${speciesInText} seen, but there is no ${speciesInText} card to put them on`); return null; }
   const mv=readMoves(target.species, txt); if(!mv) return null;
   const changed=applyMoves(target, mv); save(); render(); if(changed) gain('moves',target.species);
   const names=[mv.fast,...mv.charged].filter(Boolean).map(m=>APP.moves[m]?APP.moves[m].n:m);
@@ -1093,6 +1120,7 @@ $('file').addEventListener('change', async e=>{
       await new Promise(r=>setTimeout(r,1500));
     }
   }
+  { const folded=dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
   status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
   setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
@@ -1266,7 +1294,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
       if(prev && cands.includes(prev.species)) sp=prev.species; else { const c=results.find(x=>!x.superseded && cands.includes(x.species)); sp=c?c.species:s.candySpecies; } }
     if(/ attack | aanval /.test(normTxt(s.txt)) || (sp && results.some(x=>x.species===sp))){
       if(!/ new attack | nieuwe aanval /.test(normTxt(s.txt))) s.txt=(s.txt||'')+' '+await readBand(ctx,W,H,0.76,1);   // the NEW ATTACK button sits below the card region
-      const k=attachMovesFromText(s.txt, sp, skipKey); note(`${seen(s)} → ${k?'moves attached to '+sp:'attacks screen, no card to attach to'}`); return k; }
+      const k=attachMovesFromText(s.txt, sp, skipKey, s.hp); note(`${seen(s)} → ${k?'moves attached to '+sp:'attacks screen, no card to attach to'}`); return k; }
     if(s.species && !s.cpCandidates.length){ note(`${seen(s)} → CP not read, no card`); return null; }
     note(`${seen(s)} → not a status screen`); return null;
   }
@@ -1301,7 +1329,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   const dup=results.find(r=>r.key===key);
   if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
   if(key===skipKey) return key;
-  const same=results.find(x=>!x.superseded && x.species===s.species && x.cp===s.cp && x.hp===s.hp);   // the same copy, solved to a different level string (e.g. its appraisal card)
+  const same=sameCopy(s.species, s.cp, s.hp);   // the same physical Pokémon already has a card (its appraisal card, or an earlier scan)
   if(same){ if(mvSeen&&applyMoves(same,mvSeen)){ save(); render(); gain('moves',same.species); if(window.Planner) Planner.onMovesScan(same); } note(`${seen(s)} → same copy as the ${same.cp} CP card`); return same.key; }
   s.key=key; if(mvSeen) applyMoves(s,mvSeen);
   { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
@@ -1474,8 +1502,8 @@ function refix(i){
   save(); render();
 }
 </script>
-<script src="sources.js?v=9.38"></script>
-<script src="planner.js?v=9.38"></script>
-<script src="sync.js?v=9.38"></script>
+<script src="sources.js?v=9.39"></script>
+<script src="planner.js?v=9.39"></script>
+<script src="sync.js?v=9.39"></script>
 </body>
 </html>

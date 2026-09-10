@@ -30,6 +30,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   cost, moves, bench / archive / delete, and correcting a misread. Appraisal screenshots pin the exact
   IVs (on their own they make a complete card). A recording is read once per screen you pause on, a
   frame that takes too long is skipped, and a bad frame never aborts the rest of the video.
+- **One card per Pokémon**: a card is identified by species + CP + HP. Status screens, appraisal screens, attacks
+  screens and video frames of the same copy all land on that one card (a CP that lost a digit is recovered from HP
+  and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
+  in favour of the new one.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,
   appraisals, moves, profile, screens read) or why it failed, with decoder details for videos. Kept on the
   device, last 40 files.
