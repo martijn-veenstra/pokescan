@@ -517,7 +517,7 @@ function teamInner(m, ids, name) {
   const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
   const menu = ctxMenu([
     ['Coverage grid', `Planner.coverage(${cov})`],
-    ['Try in builder', `Planner.tryTeam(${cov});showTab('meta')`],
+    ['Try in builder', `Planner.goBuilder(${cov})`],
     ['Copy Pokémon GO search', `Planner.copyText(${attr(teamSearch(ids))})`],
     saved ? ['Rename party…', `Planner.renameTeam(${attr(saved)})`] : ['Save as in-game party…', `Planner.saveTeam(${cov})`],
     saved ? ['Delete party', `Planner.deleteTeam(${attr(saved)})`, true] : null,
@@ -660,7 +660,7 @@ function tiles(m) {
     else if (o.toLevel > 40 && o.toLevel > o.level) { st = 'xl'; txt = `XL gated · L${o.toLevel}`; }
     else if (o.toLevel > o.level) { st = 'power'; const c = costTo(o.level, o.toLevel); txt = `L${o.level} → ${o.toLevel} · ${c.candy} candy`; bar = (o.level - 1) / (o.toLevel - 1); }
     else { st = 'ready'; txt = 'ready'; }
-    out.push({id: o.id, st, txt, bar, sub: `#${APP.pokemon[o.id].rank}${o.cp ? ' · ' + o.cp : ''}`, teams: inTeams(o.id)});
+    out.push({id: o.id, st, txt, bar, sub: `#${APP.pokemon[o.id].rank}${o.cp ? ' · ' + o.cp + ' CP' : ''}`, iv: o.ivs ? o.ivs.join('/') : null, teams: inTeams(o.id)});
   }
   for (const [id, a] of Object.entries(auto)) out.push({id, st: 'pending', txt: `evolve ${a.from}`, sub: `#${APP.pokemon[id].rank} · fits to L${a.toLevel}`});
   for (const id of Object.keys(ROSTER.pending)) if (!own[id] && !auto[id] && APP.pokemon[id]) out.push({id, st: 'pending', txt: 'pending', sub: `#${APP.pokemon[id].rank}`});
@@ -782,6 +782,7 @@ function openScan(key) {                       // a scanned card's own page: thi
 function closeMon() { if (history.state && (history.state.mon || history.state.scan)) history.back(); else { UI.mon = null; UI.scan = null; showTab(UI.monFrom === 'team' && !UI.team ? 'teams' : (UI.monFrom || 'roster')); } }
 window.addEventListener('popstate', e => {
   const st = e.state || {};
+  if (UI.goMeta) { UI.goMeta = false; UI.mon = null; UI.scan = null; UI.team = null; showTab('meta'); return; }
   if (st.team && st.team.ids && APP) { UI.team = st.team; showTab('team'); renderTeam(); }
   else if (st.scan && results.some(x => x.key === st.scan)) { UI.scan = st.scan; UI.mon = st.mon && APP && APP.pokemon[st.mon] ? st.mon : null; showTab('mon'); renderMon(); }
   else if (st.mon && APP && APP.pokemon[st.mon]) { UI.scan = null; UI.mon = st.mon; showTab('mon'); renderMon(); }
@@ -894,7 +895,7 @@ function monInner(m, id, noHead) {
   const back = {today: 'Today', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
   const rm = 'Planner.renderMon()';
   const menu = ctxMenu([
-    ['Try in builder', `Planner.fillSlot('${id}');Planner.closeMon();showTab('meta')`],
+    ['Try in builder', `Planner.goBuilder('${id}')`],
     o && o.scan && !noHead ? ["Open the best copy's scan", `Planner.openScan('${esc(o.scan.key)}')`] : null,
     !st && !benched ? ['Add to wanted', `Planner.want('${id}',true)`] : null,
     !st && !benched ? ['Add as pending (building it)', `Planner.addAs('pending','${id}')`] : null,
@@ -982,7 +983,11 @@ function renderRosterInner(el) {
   const lbl = {ready: 'ready', power: 'powering up', manual: 'not scanned', pending: 'pending', wanted: 'wanted', xl: 'XL gated', bench: 'benched'};
   const clsOf = {ready: 'ok', power: 'gold', manual: '', pending: 'gl', wanted: '', xl: 'warn', bench: ''};
   let h = `<div class="chips" style="margin:0 0 10px">${Object.entries(counts).map(([k, v]) => chip(`${v} ${lbl[k]}`, clsOf[k])).join('')}</div>`;
-  h += `<div class="tiles">${ts.map(t => `<div class="tile ${t.st}" onclick="Planner.openMon('${t.id}')"><b>${esc(nm(t.id))}</b><small>${esc(t.sub)}</small>${t.bar !== null && t.bar !== undefined ? `<div class="pb"><div style="width:${Math.round(t.bar * 100)}%"></div></div>` : ''}<span class="st">${esc(t.txt)}</span></div>`).join('')}
+  h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
+  const q = (UI.rosterQ || '').trim().toLowerCase();
+  const shown = q ? ts.filter(t => nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q))) : ts;
+  if (q && !shown.length) h += `<div class="note">Nothing in your roster matches “${esc(q)}”. Search by name, type or status (ready, power, pending, wanted).</div>`;
+  h += `<div class="tiles">${shown.map(t => `<div class="tile ${t.st}" onclick="Planner.openMon('${t.id}')"><b>${esc(nm(t.id))}</b>${t.iv ? `<span class="ivl">${t.iv}</span>` : ''}<small>${esc(t.sub)}</small>${t.bar !== null && t.bar !== undefined ? `<div class="pb"><div style="width:${Math.round(t.bar * 100)}%"></div></div>` : ''}<span class="st">${esc(t.txt)}</span></div>`).join('')}
     <div class="tile add" onclick="Planner.toggleAdd()"><b>+</b><span class="st">add</span></div></div>`;
   h += `<div class="add" id="addrow" style="${UI.adding ? '' : 'display:none'}"><input id="addid" list="species" placeholder="species id, e.g. lickilicky"><select id="addkind"><option value="owned">owned</option><option value="pending">pending</option><option value="candidates">wanted</option></select><button onclick="Planner.add()">Add</button></div>`;
   h += `<div class="note">Your in-game parties and the teams you can build are under <a href="#" onclick="showTab('teams');return false">Teams</a>.</div>`;
@@ -1076,6 +1081,14 @@ function renderRankings(m) {
   return h;
 }
 function metaPanel(k) { UI.metaPanel = k; renderMeta(); }
+function goBuilder(idOrIds) {                  // from a Pokémon or team page: load the builder, then leave the page so Back does not undo it
+  if (Array.isArray(idOrIds)) { UI.build.slots = idOrIds.slice(0, 3); saveBuild(); } else { let i = UI.build.slots.indexOf(null); if (!UI.build.slots.includes(idOrIds)) { if (i < 0) i = 2; UI.build.slots[i] = idOrIds; saveBuild(); } }
+  UI.metaPanel = 'build'; localStorage.setItem('tab', 'meta');
+  const v = onView();
+  if ((v === 'mon' || v === 'team') && history.state && (history.state.mon || history.state.scan || history.state.team)) { UI.goMeta = true; history.back(); }
+  else { UI.mon = null; UI.scan = null; UI.team = null; showTab('meta'); }
+  window.scrollTo(0, 0);
+}
 
 /* ---------- Raids: best PvE attackers per type, from data/pve.json (built weekly from the game master) ---------- */
 let PVE = null, pveLoading = null, pveError = '';
@@ -1150,6 +1163,7 @@ function renderRaids(m) {
 }
 function pveType(t) { UI.pveType = t; renderMeta(); }
 function pveBasic(v) { UI.pveBasic = !!v; renderMeta(); }
+function rosterSearch(v) { UI.rosterQ = v; const pos = $('rosterq') && $('rosterq').selectionStart; renderRoster(); const q = $('rosterq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 function rankSearch(v) { UI.rankQ = v; UI.rankLimit = 50; const el = $('meta'); const pos = $('rankq') && $('rankq').selectionStart; renderMeta(); const q = $('rankq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 function rankType(v) { UI.rankType = v; UI.rankLimit = 50; renderMeta(); }
 function rankMore() { UI.rankLimit += 100; renderMeta(); }
@@ -1222,7 +1236,7 @@ function setScanMove(idx, slot, val) {
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
 window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
-                  metaPanel, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
+                  metaPanel, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 })();
