@@ -38,6 +38,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **Lineage offer**: when a new scan looks like a power-up or evolution of a card you already had (same IV spread,
+  higher CP or the evolved species), the new card asks "Is this your X powered up?" — one tap folds both into one
+  card with a CP history; "No" keeps them apart. Cards also say when the CP was inferred or the moves were never read,
+  so nothing guessed is shown as fact.
   A status screen with the same IVs at a higher level, or of its evolution, moves the card to the new CP/HP/level and
   keeps a history line; an appraisal or attacks screen attaches to it. A screenshot whose IVs do not match, or of
   another species, becomes a separate card and the log says why.

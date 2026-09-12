@@ -181,6 +181,22 @@ function ivSet(r) { return new Set(r.combos.map(c => c.slice(1, 4).join('/'))); 
 function shareIVs(a, b) { const A = ivSet(a); for (const x of ivSet(b)) if (A.has(x)) return true; return false; }
 function lvl(r) { return r.level || (r.combos.length ? Math.max(...r.combos.map(c => c[0])) : null); }
 function logEntry(e) { ROSTER.log.unshift(Object.assign({t: Date.now()}, e)); ROSTER.log = ROSTER.log.slice(0, 50); }
+function hint(s, r, kind) {                    // remember which archived card this new scan probably continues, so the card can offer a one-tap merge
+  if (s.lineageHint) { s.lineageHint.multi = true; return; }
+  s.lineageHint = {key: r.key, species: r.species, cp: r.cp, kind};
+}
+function lineageMerge(newKey) {               // "Yes, same Pokémon": fold the new scan into the old card (one card, CP history) instead of keeping an archived copy
+  const s = results.find(x => x.key === newKey), h = s && s.lineageHint, t = h && results.find(x => x.key === h.key);
+  if (!s || !t) { lineageDismiss(newKey); return; }
+  const sid = scanId(s), mv = s.moves && s.moves.length && sid && sid.id ? {id: sid.id, fast: s.moves[0], charged: s.moves.slice(1).filter(Boolean), second: s.secondMove, found: true} : null;
+  const wasOpen = UI.scan === s.key;
+  if (!updateCard(t, s, mv)) { status('Those two do not share an IV spread; kept as separate cards'); lineageDismiss(newKey); return; }
+  results.splice(results.indexOf(s), 1);
+  for (const e of ROSTER.log) if (e.evidence === s.key) e.evidence = t.key;
+  save(); render(); refresh(); status(`${nm(scanId(t).id || t.species)}: one card, ${h.cp} → ${t.cp} CP`);
+  if (wasOpen) nav('#/scan/' + encodeURIComponent(t.key));
+}
+function lineageDismiss(newKey) { const s = results.find(x => x.key === newKey); if (s) { delete s.lineageHint; save(); render(); if (UI.scan === s.key) renderMon(); } }
 function onNewScan(s) {                        // called by the scanner after a new card is stored (or an appraisal completes one)
   if (!APP || !s.combos || !s.combos.length || !s.cp) return;
   const sid = scanId(s), newId = sid && sid.id, newLv = lvl(s);
@@ -190,9 +206,11 @@ function onNewScan(s) {                        // called by the scanner after a 
     if (!shareIVs(r, s)) continue;
     if (r.species === s.species && s.cp > r.cp && (!oldLv || !newLv || newLv >= oldLv)) {          // power-up
       r.superseded = {by: s.key, why: `powered up to L${newLv ?? '?'}`, t: Date.now()};
+      hint(s, r, 'powerup');
       logEntry({kind: 'powerup', id: 'pu:' + rid, title: `${nm(rid || s.species)} powered up ${r.cp} → ${s.cp} CP`, evidence: s.key});
     } else if (rid && newId && (APP.pokemon[rid] || {}).evo && APP.pokemon[rid].evo.includes(newId) && (!oldLv || !newLv || newLv >= oldLv)) {   // evolution
       r.superseded = {by: s.key, why: `evolved into ${nm(newId)}`, t: Date.now()};
+      hint(s, r, 'evolution');
       logEntry({kind: 'evolve', id: 'get:' + newId, title: `${nm(rid)} evolved into ${nm(newId)}`, evidence: s.key});
     }
   }
@@ -963,7 +981,7 @@ function scanSection(m, r) {
     ['Correct a misread…', `Planner.editScan('${key}')`],
     ['Delete scan', `Planner.deleteScan('${key}')`, true],
   ]);
-  let h = `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
+  let h = lineageBanner(r) + `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
   h += `<div class="scanhero"><div class="dh" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></div>`;
   const rows = [];
   if (best) {
@@ -1131,7 +1149,7 @@ function renderRosterInner(el) {
   const clsOf = {ready: 'ok', power: 'gold', moves: 'gold', manual: '', pending: 'gl', wanted: '', xl: 'warn', bench: ''};
   let h = `<div class="chips" style="margin:0 0 10px">${Object.entries(counts).map(([k, v]) => chip(`${v} ${lbl[k]}`, clsOf[k])).join('')}</div>`;
   const live = results.filter(r => !r.superseded).length;
-  h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span><span class="go">›</span></div>`;
+  h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span>${ctxMenu([['Export roster JSON', 'Planner.exportRoster()'], ['Load saved roster', 'Planner.loadRepoRoster()'], ['Clear all scans…', 'clearAll()', true]])}</div>`;
   h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
   const q = (UI.rosterQ || '').trim().toLowerCase();
   const shown = q ? ts.filter(t => nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q))) : ts;
@@ -1139,8 +1157,7 @@ function renderRosterInner(el) {
   h += `<div class="tiles">${shown.map(t => `<div class="tile ${t.st}" onclick="Planner.openMon('${t.id}')"><b>${esc(nm(t.id))}</b>${t.iv ? `<span class="ivl">${t.iv}</span>` : ''}<small>${esc(t.sub)}</small>${t.bar !== null && t.bar !== undefined ? `<div class="pb"><div style="width:${Math.round(t.bar * 100)}%"></div></div>` : ''}<span class="st">${esc(t.txt)}</span></div>`).join('')}
     <div class="tile add" onclick="Planner.toggleAdd()"><b>+</b><span class="st">add</span></div></div>`;
   h += `<div class="add" id="addrow" style="${UI.adding ? '' : 'display:none'}"><input id="addid" list="species" placeholder="species id, e.g. lickilicky"><select id="addkind"><option value="owned">owned</option><option value="pending">pending</option><option value="candidates">wanted</option></select><button onclick="Planner.add()">Add</button></div>`;
-  h += `<div class="note">Your in-game parties and the teams you can build are under <a href="#" onclick="Planner.nav('#/teams');return false">Teams</a>.</div>`;
-  h += `<div class="tools"><button class="btn sec" onclick="Planner.exportRoster()">Export roster JSON</button><button class="btn sec" onclick="Planner.loadRepoRoster()">Load saved roster</button></div>`;
+  h += `<div class="note">Your in-game parties and the teams you can build are under <a href="#" onclick="Planner.nav('#/teams');return false">Saved teams</a>.</div>`;
   el.innerHTML = h;
 }
 
@@ -1397,7 +1414,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

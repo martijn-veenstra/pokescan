@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.42';
+const APP_VERSION='9.43';
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -975,6 +975,13 @@ function bestOf2(r){ return r.combos.reduce((a,b)=>pct(b)>pct(a)?b:a); }
 function toggleFav(i){ results[i].fav=!results[i].fav; save(); render(); }
 function toggleBench(i){ results[i].bench=!results[i].bench; save(); render(); if(window.Planner) Planner.refresh(); }
 function toggleHelp(){ $('help').classList.toggle('open'); }
+function lineageBanner(r){                        // one-tap merge offer on a scan that looks like a power-up or evolution of a card we already had
+  const h=r&&r.lineageHint; if(!h) return '';
+  const old=results.find(x=>x.key===h.key); if(!old){ delete r.lineageHint; return ''; }
+  const nice=x=>String(x||'').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  const k=r.key.replace(/'/g,''), what=h.kind==='evolution'?`your ${nice(h.species)} (${h.cp} CP) evolved`:`your ${nice(h.species)} ${h.cp} CP powered up`;
+  return `<div class="lin" onclick="event.stopPropagation()"><span class="q">Is this ${what}?</span><span class="a"><button class="yes" onclick="Planner.lineageMerge('${k}')">Yes, one card</button><button class="no" onclick="Planner.lineageDismiss('${k}')">No, another one</button></span>${h.multi?'<div class="dim" style="font-size:11.5px;margin-top:4px">More than one older card fits; this merges with the first. Use ⋮ → Update this Pokémon on the right card if it is not that one.</div>':''}</div>`;
+}
 function render(){
   $('count').textContent=results.length+' scanned';
   const em=$('empty'); if(em) em.style.display=results.length?'none':'block';
@@ -1019,10 +1026,12 @@ function render(){
       else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
       else status='<span class="chip meta1">ready for GL</span>'; }
     const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
+      r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
+      (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length?'<span class="chip" title="no attacks screenshot yet; the planner falls back to PvPoke\'s moveset without showing it as fact">moves not read</span>':'',
       !r.bench&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
       ].join('');
     const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
-    return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="Planner.openScan('${r.key.replace(/'/g,'')}')">
+    return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="Planner.openScan('${r.key.replace(/'/g,'')}')">${lineageBanner(r)}
       <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${nice}</span>
         <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
       <div class="ivrow">
