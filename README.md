@@ -41,6 +41,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **Raids → Pick a boss**: the bosses in raids right now (Leek Duck) or any Pokémon by name; the page shows its
+  weaknesses, ranks **your own scans** against it (real level, IVs and scanned moves; unscanned moves use the best
+  possible set and say so) by DPS³ × TDO, and lists the best attackers in the game for its weak types.
 - **Matchups** (menu): your builder team or a saved party against any of ~150 simulated opponents per shield scenario
   (0-0, 1-1, 2-2), with a verdict per member and a "their lead is X" mode that says stay / swap / shield. The numbers
   come from `data/matrix-<league>.json`, built daily by `scripts/build_matrix.mjs` with PvPoke's own battle engine

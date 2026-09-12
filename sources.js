@@ -123,6 +123,8 @@ function hint(names, opts) {                  // one short phrase for a Next-mov
   return e.kind === 'raid' ? `${e.name} ${e.what.toLowerCase()} ${e.when}` : e.kind === 'egg' ? `${e.name} from ${e.what}` : e.kind === 'research' ? `${e.name} from field research` : `${e.name} ${e.what} ${e.when}`;
 }
 function onChange(f) { listeners.push(f); }
-window.Sources = {load, forSpecies, hint, onChange, ready: () => !!S, updated: () => S ? S.t : 0, error: () => error};
+/* raids(): the bosses in raids right now (Leek Duck via ScrapedDuck): name, tier, types (lowercase names), shiny */
+function raids() { return ((S && S.raids) || []).map(r => ({name: r.name, tier: r.tier, types: (r.types || []).map(t => (t.name || '').toLowerCase()).filter(Boolean), shiny: !!r.canBeShiny})); }
+window.Sources = {load, forSpecies, hint, onChange, raids, ready: () => !!S, updated: () => S ? S.t : 0, error: () => error};
 window.addEventListener('load', () => setTimeout(() => load(false), 800));
 })();

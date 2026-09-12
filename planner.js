@@ -1486,6 +1486,59 @@ function pveSearch(e) {
   const base = e.name.replace(/\s*\(.*\)\s*$/, '').trim().toLowerCase();
   return ['+' + base].concat(formFilters(e.id)).join('&');
 }
+/* ---------- a specific boss: who in YOUR storage does best against it (your level, IVs and scanned moves) ---------- */
+const RAID_BOSS_ATK = (250 + 15) * CPM40, RAID_BOSS_DMG = 100, RAID_BOSS_DUR = 2.5;
+function bossInfo(key) {                        // key: PvPoke id, or "raid:<name>" from the live raid list
+  if (!key) return null;
+  if (key.startsWith('raid:')) { const r = (window.Sources && Sources.raids ? Sources.raids() : []).find(x => 'raid:' + x.name === key); if (!r) return null;
+    const id = Object.keys(APP.pokemon).find(k => nm(k).toLowerCase() === r.name.toLowerCase()) || null; return {key, id, name: r.name, types: r.types, tier: r.tier}; }
+  const e = APP.pokemon[key] || APP.unranked[key]; if (!e) return null;
+  return {key, id: APP.pokemon[key] ? key : null, name: e.name, types: e.types || []};
+}
+function bossWeak(types) { return TYPES18.map(t => ({t, e: PVP.eff(t, types)})).filter(x => x.e > 1).sort((a, b) => b.e - a.e); }
+function myRaidAttackers(bossTypes, limit) {
+  const out = [];
+  for (const r of results) {
+    if (r.superseded || !r.cp || !r.combos || !r.combos.length || !DATA.stats[r.species]) continue;
+    const sid = scanId(r), e = sid && sid.id ? APP.pokemon[sid.id] : null; if (!e) continue;
+    const best = sid.best, b = sid.base, cpm = cpmAt(best[0]);
+    const atk = (b[0] + best[1]) * cpm, def = (b[1] + best[2]) * cpm, hp = calcHP(b, best[3], cpm);
+    const incoming = (0.5 * RAID_BOSS_DMG * RAID_BOSS_ATK / def + 1) / RAID_BOSS_DUR;
+    const known = (r.moves || []).filter(Boolean), fasts = known[0] ? [known[0]] : e.fast, chargeds = known.length > 1 ? known.slice(1) : e.charged;
+    const dmg = (p, t) => Math.floor(0.5 * p * atk / RAID_BOSS_DEF * (e.types.includes(t) ? 1.2 : 1) * PVP.eff(t, bossTypes)) + 1;
+    let top = null;
+    for (const f of fasts) { const fm = gmMove(f); if (!fm || fm.e <= 0) continue;
+      for (const c of chargeds) { const cm = gmMove(c); if (!cm || cm.e >= 0) continue;
+        const n = -cm.e / fm.e, dps = (dmg(fm.p, fm.t) * n + dmg(cm.p, cm.t)) / (fm.d * n + cm.d), tdo = hp / incoming * dps, er = dps ** 3 * tdo;
+        if (!top || er > top.er) top = {f, c, dps, tdo, er}; } }
+    if (top) out.push(Object.assign({key: r.key, id: sid.id, species: r.species, level: best[0], cp: r.cp, movesKnown: known.length > 1, shadow: !!r.shadow}, top));
+  }
+  out.sort((a, b) => b.er - a.er);
+  return out.slice(0, limit || 8);
+}
+function pickBoss(key) { UI.boss = key || null; UI.bossQ = ''; renderMeta('raids'); }
+function bossSearch(v) { UI.bossQ = v; const pos = $('bossq') && $('bossq').selectionStart; renderMeta('raids'); const q = $('bossq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
+function bossSection(m) {
+  const live = window.Sources && Sources.raids ? Sources.raids() : [], boss = bossInfo(UI.boss);
+  let h = `<div class="sec">Pick a boss <small>your storage against it</small></div>`;
+  const q = (UI.bossQ || '').toLowerCase();
+  h += `<div class="add" style="margin:4px 0 6px"><input id="bossq" placeholder="search any Pokémon…" value="${esc(UI.bossQ || '')}" oninput="Planner.bossSearch(this.value)">${boss ? `<button onclick="Planner.pickBoss(null)" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
+  if (q) { const hits = Object.keys(APP.pokemon).concat(Object.keys(APP.unranked)).filter(k => nm(k).toLowerCase().includes(q)).slice(0, 8);
+    h += hits.length ? `<div class="tchips">${hits.map(k => `<span class="chip" onclick="Planner.pickBoss('${k}')">${esc(nm(k))}</span>`).join('')}</div>` : `<div class="note">No Pokémon named like that in this league's data.</div>`; }
+  else if (live.length) h += `<div class="tchips">${live.filter(r => /5-Star|Mega|3-Star/.test(r.tier)).slice(0, 12).map(r => `<span class="chip ${UI.boss === 'raid:' + r.name ? 'ok' : ''}" onclick="Planner.pickBoss(${attr('raid:' + r.name)})" title="${esc(r.tier)}">${esc(r.name)} <span style="opacity:.7">${esc(r.tier.replace(' Raids', '').replace('-Star', '★'))}</span></span>`).join('')}</div>`;
+  else h += `<div class="note">Type a boss name. The current raid bosses appear here when the schedule has loaded.</div>`;
+  if (!boss) return h;
+  const weak = bossWeak(boss.types), mine = myRaidAttackers(boss.types, 8), maxEr = mine.length ? mine[0].er : 1;
+  h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center"><span>${esc(boss.name)} <small>${boss.tier ? esc(boss.tier) + ' · ' : ''}${boss.types.map(t => esc(t)).join(' / ') || 'types unknown'}</small></span>${boss.id ? ctxMenu([['Open page', `Planner.openMon('${boss.id}')`]]) : ''}</div>
+    <div class="dt" style="margin-bottom:6px">Weak to</div><div class="chips">${weak.length ? weak.map(w => `<span class="chip t-${w.t}">${w.t}${w.e > 2 ? ' ×2.56' : ''}</span>`).join('') : '<span class="dim">nothing known</span>'}</div></div>`;
+  h += `<div class="sec">Your best attackers <small>${mine.length ? 'from your scans, at their own level and IVs' : 'none of your scans can be rated'}</small></div>`;
+  if (!mine.length) h += `<div class="note">Scan the Pokémon you would bring: the attackers list below shows what to aim for.</div>`;
+  else h += mine.map((x, i) => `<div class="rank pve" onclick="Planner.openScan(${attr(x.key)})" style="cursor:pointer"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn"><b>${esc(nm(x.id))}</b> <span class="dim">L${x.level} · ${x.cp} CP</span>${x.movesKnown ? '' : ' <span class="chip">best possible moves</span>'}</div><div class="dt">${esc(mvName(x.f))} · ${esc(mvName(x.c))}</div>
+      <div class="pvb"><span class="lb">DPS</span><span class="bar"><i style="width:${Math.round(x.dps / mine[0].dps * 100)}%"></i></span><span class="v">${x.dps.toFixed(1)}</span><span class="lb">TDO</span><span class="bar"><i class="t" style="width:${Math.round(x.tdo / Math.max(...mine.map(y => y.tdo)) * 100)}%"></i></span><span class="v">${Math.round(x.tdo)}</span></div></div></div>`).join('');
+  const bestGlobal = weak.length ? [].concat(...weak.map(w => (PVE.types[w.t] || []).slice(0, 8).map(r => Object.assign({}, r, {vs: w.t})))).sort((a, b) => b.er - a.er).filter((r, i, a) => a.findIndex(x => x.id === r.id) === i).slice(0, 6) : [];
+  if (bestGlobal.length) h += `<div class="sec">Best in the game against it <small>same model, level 40</small></div><div class="team" style="cursor:default"><div class="chips">${bestGlobal.map(r => `<span class="chip ${pveOwned(r) ? 'ok' : ''}">${esc(r.name)} <span style="opacity:.7">${r.dps.toFixed(0)} dps</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">Green = you own the species. Your own list above uses your copies' real level, IVs and (when scanned) moves; the boss is the tier-5 stand-in of the model.</div></div>`;
+  return h;
+}
 function renderRaids(m) {
   if (!PVE) { loadPve(); return `<div class="note">${pveError ? 'Raid data not available: ' + esc(pveError) : 'Loading the raid attacker rankings…'}</div>`; }
   const type = UI.pveType || 'overall', basic = !!UI.pveBasic;
@@ -1493,6 +1546,8 @@ function renderRaids(m) {
   const rows = (basic ? rows0.filter(r => !r.mega && !r.shadow) : rows0).slice(0, 20);
   const mv = id => (PVE.moves[id] || {n: id}).n;
   let h = `<div class="note">Best raid attackers when the boss is weak to the type, computed from the game master (${esc(PVE.generated || '')}). <b>DPS</b> damage per second, <b>TDO</b> total damage before fainting, both at level 40 against a typical tier-5 boss. Ranked by DPS³ × TDO, the usual raid metric.</div>`;
+  h += bossSection(m);
+  h += `<div class="sec">Best attackers by type</div>`;
   h += `<div class="tchips">${['overall'].concat(TYPES18).map(t => `<span class="chip ${t === type ? 'sel' : ''} ${t !== 'overall' ? 't-' + t : ''}" onclick="Planner.pveType('${t}')">${t === 'overall' ? 'Top' : t}</span>`).join('')}</div>`;
   h += `<div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${type === 'overall' ? 'Top attackers across all types (Normal left out: nothing is weak to it)' : `Best <b>${esc(type)}</b> attackers`}</span><label class="tog"><input type="checkbox" ${basic ? 'checked' : ''} onchange="Planner.pveBasic(this.checked)"> no megas / shadows</label></div>`;
   if (!rows.length) return h + `<div class="note">No entries.</div>`;
@@ -1582,7 +1637,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
