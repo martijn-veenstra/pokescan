@@ -49,6 +49,14 @@ export async function openDb(url) {
       return r.rows[0].updated_at.toISOString();
     },
     async clear(user) { await pool.query('DELETE FROM state WHERE user_id=$1', [user]); await pool.query('DELETE FROM history WHERE user_id=$1', [user]); },
+    async migrateUser(from, to) {                // re-key one user's rows to another id, only when the target has none yet
+      if (!from || !to || from === to) return 0;
+      const has = await pool.query('SELECT 1 FROM state WHERE user_id=$1 LIMIT 1', [to]);
+      if (has.rows.length) return 0;
+      const r = await pool.query('UPDATE state SET user_id=$2 WHERE user_id=$1', [from, to]);
+      await pool.query('UPDATE history SET user_id=$2 WHERE user_id=$1', [from, to]);
+      return r.rowCount;
+    },
     async close() { await pool.end(); },
   };
 }
@@ -67,6 +75,12 @@ function memoryDb() {
     },
     async put(user, kind, data) { const updatedAt = new Date().toISOString(); m.set(key(user, kind), { data, updatedAt }); return updatedAt; },
     async clear(user) { for (const k of [...m.keys()]) if (k.startsWith(user + ' ')) m.delete(k); },
+    async migrateUser(from, to) {
+      if (!from || !to || from === to || [...m.keys()].some(k => k.startsWith(to + ' '))) return 0;
+      let n = 0;
+      for (const k of [...m.keys()]) if (k.startsWith(from + ' ')) { m.set(to + ' ' + k.slice(from.length + 1), m.get(k)); m.delete(k); n++; }
+      return n;
+    },
     async close() {},
   };
 }

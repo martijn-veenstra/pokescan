@@ -653,7 +653,7 @@ function coachContext(m) {
 }
 function coachHash(o) { const s = JSON.stringify(o); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h); }
 function coachCard(m) {
-  if (!window.Sync || !Sync.available() || !Sync.state.code) return '';
+  if (!window.Sync || !Sync.available() || !Sync.signedIn()) return '';
   if (!Sync.coachAvailable()) return `<div class="sec">Coach <small>off on your server</small></div><div class="team coach"><div class="dt">The server reports no coach (<code>coach:false</code> in /api/health). Set <code>ANTHROPIC_API_KEY</code> on the Railway service and deploy the staged variable change; then tap re-check.</div><div class="acts small"><button onclick="Sync.detect().then(()=>Planner.renderToday())">Re-check</button></div></div>`;
   const fresh = COACH.text && COACH.hash === coachHash(coachContext(m));
   return `<div class="sec">Coach <small>Claude reads your roster and the meta</small></div>
@@ -696,7 +696,7 @@ const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, 
 /* ---------- always-on AI review: every complete team gets one structured review, cached per trio and league ---------- */
 const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
 const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
-const coachOn = () => !!(window.Sync && Sync.available() && Sync.state.code && Sync.coachAvailable());
+const coachOn = () => !!(window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable());
 function parseReview(text) {                   // the review prompt asks for **Verdict** / **Strengths** / **Weak spots** / **Swaps**
   const out = {}, re = /\*\*(Verdict|Strengths|Weak spots|Swaps)\*\*:?\s*/gi, parts = text.split(re);
   if (parts.length < 3) return {Verdict: text.trim()};
@@ -749,7 +749,7 @@ function builderContext(m, L, filled) {
   return ctx;
 }
 function builderCoachCard(m, L, filled) {
-  if (!window.Sync || !Sync.available() || !Sync.state.code || !Sync.coachAvailable()) return '';
+  if (!window.Sync || !Sync.available() || !Sync.signedIn() || !Sync.coachAvailable()) return '';
   const key = filled.slice().sort().join('+');
   const bubbles = BCOACH.thread.map(x => `<div class="msg me"><div class="b">${esc(x.q || (x.slots && x.slots.length === 3 ? 'Judge this team' : 'Complete this team'))}</div><div class="dt">${esc((x.slots || []).map(nm).join(' / '))}${x.key !== key ? ' · earlier slots' : ''}</div></div>
     <div class="msg ai"><div class="b ans">${linkNames(mdLite(x.a))}</div><div class="dt">${when(x.t)}</div></div>`).join('');
@@ -1101,7 +1101,7 @@ function paintDrawer() {
   const cups = CUPS || DEFAULT_CUPS, curL = LEAGUE.slug;
   h += `<div class="grp">League</div>` + cups.map(c => `<a href="#" class="${c.slug === curL ? 'on' : ''}" onclick="Planner.setLeague('${c.slug}');return false"><span class="ic">${c.kind === 'cup' ? '◆' : '◇'}</span>${esc(c.title)}<small>${c.cp} CP</small></a>`).join('');
   h += `<div class="grp">You</div><a href="#" onclick="Planner.drawer(false);toggleProfile();return false"><span class="ic">☺</span>Trainer profile</a>`;
-  if (window.Sync && Sync.available) h += `<a href="#" onclick="Planner.drawer(false);Sync.toggle();return false"><span class="ic">☁</span>Sync<small>${Sync.state && Sync.state.code ? 'connected' : 'off'}</small></a>`;
+  if (window.Sync && Sync.available()) { const hl = Sync.health() || {}; h += `<a href="#" onclick="Planner.drawer(false);Sync.toggle();return false"><span class="ic">☁</span>${hl.auth === 'clerk' ? 'Account' : 'Sync'}<small>${Sync.signedIn() ? (hl.auth === 'clerk' && window.Auth ? esc(Auth.email() || 'signed in') : 'connected') : hl.auth === 'clerk' ? 'sign in' : 'off'}</small></a>`; }
   h += `<a href="#" onclick="Planner.drawer(false);toggleHelp();return false"><span class="ic">?</span>Help &amp; glossary</a>`;
   h += `<div class="ft">PokeScan v${typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''}${APP && APP.generatedAt ? ` · PvPoke data ${esc(String(APP.generatedAt).slice(0, 10))}` : ''}</div>`;
   el.innerHTML = h;
@@ -1366,9 +1366,9 @@ function renderBuilder(m, L) {
     : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">Slot ${i + 1}</span><span class="rn dim">+</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
   if (filled.length) {                         // one tap: the coach completes or judges what is in the slots
-    const can = window.Sync && Sync.available() && Sync.state.code && Sync.coachAvailable();
+    const can = window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable();
     h += can ? `<button class="btn ai" onclick="Planner.askBuilderCoach()" ${BCOACH.busy ? 'disabled' : ''}>${BCOACH.busy ? `✦ Thinking… ${BCOACH.secs ? BCOACH.secs + 's' : ''}` : `✦ Generate AI suggestion <span class="sub">${filled.length === 3 ? 'judge this team' : `complete it from ${3 - filled.length === 1 ? 'the open slot' : 'the open slots'}`}</span>`}</button>`
-             : `<button class="btn sec" disabled style="margin:10px 0 0">✦ Generate AI suggestion <span class="sub">${window.Sync && Sync.available() && Sync.state.code ? 'the server has no coach key' : 'connect sync (cloud button) to use the coach'}</span></button>`;
+             : `<button class="btn sec" disabled style="margin:10px 0 0">✦ Generate AI suggestion <span class="sub">${window.Sync && Sync.available() && Sync.signedIn() ? 'the server has no coach key' : 'connect sync (cloud button) to use the coach'}</span></button>`;
   }
   // per-slot move choice
   if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`)}</div>`).join('');

@@ -199,6 +199,21 @@ python3 scripts/pogo_cp.py evolve-cap sentret furret --ivs 4 14 13
 `evolve-cap` without IVs gives an IV-agnostic answer for a wild catch: a CP that is always safe,
 a band where IVs decide, and a CP above which the evolution cannot fit under the cap.
 
+## Accounts (Clerk)
+
+Set `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` on the server (a Clerk *development* instance works on the Railway URL;
+a production instance needs a custom domain for Clerk's CNAME records and your own Google OAuth client) and the app
+switches from the single passcode to sign-in with Google or email and password. Every account has its own scans,
+roster, parties, battles and coach budget (`COACH_PER_USER_HOUR`, default 10, under the global `COACH_PER_HOUR`).
+Set `APP_ORIGIN` (e.g. `https://pokescan-production.up.railway.app`) so tokens minted for another site are refused.
+To hand the passcode era's data to your own account, set `OWNER_USER_ID` to your Clerk user id for one deploy; the
+server re-keys the rows once (only if the account has none yet) and you can remove the variable. Without Clerk keys
+the `PASSCODE` mode keeps working exactly as before; tests and the e2e suite run in that mode.
+
+`auth.js` loads ClerkJS from Clerk's CDN in plain JavaScript (no framework), mounts the sign-in UI in the cloud
+button's sheet, and `sync.js` sends a fresh session token with every `/api` call. `GET /api/me` returns the user id
+and enabled features. Offline or signed out, the app keeps working on local data and sync pauses.
+
 ## Running your own server (Railway)
 
 `server/index.js` serves the app and a passcode-protected sync API backed by Postgres, so scans, roster,

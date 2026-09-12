@@ -3,12 +3,19 @@
    so this module stays silent and the button is hidden. */
 (function () {
 'use strict';
-const S = Object.assign({code: '', last: {}, base: {}}, JSON.parse(localStorage.getItem('sync') || '{}'));
+const S = Object.assign({code: '', last: {}, base: {}, user: ''}, JSON.parse(localStorage.getItem('sync') || '{}'));
 const save = () => localStorage.setItem('sync', JSON.stringify(S));
 let available = null, timer = null, busy = false, lastError = '', health = null;
 const dirty = new Set();
 const $ = id => document.getElementById(id);
-const hdr = () => ({authorization: 'Bearer ' + S.code, 'content-type': 'application/json'});
+const clerkMode = () => !!(health && health.auth === 'clerk');
+const signedIn = () => clerkMode() ? !!(window.Auth && Auth.signedIn()) : !!S.code;   // the one question every caller asks
+async function hdr() {                          // Clerk: a fresh short-lived session token per request; passcode: the code
+  const tok = clerkMode() ? await Auth.token() : S.code;
+  if (!tok) throw new Error(clerkMode() ? 'signed out' : 'connect sync first (cloud button)');
+  return {authorization: 'Bearer ' + tok, 'content-type': 'application/json'};
+}
+const authErr = () => clerkMode() ? 'signed out' : 'wrong passcode';
 
 let detectedAt = 0;
 async function detect() {
@@ -18,6 +25,7 @@ async function detect() {
     const j = r.ok ? await r.json() : null;
     health = j;
     available = !!(j && j.ok && j.sync);
+    if (available && window.Auth) Auth.init(j).then(() => paint());
   } catch { available = false; }
   paint();
   return available;
@@ -63,8 +71,8 @@ function applyRemote(kind, data) {
   return false;
 }
 async function pull() {
-  const r = await fetch('/api/state', {headers: hdr(), cache: 'no-store'});
-  if (r.status === 401) throw new Error('wrong passcode');
+  const r = await fetch('/api/state', {headers: await hdr(), cache: 'no-store'});
+  if (r.status === 401) throw new Error(authErr());
   if (!r.ok) throw new Error('server ' + r.status);
   const {state} = await r.json();
   let changed = 0;
@@ -76,20 +84,20 @@ async function pull() {
   return changed;
 }
 async function pushKind(kind) {
-  let r = await fetch('/api/state/' + kind, {method: 'PUT', headers: hdr(), body: JSON.stringify({data: local(kind), baseUpdatedAt: S.base[kind]})});
+  let r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: local(kind), baseUpdatedAt: S.base[kind]})});
   if (r.status === 409) {                      // someone else wrote first: merge theirs in, then write the union
     const {current} = await r.json();
     applyRemote(kind, current.data);
     S.base[kind] = current.updatedAt;
-    r = await fetch('/api/state/' + kind, {method: 'PUT', headers: hdr(), body: JSON.stringify({data: local(kind), baseUpdatedAt: S.base[kind]})});
+    r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: local(kind), baseUpdatedAt: S.base[kind]})});
   }
-  if (r.status === 401) throw new Error('wrong passcode');
+  if (r.status === 401) throw new Error(authErr());
   if (!r.ok) throw new Error('server ' + r.status);
   S.base[kind] = (await r.json()).updatedAt;
   S.last[kind] = Date.now();
 }
 async function flush() {
-  if (!available || !S.code || busy || !dirty.size) return;
+  if (!available || !signedIn() || busy || !dirty.size) return;
   busy = true; paint();
   try {
     for (const kind of [...dirty]) { await pushKind(kind); dirty.delete(kind); }
@@ -98,26 +106,35 @@ async function flush() {
   busy = false; paint();
 }
 function touch(kind) {
-  if (!available || !S.code) return;
+  if (!available || !signedIn()) return;
   dirty.add(kind); clearTimeout(timer); timer = setTimeout(flush, 1500);
 }
 async function connect(code) {
   S.code = (code || '').trim(); save(); lastError = '';
   if (available === null) await detect();
   try {
-    const r = await fetch('/api/auth', {method: 'POST', headers: hdr()});
-    if (r.status === 401) throw new Error('wrong passcode');
+    const r = await fetch('/api/auth', {method: 'POST', headers: await hdr()});
+    if (r.status === 401) throw new Error(authErr());
     if (!r.ok) throw new Error('server ' + r.status);
     await pull();
     dirty.add('scans'); dirty.add('roster');
     await flush();
     S.connectedAt = Date.now(); save();
   } catch (e) { lastError = e.message; if (e.message === 'wrong passcode') { S.code = ''; save(); } }
-  paint(); if (window.Planner) Planner.renderToday();
+  paint(); if (window.Planner) Planner.refresh();
 }
-function disconnect() { S.code = ''; S.base = {}; S.last = {}; save(); paint(); if (window.Planner) Planner.renderToday(); }
+async function onUser(user) {                  // Clerk: signed in, signed out, or another account on this phone
+  if (!user) { S.base = {}; S.last = {}; lastError = ''; save(); paint(); if (window.Planner) Planner.refresh(); return; }
+  if (S.user && S.user !== user.id) { S.base = {}; S.last = {}; }   // never merge one account's local copy into another's server data by accident
+  S.user = user.id; save(); lastError = '';
+  try { await pull(); dirty.add('scans'); dirty.add('roster'); await flush(); S.connectedAt = Date.now(); save(); }
+  catch (e) { lastError = e.message; }
+  paint(); if (window.Planner) Planner.refresh();
+}
+if (window.Auth) Auth.onChange(onUser);
+function disconnect() { if (clerkMode()) { Auth.signOut(); return; } S.code = ''; S.base = {}; S.last = {}; save(); paint(); if (window.Planner) Planner.renderToday(); }
 async function syncNow() {
-  if (!S.code) return;
+  if (!signedIn()) return;
   busy = true; paint();
   try { await pull(); dirty.add('scans'); dirty.add('roster'); busy = false; await flush(); lastError = ''; }
   catch (e) { lastError = e.message; busy = false; }
@@ -127,15 +144,26 @@ function paint() {
   const b = $('syncbtn'); if (!b) return;
   if (available === false) { b.style.display = 'none'; return; }
   b.style.display = '';
-  b.classList.toggle('on', !!S.code && !lastError);
+  b.classList.toggle('on', signedIn() && !lastError);
   b.classList.toggle('err', !!lastError);
-  b.title = lastError ? 'Sync error: ' + lastError : S.code ? 'Synced' : 'Set up sync';
+  b.title = lastError ? 'Sync error: ' + lastError : signedIn() ? 'Synced' : clerkMode() ? 'Sign in' : 'Set up sync';
   const box = $('syncbox');
   if (box && box.classList.contains('open')) renderBox();
 }
 function renderBox() {
   const box = $('syncbox'); if (!box) return;
   const last = Math.max(S.last.scans || 0, S.last.roster || 0);
+  if (clerkMode()) {
+    const mode = Auth.mode();
+    box.innerHTML = `<div class="box"><h2>${signedIn() ? 'Your account' : 'Sign in'} <span class="x" onclick="Sync.toggle()">✕</span></h2>
+      ${signedIn() ? `<div class="team" style="cursor:default"><b>${Auth.email() || 'Signed in'}</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div></div>
+        <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out</button></div>
+        <p class="dim" style="font-size:12px;margin-top:10px">Scans, roster, parties, battles and the completion log follow your account to every device. Local storage stays the working copy, so the app keeps working offline.</p>`
+      : mode === 'offline' ? `<p class="dim">Could not reach the sign-in service. You can keep using the app; sync resumes when you are back online.</p>`
+      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}</div>`;
+    if (!signedIn() && mode === 'clerk') Auth.mountSignIn($('clerk-signin'));
+    return;
+  }
   box.innerHTML = `<div class="box"><h2>Sync across devices <span class="x" onclick="Sync.toggle()">✕</span></h2>
     <p class="dim">Scans, roster, parties and the completion log are stored on your PokeScan server, so every phone and browser sees the same data. Enter the passcode you set on the server.</p>
     ${S.code ? `<div class="team" style="cursor:default"><b>Connected</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div></div>
@@ -144,12 +172,12 @@ function renderBox() {
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
 }
 async function coach(context, question, onProgress, mode) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
-  if (!S.code) throw new Error('connect sync first (cloud button)');
+  if (!signedIn()) throw new Error(clerkMode() ? 'sign in first (cloud button)' : 'connect sync first (cloud button)');
   let r, j;
-  try { r = await fetch('/api/coach', {method: 'POST', headers: hdr(), body: JSON.stringify({context, question, mode: mode || 'roster'})}); }
+  try { r = await fetch('/api/coach', {method: 'POST', headers: await hdr(), body: JSON.stringify({context, question, mode: mode || 'roster'})}); }
   catch (e) { throw new Error('could not reach the server (' + (e.message || e) + ')'); }
   j = await r.json().catch(() => ({}));
-  if (r.status === 401) throw new Error('wrong passcode');
+  if (r.status === 401) throw new Error(authErr());
   if (r.status === 429) throw new Error('the coach is resting: ' + (j.message || 'too many questions this hour'));
   if (!r.ok) throw new Error(j.message || j.error || ('server ' + r.status));
   if (j.text) return j.text;
@@ -159,8 +187,8 @@ async function coach(context, question, onProgress, mode) {   // server-side Cla
     await new Promise(res => setTimeout(res, 2500));
     if (onProgress) onProgress(Math.round((Date.now() - t0) / 1000));
     let p;
-    try { p = await fetch('/api/coach/' + j.jobId, {headers: hdr(), cache: 'no-store'}); } catch { continue; }   // a flaky network just retries
-    if (p.status === 401) throw new Error('wrong passcode');
+    try { p = await fetch('/api/coach/' + j.jobId, {headers: await hdr(), cache: 'no-store'}); } catch { continue; }   // a flaky network just retries
+    if (p.status === 401) throw new Error(authErr());
     if (p.status === 404) throw new Error('the server restarted while thinking; ask again');
     const k = await p.json().catch(() => ({}));
     if (k.status === 'done') return k.text;
@@ -168,17 +196,17 @@ async function coach(context, question, onProgress, mode) {   // server-side Cla
   }
   throw new Error('the coach took more than five minutes; try again later');
 }
-function toggle() { const box = $('syncbox'); box.classList.toggle('open'); if (box.classList.contains('open')) renderBox(); }
+function toggle() { const box = $('syncbox'); box.classList.toggle('open'); if (box.classList.contains('open')) renderBox(); else if (window.Auth) Auth.unmountSignIn($('clerk-signin')); }
 async function init() {
-  if (await detect() && S.code) {
+  if (await detect() && !clerkMode() && S.code) {
     try { await pull(); } catch (e) { lastError = e.message; }
     paint(); if (window.Planner) Planner.renderToday();
   }
 }
-window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, state: S, error: () => lastError, available: () => available,
-               health: () => health, coachAvailable: () => !!(health && health.coach && S.code)};
+window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, state: S, error: () => lastError, available: () => available, signedIn,
+               health: () => health, coachAvailable: () => !!(health && health.coach && signedIn())};
 window.addEventListener('load', () => setTimeout(init, 300));
-window.addEventListener('online', () => { if (S.code) flush(); });
+window.addEventListener('online', () => { if (signedIn()) flush(); });
 // the server may gain the coach (or sync) after a redeploy: re-read /api/health when the app comes back to the foreground
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || available === false || Date.now() - detectedAt < 120e3) return;

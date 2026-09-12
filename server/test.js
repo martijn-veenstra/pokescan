@@ -120,7 +120,48 @@ r = await app.inject({ method: 'GET', url: '/some/deep/link' });
 assert.equal(r.statusCode, 200, 'SPA fallback');
 r = await app.inject({ method: 'GET', url: '/api/missing' });
 assert.equal(r.statusCode, 404);
+for (const p of ['/server/index.js', '/scripts/build_matrix.mjs', '/tests/e2e/helpers.js', '/package.json', '/.gitignore']) {
+  r = await app.inject({ method: 'GET', url: p });
+  assert.ok(r.statusCode === 200 && r.body.includes('PokeScan') && r.headers['content-type'].includes('text/html'), `${p} is not served as a file (SPA fallback instead)`);
+}
+r = await app.inject({ method: 'GET', url: '/api/health' });
+assert.equal(r.json().auth, 'passcode');
 
 await app.db.clear('default');
 await app.close();
 console.log(`all API tests passed (storage: ${app.db.kind})`);
+
+// ---- accounts mode: a fake token verifier stands in for Clerk ----
+const users = { 'tok-alice': { sub: 'user_alice' }, 'tok-bob': { sub: 'user_bob' } };
+const app2 = await buildServer({ passcode: '', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '' });
+const A = { authorization: 'Bearer tok-alice', 'content-type': 'application/json' }, B = { authorization: 'Bearer tok-bob', 'content-type': 'application/json' };
+r = await app2.inject({ method: 'GET', url: '/api/health' });
+assert.equal(r.json().auth, 'clerk'); assert.equal(r.json().sync, true); assert.equal(r.json().clerkPublishableKey, 'pk_test_x');
+r = await app2.inject({ method: 'GET', url: '/api/state', headers: { authorization: 'Bearer nope' } });
+assert.equal(r.statusCode, 401, 'bad token rejected');
+r = await app2.inject({ method: 'GET', url: '/api/me', headers: A });
+assert.deepEqual(r.json(), { userId: 'user_alice', auth: 'clerk', features: ['sync', 'coach'] });
+r = await app2.inject({ method: 'PUT', url: '/api/state/scans', headers: A, payload: { data: [{ key: 'a' }] } });
+assert.equal(r.statusCode, 200);
+r = await app2.inject({ method: 'GET', url: '/api/state', headers: B });
+assert.deepEqual(r.json().state, {}, 'bob does not see alice');
+r = await app2.inject({ method: 'GET', url: '/api/state/scans', headers: A });
+assert.deepEqual(r.json().data, [{ key: 'a' }]);
+r = await app2.inject({ method: 'POST', url: '/api/coach', headers: A, payload: { context: { x: 1 } } });
+assert.equal(r.statusCode, 202);
+const aliceJob = r.json().jobId;
+r = await app2.inject({ method: 'GET', url: '/api/coach/' + aliceJob, headers: B });
+assert.equal(r.statusCode, 404, 'jobs are private');
+for (let i = 0; i < 9; i++) r = await app2.inject({ method: 'POST', url: '/api/coach', headers: A, payload: { context: { x: 1 } } });
+r = await app2.inject({ method: 'POST', url: '/api/coach', headers: A, payload: { context: { x: 1 } } });
+assert.equal(r.statusCode, 429, 'per-user budget (10/hour)');
+r = await app2.inject({ method: 'POST', url: '/api/coach', headers: B, payload: { context: { x: 1 } } });
+assert.equal(r.statusCode, 202, 'bob still has budget');
+// migration of the passcode era's rows
+await app2.db.put('default', 'roster', { owned: { azumarill: null } });
+assert.equal(await app2.db.migrateUser('default', 'user_carol'), 1);
+assert.deepEqual((await app2.db.get('user_carol', 'roster')).data, { owned: { azumarill: null } });
+assert.equal(await app2.db.migrateUser('default', 'user_carol'), 0, 'idempotent');
+await app2.db.clear('user_alice'); await app2.db.clear('user_bob'); await app2.db.clear('user_carol');
+await app2.close();
+console.log('accounts-mode tests passed');
