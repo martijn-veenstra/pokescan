@@ -1,5 +1,5 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v9.44';
+const VERSION = 'pokescan-v9.45';
 const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'scanner.js', 'planner.js', 'sync.js', 'sources.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const DATA = ['data/app-great.json', 'data/cups.json', 'data/pve.json'];
 

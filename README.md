@@ -41,6 +41,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **Shadows**: ⋮ → Mark as Shadow on a scan card maps it to PvPoke's shadow ranking (search strings add `&shadow`);
+  the card shows how the other form would rank.
+- **Meta changes**: `scripts/diff_app_data.py` records moveset changes, meta-group entries/exits and rank jumps in
+  `data/changes.json` on every data update; Today shows the ones that touch Pokémon you own, with Dismiss.
+- **Share a team**: ⋮ on a team page → Share link (a `#/team/…` URL that opens the same page anywhere) or Copy as text.
 - **Lineage offer**: when a new scan looks like a power-up or evolution of a card you already had (same IV spread,
   higher CP or the evolved species), the new card asks "Is this your X powered up?" — one tap folds both into one
   card with a CP history; "No" keeps them apart. Cards also say when the CP was inferred or the moves were never read,

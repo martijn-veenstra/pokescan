@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.44';
+const APP_VERSION='9.45';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -986,6 +986,7 @@ function clearAll(){ if(!confirm(`Delete all ${results.length} scans on this dev
 function pct(c){ return (c[1]+c[2]+c[3])/45*100; }
 function bestOf2(r){ return r.combos.reduce((a,b)=>pct(b)>pct(a)?b:a); }
 function toggleFav(i){ results[i].fav=!results[i].fav; save(); render(); }
+function toggleShadow(i){ results[i].shadow=!results[i].shadow||undefined; save(); render(); if(window.Planner) Planner.refresh(); }
 function toggleBench(i){ results[i].bench=!results[i].bench; save(); render(); if(window.Planner) Planner.refresh(); }
 function toggleHelp(){ $('help').classList.toggle('open'); }
 function lineageBanner(r){                        // one-tap merge offer on a scan that looks like a power-up or evolution of a card we already had
@@ -1039,6 +1040,7 @@ function render(){
       else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
       else status=`<span class="chip meta1">ready for ${LEAGUE.abbr}</span>`; }
     const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
+      r.shadow?'<span class="chip ul">shadow</span>':'',
       r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
       (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length?'<span class="chip" title="no attacks screenshot yet; the planner falls back to PvPoke\'s moveset without showing it as fact">moves not read</span>':'',
       !r.bench&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
@@ -1057,10 +1059,12 @@ function render(){
   }).join('');
 }
 /* ---------- planning helpers ---------- */
-function pvpokeIdFor(species, form){          // scanner species (UPPERCASE) + base-stat form -> PvPoke speciesId
+function pvpokeIdFor(species, form, shadow){  // scanner species (UPPERCASE) + base-stat form (+ shadow flag) -> PvPoke speciesId
   if(!APP||!species) return null;
   const s=species.toLowerCase();
-  let ids=Object.keys(APP.pokemon).filter(k=>k===s||k.startsWith(s+'_')).filter(k=>!k.includes('shadow'));
+  const all=Object.keys(APP.pokemon).filter(k=>k===s||k.startsWith(s+'_'));
+  let ids=all.filter(k=>k.includes('shadow')===!!shadow);
+  if(!ids.length) ids=all.filter(k=>!k.includes('shadow'));   // a shadow copy of a species PvPoke ranks only in its normal form
   if(!ids.length) return null;
   if(form&&ids.length>1){ const ft=[form[3],form[4]].filter(Boolean).map(t=>t.toLowerCase()).sort().join('/');
     const m=ids.filter(k=>APP.pokemon[k].types.slice().sort().join('/')===ft); if(m.length) ids=m; }
