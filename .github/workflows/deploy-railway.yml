@@ -62,11 +62,16 @@ jobs:
           APP_URL: ${{ vars.APP_URL || 'https://pokescan-production.up.railway.app' }}
         run: |
           # the first call after a deploy builds the cache (Leek Duck pages), so allow a slow answer and never fail the deploy on it
-          if out=$(curl -sf --max-time 90 "$APP_URL/api/sources"); then
-            echo "$out" | python3 scripts/report_sources.py | tee sources-report.txt
-          else
-            echo "::warning::/api/sources did not answer in time"
-          fi
+          # the server answers from its cache while it refreshes in the background, so give a fresh parse up to three chances
+          for attempt in 1 2 3; do
+            if out=$(curl -sf --max-time 90 "$APP_URL/api/sources"); then
+              echo "$out" | python3 scripts/report_sources.py | tee sources-report.txt
+            else
+              echo "::warning::/api/sources did not answer in time"
+            fi
+            grep -q "rocket lineups: 0" sources-report.txt 2>/dev/null || break
+            [ "$attempt" -lt 3 ] && sleep 40
+          done
           # when the Rocket page could not be parsed, fetch it here and show its structure so the parser can be fixed from the log
           if grep -q "rocket lineups: 0" sources-report.txt 2>/dev/null; then
             curl -sL --max-time 30 -A "Mozilla/5.0 (PokeScan smoke check)" https://leekduck.com/rocket-lineups/ -o rocket-lineups.html || true
