@@ -210,7 +210,7 @@ function onNewScan(s) {                        // called by the scanner after a 
 function updateScan(key) {                     // "Update this Pokémon": the next import belongs to this card (power-up, evolution, appraisal, attacks)
   const r = results.find(x => x.key === key); if (!r) return;
   UI.updateKey = key; status(`Updating ${nice(r.species)} ${r.cp} CP: pick its new screenshots`);
-  showTab('scans'); $('file').click();
+  nav('#/scans'); $('file').click();
 }
 function updateDone(card) { const k = UI.updateKey; UI.updateKey = null; if (card) { UI.scan = card.key; openScan(card.key); } else if (k && results.some(x => x.key === k)) openScan(k); }
 function onUpdated(target, old) {              // called by the scanner after updateCard()
@@ -223,7 +223,7 @@ function onUpdated(target, old) {              // called by the scanner after up
 function scanProof(moveId) {                   // "Scan proof" on a next move: remember what should clear, open the importer
   const m = M(), mv = openMoves(m).find(x => x.id === moveId);
   UI.expect = {id: moveId, title: mv ? mv.title : moveId, before: openMoves(m).map(x => x.id)};
-  showTab('scans'); $('file').click();
+  nav('#/scans'); $('file').click();
 }
 function beforeImport() { UI.before = openMoves(M()).map(x => ({id: x.id, title: x.title})); UI.touched = []; }
 function onMovesScan(r) {                       // a moves screen updated a card
@@ -259,7 +259,7 @@ function snooze(id) { ROSTER.snooze[id] = Date.now() + WEEK; saveRoster(); refre
 function unsnooze(id) { delete ROSTER.snooze[id]; saveRoster(); refresh(); }
 function undoDone(id) { delete ROSTER.done[id]; ROSTER.log = ROSTER.log.filter(e => !(e.id === id && e.kind === 'manual')); saveRoster(); refresh(); }
 function toggleMore() { UI.showAll = !UI.showAll; renderToday(); }
-function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) return; showTab('scans'); $('filter').value = r.superseded ? 'arch' : 'all'; $('q').value = r.species; render(); }
+function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) return; nav('#/scans'); $('filter').value = r.superseded ? 'arch' : 'all'; $('q').value = r.species; render(); }
 
 /* ---------- rendering: Today ---------- */
 const chip = (t, cls) => `<span class="chip ${cls || ''}">${esc(t)}</span>`;
@@ -358,7 +358,7 @@ function renderTodayInner(el) {
   const parties = Object.entries(ROSTER.tagged).filter(([, v]) => v.length === 3 && v.every(x => APP.pokemon[x]));
   h += `<div class="sec">Your in-game parties <small>tap one for weak spots and to-dos</small></div>`;
   h += parties.map(([name, v]) => teamRow(m, v, name)).join('');
-  h += `<div class="team row" onclick="showTab('teams')"><span class="tx"><span class="nm">${parties.length ? 'All teams' : 'No parties saved yet'}</span><div class="dt">${parties.length ? 'second team, more from your roster, add a party' : 'add the three Pokémon of a battle party, or save one from the builder'}</div></span><span class="go">›</span></div>`;
+  h += `<div class="team row" onclick="Planner.nav('#/teams')"><span class="tx"><span class="nm">${parties.length ? 'All teams' : 'No parties saved yet'}</span><div class="dt">${parties.length ? 'second team, more from your roster, add a party' : 'add the three Pokémon of a battle party, or save one from the builder'}</div></span><span class="go">›</span></div>`;
   h += wantedCard(m);
   h += coachCard(m);
   h += `<div class="note">Heuristic, not a simulation: PvPoke's published matchups where available, type effectiveness and ranking score otherwise. Roles are a guess: the member with the fewest hard losses is the swap, the strongest remaining one closes.</div>`;
@@ -502,17 +502,21 @@ function renderTeamsInner(el) {
   el.innerHTML = h;
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
-const onView = () => ['today', 'teams', 'team', 'roster', 'meta', 'scans', 'mon'].find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
+const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon'];
+const PAGE_LABEL = {today: 'Today', builder: 'Builder', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans'};
+const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
   const cur = onView(); if (cur && cur !== 'team') UI.teamFrom = cur === 'mon' ? (UI.monFrom || 'teams') : cur;
   UI.team = {ids: ids.slice(), name: name || null};
-  try { history.pushState({team: UI.team}, ''); } catch {}
-  showTab('team'); renderTeam(); window.scrollTo(0, 0);
+  nav(teamHash(ids, name));
 }
-function closeTeam() { if (history.state && history.state.team) history.back(); else { UI.team = null; showTab(UI.teamFrom || 'teams'); } }
+const teamHash = (ids, name) => '#/team/' + ids.join('+') + (name ? '/' + encodeURIComponent(name) : '');
+function closeTeam() { back('#/' + (UI.teamFrom || 'teams')); }
 function renderTeam() {
   const el = $('team'); if (!el || !UI.team) return;
+  if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
+  if (!UI.team.ids.every(id => APP.pokemon[id])) { el.innerHTML = '<div class="note">Unknown team.</div>'; return; }
   try { el.innerHTML = teamInner(M(), UI.team.ids, UI.team.name); } catch (e) { el.innerHTML = errorCard('team', e); }
 }
 function savedName(ids, name) {                 // the party this trio is saved as, if any
@@ -525,7 +529,7 @@ function teamInner(m, ids, name) {
   const saved = savedName(ids, name), best = rep.today[0];
   const isBest = best && best.members.map(x => x.speciesId).slice().sort().join() === ids.slice().sort().join();
   const metaRank = (APP.metaTeams || []).findIndex(t => t.members.slice().sort().join() === ids.slice().sort().join()) + 1;
-  const back = {today: 'Today', teams: 'Teams', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.teamFrom] || 'Teams';
+  const back = PAGE_LABEL[UI.teamFrom] || 'Teams';
   const cov = attr(ids), bm = APP.benchmark || {best: 721, median: 521};
   const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
   const menu = ctxMenu([
@@ -633,7 +637,7 @@ function linkNames(html) {                     // wrap Pokémon names in coach a
 }
 function pickName(id) {
   if (!APP.pokemon[id]) return;
-  if (onView() === 'meta' && UI.metaPanel === 'build' && !UI.build.slots.includes(id) && UI.build.slots.includes(null)) { fillSlot(id); status(`${nm(id)} added to the builder`); window.scrollTo(0, 0); return; }
+  if (onView() === 'builder' && !UI.build.slots.includes(id) && UI.build.slots.includes(null)) { fillSlot(id); status(`${nm(id)} added to the builder`); window.scrollTo(0, 0); return; }
   openMon(id);
 }
 function mdLite(t) {                          // minimal markdown: paragraphs, bullets, bold
@@ -862,32 +866,74 @@ function rosterFit(m, id) {                    // what this species does for the
   const answers = best ? L.meta.filter(o => (best.unansweredMeta.includes(nm(o)) || best.sharedWeaknesses.includes(nm(o))) && L.rating(id, o) >= 500) : [];
   return {owned: false, teams, delta, top, answers};
 }
-function openMon(id, replace) {
+function openMon(id) {
   if (!APP || !APP.pokemon[id]) return;
-  const cur = onView(); if (cur && cur !== 'mon') UI.monFrom = cur;
-  UI.mon = id; UI.scan = null;
-  if (!replace) { try { history.pushState({mon: id}, ''); } catch {} }
-  showTab('mon'); renderMon(); window.scrollTo(0, 0);
+  nav('#/mon/' + id);
 }
 function openScan(key) {                       // a scanned card's own page: this copy first, then the species
-  const r = results.find(x => x.key === key); if (!r) return;
-  const cur = onView(); if (cur && cur !== 'mon') UI.monFrom = cur;
-  const sid = scanId(r); UI.scan = key; UI.mon = sid && sid.id && APP.pokemon[sid.id] ? sid.id : null;
-  try { history.pushState({mon: UI.mon, scan: key}, ''); } catch {}
-  showTab('mon'); renderMon(); window.scrollTo(0, 0);
+  if (!results.some(x => x.key === key)) return;
+  nav('#/scan/' + encodeURIComponent(key));
 }
-function closeMon() { if (history.state && (history.state.mon || history.state.scan)) history.back(); else { UI.mon = null; UI.scan = null; showTab(UI.monFrom === 'team' && !UI.team ? 'teams' : (UI.monFrom || 'roster')); } }
-window.addEventListener('popstate', e => {
-  const st = e.state || {};
-  if (UI.goMeta) { UI.goMeta = false; UI.mon = null; UI.scan = null; UI.team = null; showTab('meta'); return; }
-  if (st.team && st.team.ids && APP) { UI.team = st.team; showTab('team'); renderTeam(); }
-  else if (st.scan && results.some(x => x.key === st.scan)) { UI.scan = st.scan; UI.mon = st.mon && APP && APP.pokemon[st.mon] ? st.mon : null; showTab('mon'); renderMon(); }
-  else if (st.mon && APP && APP.pokemon[st.mon]) { UI.scan = null; UI.mon = st.mon; showTab('mon'); renderMon(); }
-  else if (onView() === 'team') { UI.team = null; showTab(UI.teamFrom || 'teams'); }
-  else if (UI.mon || UI.scan) { UI.mon = null; UI.scan = null; showTab(UI.monFrom === 'team' ? 'teams' : (UI.monFrom || 'roster')); }
-});
+function closeMon() { back('#/' + (UI.monFrom === 'team' && UI.team ? 'team' : (UI.monFrom === 'team' ? 'teams' : (UI.monFrom || 'roster')))); }
+
+/* ---------- router: every page has a hash, so Back, deep links and share links all work ---------- */
+function nav(hash) {                           // go to a page; same hash = re-render
+  drawer(false);
+  if (location.hash === hash) { route(); return; }
+  const d = ((history.state && history.state.d) || 0) + 1;
+  location.hash = hash;
+  try { history.replaceState({d}, ''); } catch {}
+}
+function back(fallback) {                      // Back within the app when there is app history, else the page we came from
+  if (history.state && history.state.d > 0) history.back(); else nav(fallback || '#/today');
+}
+function route() {
+  const seg = (location.hash || '').replace(/^#\/?/, '').split('/').map(x => { try { return decodeURIComponent(x); } catch { return x; } });
+  const p = seg[0] || localStorage.getItem('tab') || 'today', cur = onView();
+  const leave = () => { if (cur && cur !== 'mon' && cur !== 'team') { UI.monFrom = cur; } if (cur && cur !== 'team') UI.teamFrom = cur === 'mon' ? (UI.monFrom || 'teams') : cur; };
+  if (p === 'mon' && seg[1]) { if (cur !== 'mon') leave(); UI.mon = seg[1]; UI.scan = null; showView('mon'); window.scrollTo(0, 0); return; }
+  if (p === 'scan' && seg[1]) {
+    const key = seg.slice(1).join('/'), r = results.find(x => x.key === key);
+    if (!r) { nav('#/scans'); return; }
+    if (cur !== 'mon') leave();
+    const sid = scanId(r); UI.scan = key; UI.mon = sid && sid.id && APP && APP.pokemon[sid.id] ? sid.id : null;
+    showView('mon'); window.scrollTo(0, 0); return;
+  }
+  if (p === 'team' && seg[1]) {
+    const ids = seg[1].split('+').filter(Boolean);
+    if (ids.length !== 3) { nav('#/teams'); return; }
+    if (cur !== 'team') leave();
+    UI.team = {ids, name: seg[2] || null}; showView('team'); window.scrollTo(0, 0); return;
+  }
+  if (p === 'mon' || p === 'scan' || p === 'team') { nav('#/' + (localStorage.getItem('tab') || 'today')); return; }
+  const page = PAGES.includes(p) ? p : 'today';
+  if (['builder', 'meta', 'rank', 'raids'].includes(page)) UI.metaPanel = {builder: 'build', meta: 'teams', rank: 'rank', raids: 'raids'}[page];
+  UI.mon = null; UI.scan = null; UI.team = null;
+  showView(page);
+  if (page !== cur) window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+
+/* ---------- side drawer ---------- */
+const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★']]],
+                ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
+                ['Collection', [['roster', 'Roster', '◎'], ['scans', 'Scans & import', '⌗']]]];
+function drawer(open) { const d = $('drawer'); if (!d) return; d.classList.toggle('open', !!open); if (open) paintDrawer(); }
+function paintDrawer() {
+  const el = $('dr'), d = $('drawer'); if (!el || !d || !d.classList.contains('open')) return;
+  const cur = onView(), on = {mon: UI.monFrom, team: UI.teamFrom}[cur] || cur;
+  let h = `<div class="ttl">Menu <span class="x" onclick="Planner.drawer(false)">✕</span></div>`;
+  for (const [g, items] of DRAWER) h += `<div class="grp">${g}</div>` + items.map(([k, label, ic]) => `<a href="#/${k}" class="${on === k ? 'on' : ''}" onclick="Planner.nav('#/${k}');return false"><span class="ic">${ic}</span>${label}</a>`).join('');
+  h += `<div class="grp">You</div><a href="#" onclick="Planner.drawer(false);toggleProfile();return false"><span class="ic">☺</span>Trainer profile</a>`;
+  if (window.Sync && Sync.available) h += `<a href="#" onclick="Planner.drawer(false);Sync.toggle();return false"><span class="ic">☁</span>Sync<small>${Sync.state && Sync.state.code ? 'connected' : 'off'}</small></a>`;
+  h += `<a href="#" onclick="Planner.drawer(false);toggleHelp();return false"><span class="ic">?</span>Help &amp; glossary</a>`;
+  h += `<div class="ft">PokeScan v${typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''}${APP && APP.generatedAt ? ` · PvPoke data ${esc(String(APP.generatedAt).slice(0, 10))}` : ''}</div>`;
+  el.innerHTML = h;
+}
 function renderMon() {
   const el = $('mon'); if (!el || (!UI.mon && !UI.scan)) return;
+  if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
+  if (UI.mon && !APP.pokemon[UI.mon]) { UI.mon = null; if (!UI.scan) { el.innerHTML = '<div class="note">Unknown Pokémon.</div>'; return; } }
   try {
     const m = M(), r = UI.scan ? results.find(x => x.key === UI.scan) : null;
     if (UI.scan && !r) { UI.scan = null; if (!UI.mon) { closeMon(); return; } }
@@ -907,7 +953,7 @@ function toggleGloss() { UI.gloss = !UI.gloss; renderMon(); }
 function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
   const lo = ps.length ? Math.min(...ps) : 0, hi = ps.length ? Math.max(...ps) : 0;
-  const back = {today: 'Today', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
+  const back = PAGE_LABEL[UI.monFrom] || 'Back';
   const key = esc(r.key), rm = `Planner.renderMon()`;
   const menu = ctxMenu([
     [r.fav ? '☆ Remove favourite' : '★ Favourite', `toggleFav(${idx});${rm}`],
@@ -984,14 +1030,14 @@ function deleteScan(key) {
   const i = results.findIndex(x => x.key === key); if (i < 0) return;
   if (!confirm(`Delete this ${nice(results[i].species)} scan?`)) return;
   results.splice(i, 1); save(); render(); refresh(); UI.scan = null; UI.mon = null;
-  showTab('scans'); try { if (history.state && history.state.scan) history.back(); } catch {}
+  nav('#/scans');
 }
 function monInner(m, id, noHead) {
   const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
   const known = o ? (o.manual ? (ROSTER.moves[id] || null) : knownMoves(o.scan, id)) : (ROSTER.moves[id] || ri.pending[id] || null);
   const moves = known || e.moveset;
   const rec = e.moveset, notRec = known ? known.filter(Boolean).filter(mv => !rec.includes(mv)) : [];
-  const back = {today: 'Today', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta', scans: 'Scans'}[UI.monFrom] || 'Back';
+  const back = PAGE_LABEL[UI.monFrom] || 'Back';
   const rm = 'Planner.renderMon()';
   const menu = ctxMenu([
     ['Try in builder', `Planner.goBuilder('${id}')`],
@@ -1084,6 +1130,8 @@ function renderRosterInner(el) {
   const lbl = {ready: 'ready', power: 'powering up', moves: 'need moves', manual: 'not scanned', pending: 'pending', wanted: 'wanted', xl: 'XL gated', bench: 'benched'};
   const clsOf = {ready: 'ok', power: 'gold', moves: 'gold', manual: '', pending: 'gl', wanted: '', xl: 'warn', bench: ''};
   let h = `<div class="chips" style="margin:0 0 10px">${Object.entries(counts).map(([k, v]) => chip(`${v} ${lbl[k]}`, clsOf[k])).join('')}</div>`;
+  const live = results.filter(r => !r.superseded).length;
+  h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span><span class="go">›</span></div>`;
   h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
   const q = (UI.rosterQ || '').trim().toLowerCase();
   const shown = q ? ts.filter(t => nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q))) : ts;
@@ -1091,7 +1139,7 @@ function renderRosterInner(el) {
   h += `<div class="tiles">${shown.map(t => `<div class="tile ${t.st}" onclick="Planner.openMon('${t.id}')"><b>${esc(nm(t.id))}</b>${t.iv ? `<span class="ivl">${t.iv}</span>` : ''}<small>${esc(t.sub)}</small>${t.bar !== null && t.bar !== undefined ? `<div class="pb"><div style="width:${Math.round(t.bar * 100)}%"></div></div>` : ''}<span class="st">${esc(t.txt)}</span></div>`).join('')}
     <div class="tile add" onclick="Planner.toggleAdd()"><b>+</b><span class="st">add</span></div></div>`;
   h += `<div class="add" id="addrow" style="${UI.adding ? '' : 'display:none'}"><input id="addid" list="species" placeholder="species id, e.g. lickilicky"><select id="addkind"><option value="owned">owned</option><option value="pending">pending</option><option value="candidates">wanted</option></select><button onclick="Planner.add()">Add</button></div>`;
-  h += `<div class="note">Your in-game parties and the teams you can build are under <a href="#" onclick="showTab('teams');return false">Teams</a>.</div>`;
+  h += `<div class="note">Your in-game parties and the teams you can build are under <a href="#" onclick="Planner.nav('#/teams');return false">Teams</a>.</div>`;
   h += `<div class="tools"><button class="btn sec" onclick="Planner.exportRoster()">Export roster JSON</button><button class="btn sec" onclick="Planner.loadRepoRoster()">Load saved roster</button></div>`;
   el.innerHTML = h;
 }
@@ -1117,20 +1165,16 @@ function needLine(m, ids) {
     return sc ? `catch a ${nm(pre)} ≤ ${sc.safe} CP for ${nm(id)}` : `find a ${nm(id)}`; }).filter(Boolean);
   return parts.length ? `You still need: ${parts.join(' · ')}.` : 'You own all three.';
 }
-function renderMeta() {
-  const el = $('meta'); if (!el) return;
-  try { renderMetaInner(el); } catch (e) { el.innerHTML = errorCard('Meta', e); }
+const META_PAGES = {build: 'builder', teams: 'meta', rank: 'rank', raids: 'raids'};
+function renderMeta(k) {                        // the four pages that used to be Meta sub-tabs; no argument = whichever of them is visible
+  const key = k || Object.keys(META_PAGES).find(x => META_PAGES[x] === onView()); if (!key) return;
+  const el = $(META_PAGES[key]); if (!el) return;
+  try { renderMetaInner(el, key); } catch (e) { el.innerHTML = errorCard(PAGE_LABEL[META_PAGES[key]], e); }
 }
-function renderMetaInner(el) {
+function renderMetaInner(el, key) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading PvPoke data…</div>'; return; }
-  const m = M(), L = builderLeague(m);
-  const seg = ['build', 'teams', 'rank', 'raids'].map(k => `<button class="${UI.metaPanel === k ? 'on' : ''}" onclick="Planner.metaPanel('${k}')">${{build: 'Builder', teams: 'Meta teams', rank: 'Rankings', raids: 'Raids'}[k]}</button>`).join('');
-  let h = `<div class="tabs sub">${seg}</div>`;
-  if (UI.metaPanel === 'build') h += renderBuilder(m, L);
-  else if (UI.metaPanel === 'teams') h += renderMetaTeams(m);
-  else if (UI.metaPanel === 'raids') h += renderRaids(m);
-  else h += renderRankings(m);
-  el.innerHTML = h;
+  const m = M();
+  el.innerHTML = key === 'build' ? renderBuilder(m, builderLeague(m)) : key === 'teams' ? renderMetaTeams(m) : key === 'raids' ? renderRaids(m) : renderRankings(m);
 }
 function renderBuilder(m, L) {
   const slots = UI.build.slots, filled = slots.filter(Boolean);
@@ -1201,15 +1245,11 @@ function renderRankings(m) {
   if (all.length > shown.length) h += `<div class="note" style="cursor:pointer" onclick="Planner.rankMore()">▸ show ${Math.min(100, all.length - shown.length)} more</div>`;
   return h;
 }
-function metaPanel(k) { UI.metaPanel = k; renderMeta(); }
+function metaPanel(k) { nav('#/' + (META_PAGES[k] || 'builder')); }
 function buildPool(k) { UI.buildPool = k; renderMeta(); }
-function goBuilder(idOrIds) {                  // from a Pokémon or team page: load the builder, then leave the page so Back does not undo it
+function goBuilder(idOrIds) {                  // from a Pokémon or team page: load the builder
   if (Array.isArray(idOrIds)) { UI.build.slots = idOrIds.slice(0, 3); saveBuild(); } else { let i = UI.build.slots.indexOf(null); if (!UI.build.slots.includes(idOrIds)) { if (i < 0) i = 2; UI.build.slots[i] = idOrIds; saveBuild(); } }
-  UI.metaPanel = 'build'; localStorage.setItem('tab', 'meta');
-  const v = onView();
-  if ((v === 'mon' || v === 'team') && history.state && (history.state.mon || history.state.scan || history.state.team)) { UI.goMeta = true; history.back(); }
-  else { UI.mon = null; UI.scan = null; UI.team = null; showTab('meta'); }
-  window.scrollTo(0, 0);
+  nav('#/builder');
 }
 
 /* ---------- Raids: best PvE attackers per type, from data/pve.json (built weekly from the game master) ---------- */
@@ -1286,7 +1326,7 @@ function renderRaids(m) {
 function pveType(t) { UI.pveType = t; renderMeta(); }
 function pveBasic(v) { UI.pveBasic = !!v; renderMeta(); }
 function rosterSearch(v) { UI.rosterQ = v; const pos = $('rosterq') && $('rosterq').selectionStart; renderRoster(); const q = $('rosterq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
-function rankSearch(v) { UI.rankQ = v; UI.rankLimit = 50; const el = $('meta'); const pos = $('rankq') && $('rankq').selectionStart; renderMeta(); const q = $('rankq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
+function rankSearch(v) { UI.rankQ = v; UI.rankLimit = 50; const pos = $('rankq') && $('rankq').selectionStart; renderMeta(); const q = $('rankq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 function rankType(v) { UI.rankType = v; UI.rankLimit = 50; renderMeta(); }
 function rankMore() { UI.rankLimit += 100; renderMeta(); }
 function setSlot(i, id) { UI.build.slots[i] = id; saveBuild(); UI.metaPanel = 'build'; renderMeta(); }
@@ -1304,7 +1344,7 @@ function saveBuildAsTeam() { const ids = UI.build.slots.filter(Boolean); if (ids
   const name = prompt('Name for this party', ids.map(nm).join(' / ')); if (!name) return; ROSTER.tagged[name] = ids.slice(); saveRoster(); refresh(); status(`Saved "${name}" under your in-game parties`); }
 
 /* ---------- actions ---------- */
-function refresh() { dirty = true; renderToday(); renderTeams(); renderRoster(); renderMeta(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
+function refresh() { dirty = true; renderToday(); renderTeams(); renderRoster(); renderMeta(); paintDrawer(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
 function markDirty() { dirty = true; }
 function toggleAdd() { UI.adding = !UI.adding; renderRoster(); if (UI.adding) $('addid').focus(); }
 function add() { const id = $('addid').value.trim().toLowerCase(), kind = $('addkind').value;
@@ -1345,7 +1385,7 @@ async function loadRepoRoster() {
     saveRoster(); refresh();
   } catch (e) { status('Could not load data/roster-great.json'); }
 }
-function showScan(species) { showTab('scans'); const q = $('q'); if (q) { q.value = species; render(); } }
+function showScan(species) { nav('#/scans'); const q = $('q'); if (q) { q.value = species; render(); } }
 function movesRowForScan(r, idx) {      // used by the Scans view: manual move selection on a card
   const s = scanId(r); if (!s || !s.id || !APP) return '';
   return movesRow(s.id, movesFor(r, s.id), `Planner.setScanMove(${idx},SLOT,this.value)`);
@@ -1357,8 +1397,9 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+route();
 })();

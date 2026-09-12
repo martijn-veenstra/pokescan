@@ -19,6 +19,17 @@ jobs:
           node-version: '22'
       - name: Run server tests
         run: npm ci && npm test
+      - name: Install Chromium for the end-to-end tests
+        run: npx playwright install --with-deps chromium
+      - name: Run end-to-end tests (navigation and the scanner fixture corpus)
+        run: npm run test:e2e
+      - name: Keep the Playwright report when something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
       - name: Deploy with the Railway CLI
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

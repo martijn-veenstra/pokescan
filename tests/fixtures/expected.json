@@ -1,0 +1,9 @@
+{
+  "_readme": "One entry per screenshot in this folder. The e2e test imports each file on its own through the real importer and compares. Add a fixture: drop the PNG here and add a line. ivs = [atk, def, sta] when the scan pins a single spread (appraisal bars or a unique solve); moves = what the status screen showed; secondMove false = NEW ATTACK button visible.",
+  "cram-appr.png":     {"kind": "appraisal", "species": "CRAMORANT", "cp": 1490, "hp": 124, "level": 25.5, "ivs": [10, 11, 12]},
+  "stun-appr.png":     {"kind": "appraisal", "species": "STUNFISK", "cp": 794, "hp": 126, "level": 14, "ivs": [5, 9, 13]},
+  "stun-status.png":   {"kind": "status", "species": "STUNFISK", "cp": 794, "hp": 126, "level": 14, "moves": ["METAL_CLAW", "EARTHQUAKE"], "secondMove": false},
+  "mimikyu-status.png":{"kind": "status", "species": "MIMIKYU", "cp": 1134, "hp": 89, "level": 18, "ivs": [15, 15, 12], "moves": ["SHADOW_CLAW", "PLAY_ROUGH"], "secondMove": false},
+  "mimikyu-appr.png":  {"kind": "appraisal", "species": "MIMIKYU", "cp": 1134, "hp": 89, "level": 18, "ivs": [15, 15, 12]},
+  "medicham-appr.png": {"kind": "appraisal", "species": "MEDICHAM", "cp": 667, "hp": 95, "level": 18, "ivs": [5, 10, 13]}
+}

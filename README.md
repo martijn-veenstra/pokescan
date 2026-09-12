@@ -9,7 +9,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   catch or evolve. Everything else (bench power-ups, catches for a hypothetical team, what to park) sits
   behind "N more ideas", so dust goes to the team first. Then your saved parties as one line each, where
   to get wanted Pokémon, and the coach.
-- **Teams** tab: the recommended team, your in-game parties (add one by name and three species, or save
+- **Saved teams** (menu): the recommended team, your in-game parties (add one by name and three species, or save
   one from the builder), a second team with no overlap, and more buildable trios, one line each with score
   and weak-spot counts. Every team opens its own page: roles with the moves used for scoring, members with
   status, the to-dos for its members, the meta Pokémon that beat two or all three (with who to swap to),
@@ -18,12 +18,15 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Roster** tab: every Pokémon as a status tile (ready, powering up, pending, wanted, XL gated, benched).
   Tap for rank, cost to the cap, moves, what it beats and loses to, and actions. Owned tiles come from
   scans at or under 1500 CP; add others by name or load the roster committed in the repo.
-- **Meta** tab: a team builder (any three Pokémon, scored live with roles, coverage grid and what you
-  would still need to catch; save as a party or add missing members to wanted; best-third suggestions),
-  the derived meta teams (each opens a team page), PvPoke's full rankings with search and type filter, and
-  **Raids**: the best PvE attackers per type (DPS, TDO, Elite TM moves, megas and shadows toggle) computed
-  by `scripts/build_pve_data.py` from the PokeMiners game master, with your scanned copies marked.
-- **Scans** tab: one button imports screenshots or a screen recording; the app solves level and IVs.
+- **Builder** tab: any three Pokémon, scored live with roles, coverage grid and what you would still need
+  to catch; save as a party or add missing members to wanted; best-third suggestions from your roster or
+  the meta; an AI coach conversation with tappable Pokémon names.
+- **≡ menu** (top left): saved teams, the derived meta teams (each opens a team page), PvPoke's full
+  rankings with search and type filter, **Raids** (the best PvE attackers per type: DPS, TDO, Elite TM
+  moves, megas and shadows toggle, computed by `scripts/build_pve_data.py` from the PokeMiners game
+  master, with your scanned copies marked), scans, trainer profile, sync and help. Every page has a
+  `#/…` URL, so Back, bookmarks and shared links work.
+- **Scans** (menu → Scans & import): one button imports screenshots or a screen recording; the app solves level and IVs.
   Each card is one compact row: IVs, IV% (sum out of 45) and GL rank (position among the 4096 IV spreads
   at the 1500 cap, with stat product vs #1), plus one status chip (ready / power-up cost / XL / over cap).
   Tap a card for its page: IV bars, Ultra League rank, all possible spreads, evolution preview, second-move
