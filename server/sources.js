@@ -106,9 +106,11 @@ export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) 
   }
   return {
     async current() {
-      if (cache && Date.now() - cache.t < TTL) return cache;
+      // a cache without Rocket lineups (parser fix just deployed, or Leek Duck was down) is retried after 10 minutes instead of 3 hours
+      const fresh = c => c && Date.now() - c.t < (c.rocket ? TTL : Math.min(TTL, 10 * 60e3));
+      if (fresh(cache)) return cache;
       if (!cache && db) { try { const row = await db.get('_system', 'sources'); if (row && row.data && Date.now() - row.data.t < TTL) cache = row.data; } catch {} }
-      if (cache && Date.now() - cache.t < TTL) return cache;
+      if (fresh(cache)) return cache;
       if (!loading) loading = refresh().finally(() => { loading = null; });
       if (cache) { loading.catch(() => {}); return cache; }        // serve stale while refreshing
       return loading;
