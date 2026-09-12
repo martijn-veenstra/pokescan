@@ -57,3 +57,13 @@ jobs:
           done
           echo "::error::health endpoint did not answer within 2 minutes"
           exit 1
+      - name: Report the live schedule sources (Leek Duck feeds and Team GO Rocket lineups)
+        env:
+          APP_URL: ${{ vars.APP_URL || 'https://pokescan-production.up.railway.app' }}
+        run: |
+          # the first call after a deploy builds the cache (Leek Duck pages), so allow a slow answer and never fail the deploy on it
+          if out=$(curl -sf --max-time 90 "$APP_URL/api/sources"); then
+            echo "$out" | python3 scripts/report_sources.py
+          else
+            echo "::warning::/api/sources did not answer in time"
+          fi
