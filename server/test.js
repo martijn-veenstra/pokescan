@@ -9,6 +9,13 @@ const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-sect
 <div class="pkmn-list-item"><div class="pkmn-list-img"><img src="y.png"></div><span class="pkmn-name">Mega Glalie</span></div></div>
 <h2 class="event-section-header" id="spawns">Wild Encounters</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Swablu</span><img class="shiny-icon"></div></div>
 <h2 class="event-section-header" id="shiny">Shiny</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Altaria</span></div></div></div></body></html>`;
+const ROCKET_HTML = `<html><body><div class="page-content"><h2>Team GO Rocket Grunt Lineups</h2>
+<div class="rocket-profile"><h3 class="name">Fire-type Grunt</h3><p class="quote">Do you know how hot Pokémon fire attacks can get?</p>
+<div class="lineup-info"><div class="slot slot-1"><div class="pkmn-list-item"><span class="pkmn-name">Vulpix</span></div><div class="pkmn-list-item"><span class="pkmn-name">Growlithe</span></div></div>
+<div class="slot slot-2"><div class="pkmn-list-item"><span class="pkmn-name">Ninetales</span></div></div><div class="slot slot-3"><div class="pkmn-list-item"><span class="pkmn-name">Arcanine</span></div></div></div></div>
+<div class="rocket-profile"><h3 class="name">Water-type Grunt</h3><div class="lineup-info"><div class="slot"><div class="pkmn-list-item"><span class="pkmn-name">Marill</span></div></div><div class="slot"><div class="pkmn-list-item"><span class="pkmn-name">Azumarill</span></div></div></div></div>
+<div class="rocket-profile"><h3 class="name">Cliff</h3><div class="lineup-info"><div class="slot"><div class="pkmn-list-item"><span class="pkmn-name">Aerodactyl</span></div></div><div class="slot"><div class="pkmn-list-item"><span class="pkmn-name">Vulpix</span></div></div></div></div>
+</div></body></html>`;
 const soon = new Date(Date.now() + 3600e3).toISOString(), later = new Date(Date.now() + 26 * 3600e3).toISOString();
 const fakeFetch = async (url) => {
   const json = o => ({ ok: true, status: 200, json: async () => o, text: async () => JSON.stringify(o) });
@@ -21,6 +28,7 @@ const fakeFetch = async (url) => {
     { eventID: 'mega', name: 'Mega Beedrill in Mega Raids', eventType: 'raid-battles', link: 'https://leekduck.example/events/mega/', start: soon, end: later, extraData: { raidbattles: { bosses: [{ name: 'Mega Beedrill' }] } } },
   ]);
   if (url.includes('/events/gofest/')) return { ok: true, status: 200, text: async () => GOFEST_HTML };
+  if (url.includes('rocket-lineups')) return { ok: true, status: 200, text: async () => ROCKET_HTML };
   return { ok: false, status: 404, text: async () => '', json: async () => ({}) };
 };
 const app = await buildServer({ passcode: 'test-code', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch });
@@ -108,6 +116,12 @@ assert.ok(!src.events.find(e => e.eventID === 'old').extraData, 'past events are
 assert.ok(!src.events.find(e => e.eventID === 'mega').extraData.page, 'structured events are left alone');
 assert.equal(src.enriched, 1);
 console.log('sources', { enriched: src.enriched, gofest: gofest.extraData.page });
+assert.ok(src.rocket && src.rocket.lineups.length === 3, 'three Rocket lineups parsed');
+const fire = src.rocket.lineups.find(l => /Fire/.test(l.who));
+assert.deepEqual(fire.slots, [['Vulpix', 'Growlithe'], ['Ninetales'], ['Arcanine']], 'slots kept apart');
+assert.equal(fire.type, 'fire'); assert.ok(/hot Pokémon fire/.test(fire.quote), 'grunt quote kept');
+assert.deepEqual(src.rocket.lineups.find(l => l.who === 'Cliff').slots, [['Aerodactyl'], ['Vulpix']]);
+assert.equal(app.sources.parseRocketPage('<html><body>nothing</body></html>'), null, 'unrecognised page → null');
 
 r = await app.inject({ method: 'GET', url: '/' });
 assert.equal(r.statusCode, 200);

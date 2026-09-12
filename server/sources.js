@@ -7,6 +7,7 @@ const KINDS = ['raids', 'eggs', 'research', 'events'];
 const TTL = 3 * 3600e3;
 const WINDOW_AHEAD = 21 * 864e5;
 const MAX_PAGES = 14;
+const ROCKET_URL = 'https://leekduck.com/rocket-lineups/';
 const UNSTRUCTURED = new Set(['pokemon-go-fest', 'event', 'raid-day', 'raid-hour', 'max-mondays', 'max-battles', 'season', 'go-tour', 'safari-zone', 'wild-area', 'city-safari', 'live-event']);
 
 const decode = s => String(s || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&eacute;/g, 'é').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
@@ -34,6 +35,32 @@ export function parseEventPage(html) {
     });
   }
   return out.raids.length || out.spawns.length || out.eggs.length ? out : null;
+}
+
+/* parseRocketPage(html) -> [{who, type, quote, slots:[[names],[names],[names]]}] or null.
+   Leek Duck's Rocket lineups page: one block per grunt type or leader (Arlo, Cliff, Sierra, Giovanni), the Pokémon of each of
+   the three slots listed as .pkmn-list-item / .pkmn-name like the event pages. Tolerant of markup drift: blocks are cut at
+   headings or "rocket-profile"-like containers, slots at "slot"-like containers, else the block's Pokémon go into one list. */
+export function parseRocketPage(html) {
+  if (!html) return null;
+  const content = (html.match(/<div[^>]*class="[^"]*page-content[^"]*"[^>]*>([\s\S]*)/) || [null, html])[1];
+  const starts = [...content.matchAll(/<(?:div|section|article)[^>]*class="[^"]*(?:rocket-profile|grunt-|leader-|profile)[^"]*"[^>]*>|<h[2-3][^>]*>/gi)].map(m => m.index);
+  if (starts.length < 3) return null;
+  const out = [];
+  for (let i = 0; i < starts.length; i++) {
+    const block = content.slice(starts[i], starts[i + 1] || content.length);
+    const names = [...block.matchAll(/class="[^"]*pkmn-name[^"]*"[^>]*>([\s\S]*?)<\//g)].map(m => decode(m[1])).filter(n => n && n.length <= 40);
+    if (!names.length) continue;
+    const title = decode((block.match(/<h[2-4][^>]*>([\s\S]*?)<\/h[2-4]>/i) || block.match(/class="(?:[^"]*\s)?(?:name|title|grunt-type|leader-name)(?:\s[^"]*)?"[^>]*>([\s\S]*?)<\//i) || [])[1]);
+    const quote = decode((block.match(/class="[^"]*quote[^"]*"[^>]*>([\s\S]*?)<\//i) || [])[1]);
+    const type = (title.match(/\b(normal|fire|water|grass|electric|ice|fighting|poison|ground|flying|psychic|bug|rock|ghost|dragon|dark|steel|fairy)\b/i) || [])[1];
+    const slotChunks = [...block.matchAll(/class="[^"]*slot[^"]*"/gi)].map(m => m.index);
+    let slots;
+    if (slotChunks.length >= 2) slots = slotChunks.map((at, j) => [...block.slice(at, slotChunks[j + 1] || block.length).matchAll(/class="[^"]*pkmn-name[^"]*"[^>]*>([\s\S]*?)<\//g)].map(m => decode(m[1])).filter(Boolean));
+    else slots = [names];
+    out.push({who: title || (type ? type[0].toUpperCase() + type.slice(1) + '-type Grunt' : 'Grunt'), type: type ? type.toLowerCase() : null, quote, slots: slots.filter(x => x.length)});
+  }
+  return out.length >= 3 ? out : null;
 }
 
 export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) {
@@ -64,6 +91,15 @@ export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) 
         if (log) log.warn ? log.warn({err: e.message, event: ev.eventID}, 'event page not read') : log.log('event page not read', ev.eventID, e.message);
       }
     }
+    // Team GO Rocket lineups (Shadow Pokémon): one fixed page; keep the previous parse when Leek Duck is slow or changed its markup
+    try {
+      const lineups = parseRocketPage(await (await get(ROCKET_URL, 10000)).text());
+      if (lineups) out.rocket = {t: Date.now(), lineups};
+      else throw new Error('no lineups recognised');
+    } catch (e) {
+      if (prev && prev.rocket) out.rocket = prev.rocket;
+      if (log) log.warn ? log.warn({err: e.message}, 'rocket lineups not read') : log.log('rocket lineups not read', e.message);
+    }
     cache = out;
     if (db) { try { await db.put('_system', 'sources', out); } catch {} }
     return out;
@@ -79,5 +115,6 @@ export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) 
     },
     refresh,
     parseEventPage,
+    parseRocketPage,
   };
 }

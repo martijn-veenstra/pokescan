@@ -41,6 +41,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **How to get** (Pokémon page): concrete routes instead of a bare schedule lookup: catch it (Leek Duck raids, eggs,
+  research, events), evolve a pre-evolution (candy cost from the game master in `data/evo.json`, the safe catch CP so it
+  stays league-legal, the pre-evolution's own sources, your own copies that would fit), and for Shadow Pokémon the Team
+  GO Rocket route with today's grunt and leader lineups (`/api/sources` reads Leek Duck's Rocket lineups page; the
+  server keeps the previous parse when the page is unreadable) plus the purification trade-off.
 - **Battle log** (menu): log GO Battle League battles in three taps (team, their lead, win or loss), type the rating
   after a set or import the end-of-set / rating screenshot (best effort OCR), and see your rating over time, results
   per team, per opposing lead ("trouble") and per member. Team pages show the team's real record; the coach and the AI

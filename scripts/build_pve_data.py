@@ -184,8 +184,44 @@ def build(gm):
                       "rank": "DPS^3 x TDO, boss weak to the type (x1.6)", "source": GM_URL}}
 
 
+def build_evo(gm):
+    """data/evo.json: evolution candy costs, which species exist as Shadow, purification costs. Ids like PvPoke's (vulpix, vulpix_alolan)."""
+    evolve, shadow, purify = {}, set(), {}
+    for t in gm:
+        ps = t.get("data", {}).get("pokemonSettings")
+        if not ps or not isinstance(ps.get("pokemonId"), str):
+            continue
+        pid = ps["pokemonId"]
+        suf = form_suffix(pid, ps.get("form", ""))
+        if suf is None:
+            continue
+        pid_l = pid.lower() + ("_" + suf if suf else "")
+        for br in ps.get("evolutionBranch", []) or []:
+            if not br.get("evolution") or br.get("temporaryEvolution"):
+                continue
+            to_suf = form_suffix(br["evolution"], br.get("form", "")) or ""
+            to = br["evolution"].lower() + ("_" + to_suf if to_suf else "")
+            entry = {"to": to, "candy": br.get("candyCost", 0)}
+            if br.get("candyCostPurified"):
+                entry["purified"] = br["candyCostPurified"]
+            lst = evolve.setdefault(pid_l, [])
+            if not any(x["to"] == to for x in lst):
+                lst.append(entry)
+        if "shadow" in ps:
+            shadow.add(pid_l)
+            sh = ps["shadow"]
+            purify[pid_l] = {"dust": sh.get("purificationStardustNeeded", 0), "candy": sh.get("purificationCandyNeeded", 0)}
+    return {"evolve": dict(sorted(evolve.items())), "shadow": sorted(shadow), "purify": dict(sorted(purify.items()))}
+
+
 def main():
     gm = json.load(open(sys.argv[1])) if len(sys.argv) > 1 else fetch_json(GM_URL)   # optional: a local copy of the game master
+    evo = build_evo(gm)
+    import datetime as _dt
+    evo["generated"] = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
+    evo_path = OUT.parent / "evo.json"
+    evo_path.write_text(json.dumps(evo, separators=(",", ":"), ensure_ascii=False))
+    print(f"wrote data/evo.json: {len(evo['evolve'])} evolving species, {len(evo['shadow'])} shadow-able, {evo_path.stat().st_size // 1024} KB", file=sys.stderr)
     data = build(gm)
     import datetime
     data["generated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")

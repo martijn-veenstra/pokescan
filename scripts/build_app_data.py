@@ -126,10 +126,17 @@ def main(argv=None):
         for evo in gp.get("family", {}).get("evolutions", []):
             if evo in pokemon:
                 prevo.setdefault(evo, gp["speciesId"])
+    # a ranked Shadow evolves from the Shadow of its pre-evolution (Ninetales (Shadow) <- Vulpix (Shadow)); PvPoke only lists non-shadow families
+    for evo in list(pokemon):
+        if evo.endswith("_shadow") and evo[:-7] in prevo:
+            prevo.setdefault(evo, prevo[evo[:-7]] + "_shadow")
     for pre in set(prevo.values()):
         if pre not in pokemon and pre not in extra:
-            gp = gm_pokemon[pre]
-            extra[pre] = {"name": gp["speciesName"], "types": [t for t in gp["types"] if t != "none"]}
+            base = pre[:-7] if pre.endswith("_shadow") else pre
+            gp = gm_pokemon.get(pre) or gm_pokemon.get(base)
+            if not gp:
+                continue
+            extra[pre] = {"name": gp["speciesName"] + (" (Shadow)" if pre.endswith("_shadow") and "Shadow" not in gp["speciesName"] else ""), "types": [t for t in gp["types"] if t != "none"]}
 
     # Derived meta teams (data/pvpoke-team-comps.json, produced by generate_pvpoke_team_comps.py)
     meta_teams = []

@@ -110,6 +110,10 @@ function forSpecies(names, opts) {
         push({kind: ev.eventType.startsWith('raid') ? 'raid' : 'event', name: w.name, what, now: isNow, when, sort, start: ev.start, remote: ev.eventType.startsWith('raid') && !b.shadow, note: ev.eventType.startsWith('max') ? 'Dynamax form, in person' : ''}); }
     }
   }
+  if (opts.shadow) {                          // Shadow Pokémon: Team GO Rocket grunts and leaders (lineups read from Leek Duck by the server)
+    for (const lu of ((S.rocket || {}).lineups) || []) lu.slots.forEach((slot, i) => { for (const n of slot) { const h = hit(n); if (!h) continue;
+      push({kind: 'rocket', name: h.w.name, what: `${lu.who}${lu.slots.length > 1 ? ` · slot ${i + 1}` : ''}`, who: lu.who, slot: lu.slots.length > 1 ? i + 1 : null, quote: lu.quote || '', now: true, when: 'Team GO Rocket now', sort: 0, remote: false, shiny: false, note: ''}); } });
+  }
   if (!opts.shadow) {
     for (const e of S.eggs || []) { const h = hit(e.name); if (!h) continue;
       push({kind: 'egg', name: h.w.name, what: `${e.eggType} eggs${e.isAdventureSync ? ' (Adventure Sync)' : e.isGiftExchange ? ' (gifts)' : ''}`, now: true, when: 'hatching now', shiny: !!e.canBeShiny, sort: 1, remote: false, note: e.isRegional ? 'regional' : ''}); }
@@ -120,11 +124,12 @@ function forSpecies(names, opts) {
 }
 function hint(names, opts) {                  // one short phrase for a Next-moves line, or ''
   const e = forSpecies(names, opts)[0]; if (!e) return '';
-  return e.kind === 'raid' ? `${e.name} ${e.what.toLowerCase()} ${e.when}` : e.kind === 'egg' ? `${e.name} from ${e.what}` : e.kind === 'research' ? `${e.name} from field research` : `${e.name} ${e.what} ${e.when}`;
+  return e.kind === 'raid' ? `${e.name} ${e.what.toLowerCase()} ${e.when}` : e.kind === 'egg' ? `${e.name} from ${e.what}` : e.kind === 'research' ? `${e.name} from field research` : e.kind === 'rocket' ? `Shadow ${e.name} from ${e.what}` : `${e.name} ${e.what} ${e.when}`;
 }
 function onChange(f) { listeners.push(f); }
 /* raids(): the bosses in raids right now (Leek Duck via ScrapedDuck): name, tier, types (lowercase names), shiny */
 function raids() { return ((S && S.raids) || []).map(r => ({name: r.name, tier: r.tier, types: (r.types || []).map(t => (t.name || '').toLowerCase()).filter(Boolean), shiny: !!r.canBeShiny})); }
-window.Sources = {load, forSpecies, hint, onChange, raids, ready: () => !!S, updated: () => S ? S.t : 0, error: () => error};
+function rocket() { return (S && S.rocket && S.rocket.lineups) || []; }
+window.Sources = {load, forSpecies, hint, onChange, raids, rocket, rocketAt: () => (S && S.rocket && S.rocket.t) || 0, ready: () => !!S, updated: () => S ? S.t : 0, error: () => error};
 window.addEventListener('load', () => setTimeout(() => load(false), 800));
 })();

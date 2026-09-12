@@ -315,3 +315,9 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .wl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .wl button{border:none;border-radius:14px;padding:16px 10px;font-family:Sora,sans-serif;font-weight:800;font-size:18px}
 .wl .win{background:linear-gradient(135deg,#3BC489,#2BA8A0);color:#062018}.wl .loss{background:rgba(240,101,79,.22);color:#F59A8B;border:1px solid rgba(240,101,79,.4)}
+
+/* ---------- How to get: routes ---------- */
+.avb .rt{padding:8px 0;border-top:1px solid var(--line)}.avb .rt:first-child{border-top:none;padding-top:2px}
+.avb .rh{font-weight:700;font-size:14px;margin-bottom:4px}.avb .rh small{color:var(--dim);font-weight:500;font-size:12px;margin-left:4px}
+.avb .rf{font-size:13px;line-height:1.45;margin:3px 0}.avb .rf.dim{color:var(--dim);font-size:12.5px}.avb .rf.good{color:var(--green)}
+.avb .rf a{color:var(--green)}

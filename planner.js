@@ -330,7 +330,9 @@ function renderToday() {
 function hintFor(x) {                           // availability phrase for a "get" item
   if (!x.id.startsWith('get:') || !window.Sources || !Sources.ready()) return '';
   const id = x.id.slice(4), hnt = Sources.hint(family(id).map(nm), {shadow: /_shadow$/.test(id)});
-  return hnt ? ` · <span class="good">${esc(hnt)}</span>` : '';
+  if (hnt) return ` · <span class="good">${esc(hnt)}</span>`;
+  const pre = family(id)[1]; if (pre && /_shadow$/.test(id)) return ` · <span class="dim">Shadow ${esc(nm(pre))} from Team GO Rocket, then evolve</span>`;
+  return '';
 }
 function moveCard(x) {
   const menu = ctxMenu([
@@ -915,7 +917,58 @@ function bundleAvail(list, species) {          // fold a species' entries into a
   if (wild.length) out.push({label: 'Wild', now: wild.some(e => e.now), html: asForm(wild) + uniq(wild.map(e => `${esc(e.what.replace(/^wild spawns\s*\((.*)\)$/i, '$1 spawns'))}${e.when ? ` <span>${esc(e.when)}</span>` : ''}`)).join(' · ') + flags(wild)});
   const res = grp('research');
   if (res.length) out.push({label: 'Research', now: true, html: asForm(res) + uniq(res.map(e => `“${esc(e.when)}”`)).join(', ') + flags(res)});
+  const rk = grp('rocket');
+  if (rk.length) out.push({label: 'Rocket', now: true, html: asForm(rk) + uniq(rk.map(e => esc(e.what))).join(' · ') + ' <span class="dim">· in person, Shadow</span>'});
   return out;
+}
+/* ---------- How to get a Pokémon: catch it, evolve a pre-evolution (candy, safe catch CP, its sources), or Team GO Rocket for shadows ---------- */
+let EVO = JSON.parse(localStorage.getItem('evo') || 'null');
+async function loadEvo() {
+  try { const r = await fetch('data/evo.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}); if (r.ok) { EVO = await r.json(); localStorage.setItem('evo', JSON.stringify(EVO)); if (UI.mon && onView() === 'mon') renderMon(); } } catch {}
+}
+const evoBase = id => id.replace(/_shadow$/, '');
+function evoCandy(preId, toId) {              // candy to evolve pre → to, from the game master (shadow ids share the base species' entry)
+  const lst = EVO && EVO.evolve && EVO.evolve[evoBase(preId)]; if (!lst) return null;
+  const hit = lst.find(x => x.to === evoBase(toId)) || (lst.length === 1 ? lst[0] : null); return hit ? hit.candy : null;
+}
+function ownedCopies(preId) {                  // your live scans of this species that fit the league after evolving
+  const sp = evoBase(preId).split('_')[0].toUpperCase(), sh = /_shadow$/.test(preId);
+  return results.filter(r => !r.superseded && r.species === sp && !!r.shadow === sh && r.combos && r.combos.length && r.cp);
+}
+function howToGet(m, id) {
+  const e = APP.pokemon[id], name = e.name, shadow = /_shadow$/.test(id), fam = family(id);
+  const ready = window.Sources && Sources.ready(), srcOf = pid => ready ? Sources.forSpecies([nm(pid)], {shadow}) : null;
+  const block = (label, now, html) => `<div class="avl ${now ? 'now' : ''}"><span class="lb">${label}</span><span class="tx">${html}</span></div>`;
+  const routes = [];
+  // 1 · catch it as it is
+  const direct = srcOf(id);
+  if (direct && direct.length) routes.push({live: true, order: 0, html: `<div class="rt"><div class="rh">Catch it <small>as ${esc(name)}</small></div>${bundleAvail(direct, name).map(l => block(l.label, l.now, l.html)).join('')}</div>`});
+  // 2 · evolve a pre-evolution
+  fam.slice(1).forEach((pre, i) => {
+    const to = fam[i], candy = evoCandy(pre, to), sc = DATA.stats[evoBase(pre).split('_')[0].toUpperCase()] ? safeCap(pre, to) : null, cs = candidateSearch(to);
+    const src = srcOf(pre), lines = src && src.length ? bundleAvail(src, nm(pre)).map(l => block(l.label, l.now, l.html)).join('') : '';
+    const mine = ownedCopies(pre).map(r => { const b = bestOf2(r), eb = evoBaseStats(to); const cp = eb ? calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) : null; return {r, cp}; }).filter(x => x.cp && x.cp <= LEAGUE.cp).sort((a, b) => b.cp - a.cp);
+    let facts = `<div class="rf">${shadow ? 'Shadow evolution keeps the Shadow bonus · ' : ''}${candy ? `<b>${candy}</b> candy` : 'candy cost unknown'}${sc ? ` · catch one ≤ <b>${sc.safe}</b> CP so it stays under ${LEAGUE.cp} as ${esc(nm(to))} <span class="dim">(${sc.safe + 1}–${sc.max} CP only with the right IVs)</span>` : sc === null && DATA.stats[evoBase(pre).split('_')[0].toUpperCase()] ? ' · any copy stays legal after evolving' : ''}</div>`;
+    if (mine.length) facts += `<div class="rf good">You have a ${esc(nm(pre))} at ${mine[0].r.cp} CP: evolved it is about ${mine[0].cp} CP as ${esc(nm(to))}.</div>`;
+    if (cs && !shadow) facts += `<div class="srchi" style="margin-top:4px"><code>${esc(cs.q)}</code><button onclick="Planner.copyText(${attr(cs.q)},this)">Copy</button></div>`;
+    routes.push({live: !!lines, order: 1 + i, html: `<div class="rt"><div class="rh">Evolve <b>${esc(nm(pre))}</b> → ${esc(nm(to))}</div>${facts}${lines || (shadow ? '' : `<div class="rf dim">${ready ? `${esc(nm(pre))} is not in raids, eggs, research or announced events right now; wild spawns are not listed.` : 'Loading the schedule…'}</div>`)}</div>`});
+  });
+  // 3 · shadows: Team GO Rocket
+  if (shadow) {
+    const targets = fam.slice().reverse(), lineups = ready ? Sources.rocket() : [], hits = [];
+    for (const lu of lineups) lu.slots.forEach((slot, si) => { for (const n of slot) for (const t of targets) if (n.toLowerCase().replace(/\s*\(.*\)$/, '') === nm(evoBase(t)).toLowerCase().replace(/\s*\(.*\)$/, '')) hits.push({who: lu.who, slot: lu.slots.length > 1 ? si + 1 : null, quote: lu.quote, t}); });
+    const pu = EVO && EVO.purify && EVO.purify[evoBase(fam[fam.length - 1])], base = APP.pokemon[evoBase(id)];
+    let html = `<div class="rf">Shadow Pokémon come from <b>Team GO Rocket</b>: beat a grunt or leader whose lineup has ${targets.map(t => `Shadow ${esc(nm(evoBase(t)))}`).join(' or ')}, catch it${fam.length > 1 ? ', then evolve' : ''}.</div>`;
+    if (hits.length) html += `<div class="chips" style="margin:6px 0 2px">${hits.map(h => `<span class="chip ok" title="${esc(h.quote || '')}">${esc(h.who)}${h.slot ? ` · slot ${h.slot}` : ''} <span style="opacity:.7">${esc(nm(evoBase(h.t)))}</span></span>`).join('')}</div><div class="rf dim">Lineups today, from Leek Duck${Sources.rocketAt ? ' (' + when(Sources.rocketAt()) + ')' : ''}. Grunt lineups rotate every few weeks.</div>`;
+    else html += `<div class="rf dim">${lineups.length ? `Not in today's grunt or leader lineups.` : 'Lineups rotate; '}<a href="https://leekduck.com/rocket-lineups/" target="_blank" rel="noopener">Leek Duck's Rocket lineups</a> show who has it right now.</div>`;
+    if (pu) html += `<div class="rf dim">Purifying (${fmt(pu.dust)} dust · ${pu.candy} candy) makes it the normal form${base ? `: meta #${base.rank} instead of #${e.rank}` : ''}.</div>`;
+    routes.push({live: hits.length > 0, order: hits.length ? -1 : 9, html: `<div class="rt"><div class="rh">Team GO Rocket</div>${html}</div>`});
+  }
+  routes.sort((a, b) => (b.live - a.live) || (a.order - b.order));
+  let h = `<div class="sec">How to get ${esc(name)} <small>Leek Duck schedule · game master</small></div>`;
+  if (!routes.length) h += `<div class="note">${ready ? `Not in raids, eggs, research or announced events right now. Wild spawns are not listed.` : (window.Sources && Sources.error() ? 'Schedule not available: ' + esc(Sources.error()) : 'Loading the raid and egg schedule…')}</div>`;
+  else h += `<div class="team avb" style="cursor:default">${routes.map(r => r.html).join('')}</div>`;
+  return h;
 }
 function availBlock(id, list, opts) {          // a species block for Today: name, then its bundled channels
   opts = opts || {};
@@ -1396,8 +1449,7 @@ function monInner(m, id, noHead) {
       ['Status', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${benched && st ? ' ' + chip('benched') : ''}${o && o.manual ? ' <span class="dim">added by hand</span>' : ''}`],
       ['In teams', `${teamsIn} of ${rep.todayAll.length} buildable from your roster`],
     ];
-    const cs = !o ? candidateSearch(id) : null;
-    rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span>${cs ? `<span class="srchi"><code>${esc(cs.q)}</code><button onclick="Planner.copyText(${attr(cs.q)},this)">Copy</button></span>` : ''}<div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under 1500 CP${cs ? `, and ${esc(nm(cs.pre))} that evolve under the cap` : ''}</div>`]);
+    rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span><div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under ${LEAGUE.cp} CP; the catch string for a pre-evolution is under How to get</div>`]);
     h += `<div class="sec">In your roster</div><div class="team card" style="cursor:default">${kv(rrows)}</div>`;
   }
   // roster fit
@@ -1419,14 +1471,7 @@ function monInner(m, id, noHead) {
   h += `<div class="team" style="cursor:default"><div class="nm" style="font-size:13px">Loses to <span class="dim">most dangerous first</span></div><div class="chips">${losses.slice(0, 10).map(mchip).join('') || '<span class="dim">nothing in the meta beats it clearly</span>'}</div>
     <div class="nm" style="font-size:13px;margin-top:10px">Beats</div><div class="chips">${wins.slice(0, 10).map(mchip).join('') || '<span class="dim">no clear wins</span>'}</div>
     <div class="note" style="margin:8px 0 0">Ratings: PvPoke's published matchups where available, type effectiveness and rank otherwise. Tap a name for its page.</div></div>`;
-  // where to get it
-  if (!o) {
-    const av = availability(id);
-    h += `<div class="sec">Where to get ${esc(e.name)} <small>Leek Duck schedule</small></div>`;
-    if (av === null) h += `<div class="note">${window.Sources && Sources.error() ? 'Schedule not available: ' + esc(Sources.error()) : 'Loading the raid and egg schedule…'}</div>`;
-    else if (!av.length) h += `<div class="note">Not in raids, eggs, research or announced events right now (checked ${esc(family(id).map(nm).join(', '))}). Wild spawns are not listed.</div>`;
-    else h += `<div class="team avb" style="cursor:default">${availLines(av, e.name)}</div>`;
-  }
+  if (!o) h += howToGet(m, id);                // how to get it: catch, evolve (with candy and safe CP), Team GO Rocket for shadows
   return h;
 }
 function dropMon(kind, id) { delete ROSTER[kind][id]; saveRoster(); refresh(); renderMon(); }
@@ -1769,5 +1814,5 @@ window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, t
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
-route(); loadCups(); loadChanges();
+route(); loadCups(); loadChanges(); loadEvo();
 })();
