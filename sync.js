@@ -33,6 +33,7 @@ async function detect() {
 function local(kind) {
   if (kind === 'scans') return results;
   if (kind === 'roster') return window.Planner ? Planner.ROSTER : JSON.parse(localStorage.getItem('roster') || '{}');
+  if (kind === 'battles') return window.Planner ? Planner.BATTLES : JSON.parse(localStorage.getItem('battles') || '[]');
   return null;
 }
 function applyRemote(kind, data) {
@@ -51,6 +52,7 @@ function applyRemote(kind, data) {
     if (added && typeof render === 'function') render();
     return added > 0;
   }
+  if (kind === 'battles') { return !!(window.Planner && Planner.mergeBattles(data)); }
   if (kind === 'roster') {
     const R = local('roster');
     let changed = false;
@@ -76,7 +78,7 @@ async function pull() {
   if (!r.ok) throw new Error('server ' + r.status);
   const {state} = await r.json();
   let changed = 0;
-  for (const kind of ['scans', 'roster']) if (state[kind]) {
+  for (const kind of ['scans', 'roster', 'battles']) if (state[kind]) {
     if (applyRemote(kind, state[kind].data)) changed++;
     S.base[kind] = state[kind].updatedAt;
   }
@@ -117,7 +119,7 @@ async function connect(code) {
     if (r.status === 401) throw new Error(authErr());
     if (!r.ok) throw new Error('server ' + r.status);
     await pull();
-    dirty.add('scans'); dirty.add('roster');
+    dirty.add('scans'); dirty.add('roster'); dirty.add('battles');
     await flush();
     S.connectedAt = Date.now(); save();
   } catch (e) { lastError = e.message; if (e.message === 'wrong passcode') { S.code = ''; save(); } }
@@ -127,7 +129,7 @@ async function onUser(user) {                  // Clerk: signed in, signed out, 
   if (!user) { S.base = {}; S.last = {}; lastError = ''; save(); paint(); if (window.Planner) Planner.refresh(); return; }
   if (S.user && S.user !== user.id) { S.base = {}; S.last = {}; }   // never merge one account's local copy into another's server data by accident
   S.user = user.id; save(); lastError = '';
-  try { await pull(); dirty.add('scans'); dirty.add('roster'); await flush(); S.connectedAt = Date.now(); save(); }
+  try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); await flush(); S.connectedAt = Date.now(); save(); }
   catch (e) { lastError = e.message; }
   paint(); if (window.Planner) Planner.refresh();
 }
@@ -136,7 +138,7 @@ function disconnect() { if (clerkMode()) { Auth.signOut(); return; } S.code = ''
 async function syncNow() {
   if (!signedIn()) return;
   busy = true; paint();
-  try { await pull(); dirty.add('scans'); dirty.add('roster'); busy = false; await flush(); lastError = ''; }
+  try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); busy = false; await flush(); lastError = ''; }
   catch (e) { lastError = e.message; busy = false; }
   paint();
 }

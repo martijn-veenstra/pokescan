@@ -41,6 +41,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **Battle log** (menu): log GO Battle League battles in three taps (team, their lead, win or loss), type the rating
+  after a set or import the end-of-set / rating screenshot (best effort OCR), and see your rating over time, results
+  per team, per opposing lead ("trouble") and per member. Team pages show the team's real record; the coach and the AI
+  review get the history next to the meta numbers. The log syncs with your account like scans.
 - **Raids → Pick a boss**: the bosses in raids right now (Leek Duck) or any Pokémon by name; the page shows its
   weaknesses, ranks **your own scans** against it (real level, IVs and scanned moves; unscanned moves use the best
   possible set and say so) by DPS³ × TDO, and lists the best attackers in the game for its weak types.

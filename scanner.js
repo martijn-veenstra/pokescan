@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.49';
+const APP_VERSION='9.50';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -601,6 +601,24 @@ async function readMovesScreen(ctx, W, H, skipKey){   // full-frame OCR for a sc
 }
 
 /* ---------- trainer profile screenshot: name and level ---------- */
+/* GO Battle League screens: the end-of-set screen (wins out of 5, rating) and the post-battle screen (rating and its change).
+   Best effort: returns {rating, wins, losses} with whatever was legible, or null when neither a rating nor a set result was found. */
+async function readBattle(file){
+  const bmp=await createImageBitmap(file);
+  const cv=$('cv'); cv.width=bmp.width; cv.height=bmp.height;
+  const ctx=cv.getContext('2d',{willReadFrequently:true}); ctx.drawImage(bmp,0,0);
+  const W=bmp.width, H=bmp.height, wk=await getWorker();
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  const c2=$('cv2'), sc=Math.min(1, 800/W); c2.width=Math.round(W*sc); c2.height=Math.round(H*sc);
+  const g=c2.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c2.width,c2.height); g.drawImage(ctx.canvas,0,0,c2.width,c2.height);
+  const text=((await wk.recognize(c2)).data.text||'').replace(/[|]/g,'1');
+  const out={text};
+  const rt=text.match(/rating\D{0,20}?(\d{3,4})(?!\d)/i) || text.match(/(\d{3,4})\s*\n?\s*rating/i); if(rt) out.rating=parseInt(rt[1]);
+  const delta=text.match(/([+\-−]\s?\d{1,3})(?!\d)/); if(delta&&out.rating) out.delta=parseInt(delta[1].replace('−','-').replace(/\s/g,''));
+  const set=text.match(/(\d)\s*\/\s*5\b/) || text.match(/\bwins?\D{0,12}(\d)\b(?!\s*\/)/i); if(set){ out.wins=parseInt(set[1]); if(out.wins>=0&&out.wins<=5) out.losses=5-out.wins; else delete out.wins; }
+  if(out.rating===undefined && out.wins===undefined) return null;
+  return out;
+}
 async function readProfile(ctx, W, H){
   const wk=await getWorker();
   await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
@@ -1099,15 +1117,15 @@ function planFor(r,best){                       // the evolution chain of a scan
   return lines.length?`<div class="plan">${lines.join('<br>')}</div>`:'';
 }
 
-const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups'];
-const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','scans','matchups'];
-const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:''};
+const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups','battles'];
+const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','scans','matchups','battles'];
+const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',battles:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:''};
 function showView(t){                              // switch the visible page; navigation goes through Planner.nav so the URL hash stays in step
   if(!PAGES.includes(t)) t='today';
   for(const k of PAGES){ const v=$('view-'+k); if(v) v.classList.toggle('on',k===t); }
   for(const k of ['today','builder','roster']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',BAR_FOR[t]===k); }
   if(TOP_PAGES.includes(t)) localStorage.setItem('tab',t);
-  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('meta'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon,matchups:P.renderMatchups}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
+  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('meta'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon,matchups:P.renderMatchups,battles:P.renderBattles}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
 }
 function showTab(t){ if(window.Planner&&Planner.nav&&TOP_PAGES.includes(t)) Planner.nav('#/'+t); else showView(t); }
 if(!location.hash) showView(localStorage.getItem('tab')||'today');

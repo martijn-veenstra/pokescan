@@ -522,8 +522,8 @@ function renderTeamsInner(el) {
   el.innerHTML = h;
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
-const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups'];
-const PAGE_LABEL = {today: 'Today', builder: 'Builder', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans', matchups: 'Matchups'};
+const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles'];
+const PAGE_LABEL = {today: 'Today', builder: 'Builder', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans', matchups: 'Matchups', battles: 'Battle log'};
 const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
@@ -589,6 +589,7 @@ function teamInner(m, ids, name) {
   }).join('') + '</div>';
   // to-dos for these members
   const todo = openMoves(m).filter(x => (x.species && ids.includes(x.species)) || (x.id.startsWith('get:') && ids.includes(x.id.slice(4))) || (x.id.startsWith('park:') && ids.includes(x.id.slice(5))));
+  { const rr = teamRecord(ids); if (rr) h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px">Your record <small>GO Battle League, logged by you</small></div><div><b style="font-family:Sora,sans-serif;font-size:18px;color:var(--green)">${rec(rr)}</b>${rr.worst.length ? ` <span class="dim">· trouble leads: ${rr.worst.map(x => `${esc(nm(x.id))} ${rec(x)}`).join(', ')}</span>` : ''} <a href="#" class="dim" style="font-size:12px" onclick="Planner.nav('#/battles');return false">log</a></div></div>`; }
   h += reviewCard(ids, !!saved);
   h += `<div class="sec">To do for this team</div>`;
   h += todo.length ? todo.map(moveCard).join('') : `<div class="note">Nothing open: the members you own are at the cap and carry the right moves.</div>`;
@@ -648,6 +649,7 @@ function coachContext(m) {
     bestTeams: rep.today.slice(0, 5).map(team), parties: rep.tagged.map(t => `${t.name}: ${team(t)}`),
     nextMoves: openMoves(m).slice(0, 8).map(x => `${x.title} — ${x.sub}`),
     topMeta: L.meta.slice(0, 30).map(id => `${nm(id)} #${APP.pokemon[id].rank}`),
+    battles: battleSummaryText(null) || undefined,
     scoring: 'Team score = mean best matchup rating vs the meta (PvPoke published matchups, type effectiveness otherwise) minus 12 per unanswered meta Pokémon and 6 per meta Pokémon that beats two members. Meta best is about ' + Math.round((APP.benchmark || {best: 721}).best) + '.',
   };
 }
@@ -745,6 +747,7 @@ function builderContext(m, L, filled) {
     candidatesFromRoster: filled.length < 3 ? cand(mine) : undefined,
     candidatesFromMeta: filled.length < 3 ? cand(APP.meta.slice(0, 60).filter(distinct)) : undefined,
   };
+  const hist = battleSummaryText(filled.length === 3 ? filled : null); if (hist) ctx.builder.history = hist;
   delete ctx.nextMoves;
   return ctx;
 }
@@ -990,6 +993,131 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
+/* ---------- Battle log: GO Battle League results by hand (three taps) or from end-of-set screenshots; rating over time ---------- */
+let BATTLES = JSON.parse(localStorage.getItem('battles') || '[]');
+const BL = Object.assign({team: 'builder', lead: null, q: ''}, JSON.parse(localStorage.getItem('bl') || '{}'));
+const saveBL = () => localStorage.setItem('bl', JSON.stringify(BL));
+const saveBattles = () => { BATTLES.sort((a, b) => a.t - b.t); localStorage.setItem('battles', JSON.stringify(BATTLES)); if (window.Sync) Sync.touch('battles'); };
+function mergeBattles(list) {                 // sync: append entries this device has not seen (by id)
+  const have = new Set(BATTLES.map(b => b.id)); let n = 0;
+  for (const b of list || []) if (b && b.id && !have.has(b.id)) { BATTLES.push(b); have.add(b.id); n++; }
+  if (n) { BATTLES.sort((a, b) => a.t - b.t); localStorage.setItem('battles', JSON.stringify(BATTLES)); dirty = true; }
+  return n > 0;
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function blTeamIds() { if (BL.team !== 'builder' && ROSTER.tagged[BL.team]) return ROSTER.tagged[BL.team].slice(); return UI.build.slots.filter(Boolean); }
+function logBattle(result) {
+  const ids = blTeamIds(); if (ids.length !== 3) { status('Pick a team of three first'); return; }
+  BATTLES.push({id: newId(), t: Date.now(), league: LEAGUE.slug, team: BL.team === 'builder' ? null : BL.team, ids, lead: BL.lead || null, result, src: 'tap'});
+  BL.lead = null; saveBL(); saveBattles(); renderBattles(); status(result === 'W' ? 'Win logged' : 'Loss logged');
+}
+function logRating(v, extra) {
+  const rating = parseInt(v); if (!(rating > 0 && rating < 5000)) { status('Rating must be a number like 2150'); return; }
+  BATTLES.push(Object.assign({id: newId(), t: Date.now(), league: LEAGUE.slug, rating, src: 'rating'}, extra || {}));
+  saveBattles(); renderBattles(); status(`Rating ${rating} saved`);
+}
+function delBattle(id) { BATTLES = BATTLES.filter(b => b.id !== id); saveBattles(); renderBattles(); }
+async function importBattle(files) {
+  if (!files || !files.length || typeof readBattle !== 'function') return;
+  let n = 0;
+  for (const f of files) {
+    try {
+      status('Reading ' + f.name + '…');
+      const r = await readBattle(f);
+      if (!r) { status(`${f.name}: no rating or set result found; log it by hand`); continue; }
+      const ids = blTeamIds();
+      BATTLES.push({id: newId(), t: f.lastModified || Date.now(), league: LEAGUE.slug, rating: r.rating, delta: r.delta, set: r.wins !== undefined ? {w: r.wins, l: r.losses} : undefined, team: BL.team === 'builder' ? null : BL.team, ids: ids.length === 3 ? ids : undefined, src: 'ocr'});
+      n++; status(`${f.name}: ${r.rating ? 'rating ' + r.rating : ''}${r.wins !== undefined ? ` · ${r.wins}/5 wins` : ''}`);
+    } catch (e) { status(`${f.name}: ${e.message || e}`); }
+  }
+  if (n) { saveBattles(); renderBattles(); }
+}
+const wl = arr => { const o = {w: 0, l: 0}; for (const b of arr) { if (b.result === 'W') o.w++; else if (b.result === 'L') o.l++; if (b.set) { o.w += b.set.w; o.l += b.set.l; } } return o; };
+const rec = o => `${o.w}-${o.l}`;
+const teamKey = ids => ids.slice().sort().join('+');
+function battleStats(league) {
+  const all = BATTLES.filter(b => !league || b.league === league), fights = all.filter(b => b.result || b.set);
+  const byTeam = {}, byLead = {}, byMember = {};
+  for (const b of fights) {
+    if (b.ids) { const k = teamKey(b.ids); (byTeam[k] = byTeam[k] || {ids: b.ids, name: b.team, list: []}).list.push(b); for (const id of b.ids) (byMember[id] = byMember[id] || []).push(b); }
+    if (b.lead && b.result) (byLead[b.lead] = byLead[b.lead] || []).push(b);
+  }
+  const ratings = all.filter(b => b.rating).sort((a, b) => a.t - b.t);
+  return {all, fights, total: wl(fights), ratings, now: ratings.length ? ratings[ratings.length - 1] : null,
+    teams: Object.values(byTeam).map(t => Object.assign(t, wl(t.list))).sort((a, b) => (b.w + b.l) - (a.w + a.l)),
+    leads: Object.entries(byLead).map(([id, list]) => Object.assign({id}, wl(list))).sort((a, b) => (a.w / (a.w + a.l)) - (b.w / (b.w + b.l)) || (b.w + b.l) - (a.w + a.l)),
+    members: Object.entries(byMember).map(([id, list]) => Object.assign({id}, wl(list))).sort((a, b) => (b.w + b.l) - (a.w + a.l))};
+}
+function teamRecord(ids) {                     // for team pages and the coach: this trio's real results in the current league
+  const st = battleStats(LEAGUE.slug), k = teamKey(ids), t = st.teams.find(x => teamKey(x.ids) === k); if (!t) return null;
+  const leads = {}; for (const b of t.list) if (b.lead && b.result) { (leads[b.lead] = leads[b.lead] || {w: 0, l: 0})[b.result === 'W' ? 'w' : 'l']++; }
+  const worst = Object.entries(leads).map(([id, o]) => Object.assign({id}, o)).filter(x => x.l >= x.w).sort((a, b) => (b.l - b.w) - (a.l - a.w)).slice(0, 3);
+  return {w: t.w, l: t.l, worst};
+}
+function battleSummaryText(ids) {
+  const r = ids ? teamRecord(ids) : null, st = battleStats(LEAGUE.slug);
+  if (!st.fights.length && !st.ratings.length) return null;
+  const out = {};
+  if (r) out.thisTeam = `${rec(r)} in GO Battle League${r.worst.length ? '; loses to leads: ' + r.worst.map(x => `${nm(x.id)} ${rec(x)}`).join(', ') : ''}`;
+  out.overall = `${rec(st.total)} over ${st.fights.length} logged battles/sets`;
+  if (st.teams.length) out.teams = st.teams.slice(0, 4).map(t => `${t.name || t.ids.map(nm).join(' / ')}: ${rec(t)}`);
+  if (st.leads.length) out.worstLeads = st.leads.filter(x => x.w + x.l >= 2).slice(0, 5).map(x => `${nm(x.id)}: ${rec(x)}`);
+  if (st.now) { const weekAgo = st.ratings.filter(b => b.t < Date.now() - WEEK).pop(); out.rating = `${st.now.rating} now${weekAgo ? `, ${weekAgo.rating} a week ago` : ''}`; }
+  return out;
+}
+function sparkline(points) {
+  if (points.length < 2) return '';
+  const W = 300, H = 44, min = Math.min(...points), max = Math.max(...points), span = Math.max(max - min, 20);
+  const xs = points.map((v, i) => `${(i / (points.length - 1) * W).toFixed(1)},${(H - 4 - (v - min) / span * (H - 8)).toFixed(1)}`);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${xs.join(' ')}"/><circle cx="${xs[xs.length - 1].split(',')[0]}" cy="${xs[xs.length - 1].split(',')[1]}" r="3"/></svg>`;
+}
+function renderBattles() {
+  const el = $('battles'); if (!el) return;
+  try { el.innerHTML = battlesInner(); } catch (e) { el.innerHTML = errorCard('Battle log', e); }
+}
+function battlesInner() {
+  if (!APP || !window.PVP) return '<div class="note">Loading PvPoke data…</div>';
+  const m = M(), L = builderLeague(m), st = battleStats(LEAGUE.slug), ids = blTeamIds();
+  let h = '';
+  // rating
+  const pts = st.ratings.slice(-40).map(b => b.rating);
+  h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>Rating <small>${esc(LEAGUE.title)}</small></span>${st.ratings.length ? ctxMenu([['Delete last rating', `Planner.delBattle(${attr(st.now.id)})`, true]]) : ''}</div>
+    ${st.now ? `<div style="display:flex;align-items:baseline;gap:10px"><span class="big" style="font-family:Sora,sans-serif;font-weight:800;font-size:30px;color:var(--green)">${st.now.rating}</span><span class="dim" style="font-size:12px">${when(st.now.t)}${(() => { const wk = st.ratings.filter(b => b.t < st.now.t - WEEK).pop(); return wk ? ` · ${st.now.rating - wk.rating >= 0 ? '+' : ''}${st.now.rating - wk.rating} vs a week ago` : ''; })()}</span></div>${sparkline(pts)}` : '<div class="dt">No rating yet. After a set, type the rating the game shows or import the end-of-set screenshot.</div>'}
+    <div class="add" style="margin:8px 0 0"><input id="blrating" type="number" inputmode="numeric" placeholder="rating after your set" style="flex:1;min-width:120px"><button onclick="Planner.logRating(document.getElementById('blrating').value)">Save</button><button onclick="document.getElementById('bfile').click()" style="background:var(--card);color:var(--ink);border:1px solid var(--line)">Screenshot…</button></div>
+    <div class="dt" style="margin-top:6px">Screenshot: the end-of-set screen (x/5 and rating) or the post-battle rating screen. Whatever is legible is saved; the rest you can tap in below.</div></div>`;
+  // log a battle
+  const teams = [['builder', 'Builder']].concat(Object.keys(ROSTER.tagged).map(n => [n, n]));
+  h += `<div class="sec">Log a battle <small>team · their lead · result</small></div>`;
+  h += `<div class="tchips">${teams.map(([k, l]) => `<span class="chip ${BL.team === k ? 'ok' : ''}" onclick="Planner.blTeam(${attr(k)})">${esc(l)}</span>`).join('')}</div>`;
+  if (ids.length !== 3) h += `<div class="note">Pick a saved party, or fill the builder with the three you run.</div>`;
+  else {
+    const pool = L.pool(), q = BL.q.toLowerCase(), hits = q ? pool.filter(o => nm(o).toLowerCase().includes(q) || o.includes(q)).slice(0, 8) : [];
+    const recent = []; for (const b of BATTLES.slice().reverse()) if (b.lead && !recent.includes(b.lead) && APP.pokemon[b.lead]) { recent.push(b.lead); if (recent.length >= 8) break; }
+    h += `<div class="team" style="cursor:default"><div class="dt" style="margin-bottom:4px">${ids.map(nm).map(esc).join(' / ')}</div>
+      <div class="add" style="margin:4px 0"><input id="blq" placeholder="their lead (optional): search…" value="${esc(BL.q)}" oninput="Planner.blSearch(this.value)"></div>
+      ${hits.length ? `<div class="tchips">${hits.map(o => `<span class="chip ${BL.lead === o ? 'ok' : ''}" onclick="Planner.blLead('${o}')">${esc(nm(o))}</span>`).join('')}</div>` : recent.length ? `<div class="tchips">${recent.map(o => `<span class="chip ${BL.lead === o ? 'ok' : ''}" onclick="Planner.blLead('${o}')">${esc(nm(o))}</span>`).join('')}</div>` : ''}
+      ${BL.lead ? `<div class="dt" style="margin:4px 0">Their lead: <b style="color:var(--ink)">${esc(nm(BL.lead))}</b> <a href="#" class="dim" onclick="Planner.blLead(null);return false">clear</a></div>` : ''}
+      <div class="wl"><button class="win" onclick="Planner.logBattle('W')">Win</button><button class="loss" onclick="Planner.logBattle('L')">Loss</button></div></div>`;
+  }
+  // stats
+  if (st.fights.length) {
+    h += `<div class="sec">Results <small>${rec(st.total)} · ${st.fights.length} logged</small></div>`;
+    h += `<div class="team card" style="cursor:default">${kv([
+      ['Teams', st.teams.slice(0, 5).map(t => `<div style="cursor:pointer" onclick="Planner.openTeam(${attr(t.ids)},${attr(t.name || null)})"><b>${rec(t)}</b> ${esc(t.name || t.ids.map(nm).join(' / '))}</div>`).join('') || '—'],
+      ['Their leads', st.leads.length ? st.leads.slice(0, 6).map(x => `<div style="cursor:pointer" onclick="Planner.openMon('${x.id}')"><b>${rec(x)}</b> vs ${esc(nm(x.id))}${x.l > x.w ? ' <span class="chip warn">trouble</span>' : ''}</div>`).join('') : '<span class="dim">log the lead to see who gives you trouble</span>'],
+      ['Members', st.members.slice(0, 6).map(x => `<b>${rec(x)}</b> ${esc(nm(x.id))}`).join('<br>') || '—'],
+    ])}</div>`;
+  }
+  // recent
+  const recentB = st.all.slice().reverse().slice(0, 12);
+  if (recentB.length) h += `<div class="sec">Recent</div>` + recentB.map(b => `<div class="team row" style="cursor:default"><span class="sc" style="color:${b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)'}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span><span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.src === 'ocr' ? ' · from screenshot' : ''}</div></span>${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`).join('');
+  h += `<div class="note">Everything here is yours: the log lives on this device and follows your account when sync is on. Team pages and the AI review use these records next to the meta numbers.</div>`;
+  return h;
+}
+function blTeam(k) { BL.team = k; saveBL(); renderBattles(); }
+function blLead(id) { BL.lead = id; BL.q = ''; saveBL(); renderBattles(); }
+function blSearch(v) { BL.q = v; saveBL(); const pos = $('blq') && $('blq').selectionStart; renderBattles(); const q = $('blq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
+
 /* ---------- Matchups page: your team against one opponent per shield scenario, and "their lead is X" ---------- */
 const MU = Object.assign({team: 'builder', opp: null, mode: 'matchup', q: '', recent: []}, JSON.parse(localStorage.getItem('mu') || '{}'));
 const saveMU = () => localStorage.setItem('mu', JSON.stringify(MU));
@@ -1089,7 +1217,7 @@ async function loadCups() {
 function setLeague(slug) { drawer(false); if (typeof window.setLeague === 'function') window.setLeague(slug); }
 
 /* ---------- side drawer ---------- */
-const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Matchups', '⚑']]],
+const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Matchups', '⚑'], ['battles', 'Battle log', '◔']]],
                 ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
                 ['Collection', [['roster', 'Roster', '◎'], ['scans', 'Scans & import', '⌗']]]];
 function drawer(open) { const d = $('drawer'); if (!d) return; d.classList.toggle('open', !!open); if (open) paintDrawer(); }
@@ -1584,7 +1712,7 @@ function saveBuildAsTeam() { const ids = UI.build.slots.filter(Boolean); if (ids
   const name = prompt('Name for this party', ids.map(nm).join(' / ')); if (!name) return; ROSTER.tagged[name] = ids.slice(); saveRoster(); refresh(); status(`Saved "${name}" under your in-game parties`); }
 
 /* ---------- actions ---------- */
-function refresh() { dirty = true; if (APP && matrixSlug !== LEAGUE.slug) loadMatrix(); renderToday(); renderTeams(); renderRoster(); renderMeta(); paintDrawer(); if (onView() === 'matchups') renderMatchups(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
+function refresh() { dirty = true; if (APP && matrixSlug !== LEAGUE.slug) loadMatrix(); renderToday(); renderTeams(); renderRoster(); renderMeta(); paintDrawer(); if (onView() === 'matchups') renderMatchups(); if (onView() === 'battles') renderBattles(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
 function markDirty() { dirty = true; }
 function toggleAdd() { UI.adding = !UI.adding; renderRoster(); if (UI.adding) $('addid').focus(); }
 function add() { const id = $('addid').value.trim().toLowerCase(), kind = $('addkind').value;
@@ -1637,7 +1765,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

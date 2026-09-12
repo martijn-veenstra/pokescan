@@ -309,3 +309,9 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .mut .mn b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mut .mn small{color:var(--dim);font-size:11.5px}.mut .mn .good{color:var(--green)}.mut .mn .bad{color:#F59A8B}
 .mut .mc{border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:Sora,sans-serif;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
 .mut .mc.w{background:rgba(72,213,151,.22);color:#7FE3B6}.mut .mc.e{background:rgba(240,192,96,.18);color:#F0C060}.mut .mc.l{background:rgba(240,101,79,.2);color:#F59A8B}
+
+/* ---------- Battle log ---------- */
+.spark{display:block;width:100%;height:44px;margin-top:6px}.spark polyline{fill:none;stroke:var(--green);stroke-width:2;vector-effect:non-scaling-stroke}.spark circle{fill:var(--green)}
+.wl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.wl button{border:none;border-radius:14px;padding:16px 10px;font-family:Sora,sans-serif;font-weight:800;font-size:18px}
+.wl .win{background:linear-gradient(135deg,#3BC489,#2BA8A0);color:#062018}.wl .loss{background:rgba(240,101,79,.22);color:#F59A8B;border:1px solid rgba(240,101,79,.4)}
