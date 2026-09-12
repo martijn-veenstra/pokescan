@@ -13,7 +13,17 @@ label{font-size:13px;color:var(--dim)}
 input[type=number]{width:64px;background:var(--card);border:1px solid var(--line);
  border-radius:10px;color:var(--ink);padding:8px;font-size:16px}
 select{background:var(--card);color:var(--ink);border:1px solid var(--line);
- border-radius:10px;padding:8px 10px;font-size:14px}
+ border-radius:10px;padding:8px 10px;font-size:16px}
+/* iOS Safari zooms the page when a focused field's text is under 16px, so every typing or picking control is 16px on touch
+   screens; only mouse-and-keyboard devices get the compact sizes */
+input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),select,textarea{font-size:16px}
+@media (hover:hover) and (pointer:fine){
+  select{font-size:14px}
+  .add input,#q{font-size:14px}
+  .kv .v input,#tname,#sort{font-size:15px}
+  .kv .v .mvsel{font-size:14.5px}
+  .mv select{font-size:12px}
+}
 .btn{display:block;width:100%;text-align:center;border:none;border-radius:14px;
  padding:14px;font-size:15.5px;font-weight:700;font-family:Sora,sans-serif;
  background:linear-gradient(135deg,#3BC489,#2BA8A0);color:#062018;margin:8px 0}
@@ -76,8 +86,8 @@ select{background:var(--card);color:var(--ink);border:1px solid var(--line);
 .gloss{font-size:12px;color:var(--dim);line-height:1.5;margin:6px 0 0}
 .kv{display:grid;grid-template-columns:78px minmax(0,1fr);gap:9px 12px;align-items:start;font-size:13.5px;margin-top:12px;line-height:1.45}
 .kv .k{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:3px}.kv .v{min-width:0}.kv .v .mv{margin:0}.kv .v b{font-weight:600}.kv .v .okc{color:var(--green);font-weight:700}
-.kv .v input{background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px;font-size:15px}
-.kv .v .mvsel{width:100%;min-width:0;font-size:14.5px;padding:9px 10px;background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink)}.kv .v .mvsel.empty{color:var(--dim);border-style:dashed}
+.kv .v input{background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px}
+.kv .v .mvsel{width:100%;min-width:0;padding:9px 10px;background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink)}.kv .v .mvsel.empty{color:var(--dim);border-style:dashed}
 .kv .v.cont{margin-top:-4px}
 .kv .k:has(+ .v > .mvsel),.kv .k:has(+ .v > input){align-self:center;padding-top:0}
 .team.row{display:flex;align-items:center;gap:10px;padding:9px 12px}.team.row .sc{margin:0;min-width:34px}.team.row .tx{flex:1;min-width:0}.team.row .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.team.row .dt{margin-top:1px}.team.row .go{color:var(--dim);font-size:18px;flex:none}
@@ -152,10 +162,10 @@ video{position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-e
 .pill .x{color:var(--dim);cursor:pointer}
 .pill.auto{border-style:dashed}
 .add{display:flex;gap:6px;margin:6px 0;flex-wrap:wrap}
-.add input{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:8px;font-size:14px}
+.add input{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:8px}
 .add button{background:var(--green);border:none;border-radius:9px;padding:7px 13px;font-weight:700;color:#062018}
 .mv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin:4px 0 8px}
-.mv select{font-size:12px;padding:5px;min-width:0;width:100%}
+.mv select{padding:5px;min-width:0;width:100%}
 .own{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:6px 0}
 .own .h{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;flex-wrap:wrap}
 .own .h span{text-align:right;flex:1}
@@ -178,7 +188,7 @@ h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px so
 #help p,#help li{color:var(--ink);margin:4px 0;line-height:1.5}
 #help ul{padding-left:18px}
 #help .dim{color:var(--dim)}
-.empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;padding:16px;margin:10px 0;font-size:14px;color:var(--dim);line-height:1.6}
+div.empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;padding:16px;margin:10px 0;font-size:14px;color:var(--dim);line-height:1.6}
 .star{color:var(--dim);margin-right:6px;font-size:16px;cursor:pointer}.star.on{color:var(--gold)}
 .mon.benched{opacity:.55}
 .fix .sec2{background:var(--card);color:var(--dim);border:1px solid var(--line)}
