@@ -1536,11 +1536,11 @@ function renderRosterInner(el) {
   const seenScan = new Set();
   h += shown.map(t => {
     const o = m.own[t.id];
-    if (o && !o.manual && o.scan) { const idx = results.indexOf(o.scan); return typeof cardHTML === 'function' && idx >= 0 ? cardHTML(o.scan, idx, null) : ''; }
+    if (o && !o.manual && o.scan) { const idx = results.indexOf(o.scan); return typeof cardHTML === 'function' && idx >= 0 ? cardHTML(o.scan, idx, null, `Planner.openMon('${t.id}')`) : ''; }
     const a = t.st === 'pending' && m.auto[t.id];
     if (a && a.fromKey && typeof cardHTML === 'function') {
       const idx = results.findIndex(r => r.key === a.fromKey);
-      if (idx >= 0) { if (seenScan.has(a.fromKey)) return ''; seenScan.add(a.fromKey); return cardHTML(results[idx], idx, null); }
+      if (idx >= 0) { if (seenScan.has(a.fromKey)) return ''; seenScan.add(a.fromKey); return cardHTML(results[idx], idx, null, `Planner.openMon('${t.id}')`); }
     }
     const e = APP.pokemon[t.id], why = {manual: 'added by hand · not scanned', pending: t.txt, wanted: t.txt === 'wanted' ? 'wanted · nothing to catch yet' : `catch ${t.txt}`, bench: 'benched'}[t.st] || t.txt;
     const cls = {pending: 'gl', wanted: '', manual: '', bench: ''}[t.st] || '';

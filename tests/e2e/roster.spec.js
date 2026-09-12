@@ -20,5 +20,10 @@ test('a scanned pre-evolution that PvPoke does not rank shows on the roster unde
   await expect(board.locator('.mon .name:has-text("Jigglypuff")')).toHaveCount(1);
   await page.fill('#rosterq', 'azumarill');
   await expect(board).toContainText('Nothing in your roster matches.');
+  // tapping a roster card opens the roster's Pokémon page (CP slider, teams, rankings), not the scan page
+  await page.fill('#rosterq', '');
+  await board.locator('.mon .name:has-text("Jigglypuff")').click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/mon/wigglytuff');
+  await expect(page.locator('#mon')).toContainText(/drag the knob|Wigglytuff/);
   expect(errors).toEqual([]);
 });

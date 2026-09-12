@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.54';
+const APP_VERSION='9.55';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1046,7 +1046,7 @@ function render(){
   $('out').innerHTML=order.map(i=>cardHTML(results[i], i, bestCopy)).join('');
 }
 /* one card per Pokémon, shared by the Scans list and the Roster page: scan facts (CP, IVs, rank) plus what the planner says it still needs */
-function cardHTML(r, i, bestCopy){
+function cardHTML(r, i, bestCopy, open){          // open: click handler override (the roster opens the Pokémon page, Scans the scan page)
   const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
   const cls=hi>=90?'g':hi>=70?'m':'b';
   const mt=metaFor(r.species);
@@ -1070,7 +1070,7 @@ function cardHTML(r, i, bestCopy){
     !r.bench&&bestCopy&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
     ].join('');
   const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
-  return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="Planner.openScan('${r.key.replace(/'/g,'')}')">${lineageBanner(r)}
+  return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan('${r.key.replace(/'/g,'')}')`}">${lineageBanner(r)}
     <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span>
       <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
     <div class="ivrow">
