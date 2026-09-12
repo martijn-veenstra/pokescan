@@ -295,3 +295,9 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .lin .q{flex:1;min-width:160px}.lin .a{display:flex;gap:6px}
 .lin button{border:none;border-radius:9px;padding:6px 10px;font-size:12.5px;font-weight:700}
 .lin .yes{background:var(--green);color:#062018}.lin .no{background:var(--card);color:var(--dim);border:1px solid var(--line)}
+
+/* ---------- AI review card ---------- */
+.team.card.review .verdict{font-size:14px;line-height:1.45;margin:0 0 6px}.team.card.review .verdict p{margin:0}
+.team.card.review .rsec{font-size:13px;color:var(--dim);margin:6px 0 0;line-height:1.45}.team.card.review .rsec>b{display:block;color:var(--ink);font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.team.card.review .rsec ul,.team.card.review .verdict ul{margin:2px 0 0;padding-left:18px}.team.card.review p{margin:2px 0}
+.team.row .dt .ai{color:var(--ink);opacity:.85;margin-top:3px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

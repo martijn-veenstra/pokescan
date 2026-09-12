@@ -60,7 +60,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (!body.context || typeof body.context !== 'object') return reply.code(400).send({ error: 'missing_context' });
     const context = JSON.stringify(body.context);
     if (context.length > 60000) return reply.code(413).send({ error: 'context_too_large' });
-    const question = String(body.question || '').slice(0, 4000), mode = body.mode === 'builder' ? 'builder' : 'roster';
+    const question = String(body.question || '').slice(0, 4000), mode = ['builder', 'review'].includes(body.mode) ? body.mode : 'roster';
     asks.push(now);
     // The model can take a minute or more; phones drop a fetch after ~60 s. So: answer with a job id at once, let the app poll.
     for (const [id, j] of jobs) if (now - j.t > 3600e3) jobs.delete(id);

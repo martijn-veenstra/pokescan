@@ -41,6 +41,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **AI review**: every complete team in the builder, and every saved party, gets one structured Claude review (verdict,
+  strengths, weak spots, swaps from your roster), cached per trio and league so it costs one call; saved-team rows show
+  the verdict, ⋮ → Refresh review asks again. Other team pages offer the review on tap.
 - **Shadows**: ⋮ → Mark as Shadow on a scan card maps it to PvPoke's shadow ranking (search strings add `&shadow`);
   the card shows how the other form would rank.
 - **Meta changes**: `scripts/diff_app_data.py` records moveset changes, meta-group entries/exits and rank jumps in

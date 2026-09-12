@@ -288,8 +288,8 @@ function teamRow(m, ids, name, extra) {         // one compact line per team; ta
   const weak = ev.holes.length || ev.shared.length
     ? [ev.holes.length ? `<b>${ev.holes.length} unanswered</b>` : '', ev.shared.length ? `${ev.shared.length} beat two of three` : ''].filter(Boolean).join(' · ')
     : '<span class="good">covers the meta</span>';
-  const members = ids.map(id => esc(nm(id))).join(' / ');
-  return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc">${ev.score.toFixed(0)}</span><span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${missing.length ? ` · ${missing.length} not owned` : ''}${extra ? ' · ' + extra : ''}</div></span><span class="go">›</span></div>`;
+  const members = ids.map(id => esc(nm(id))).join(' / '), rv = reviewFor(ids);
+  return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc">${ev.score.toFixed(0)}</span><span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${rv ? `<div class="ai">✦ ${esc(verdictOf(rv))}</div>` : ''}${missing.length ? ` · ${missing.length} not owned` : ''}${extra ? ' · ' + extra : ''}</div></span><span class="go">›</span></div>`;
 }
 function bestSwaps(L, team, m, ev) {         // one-member swaps from owned/pending pieces, best first
   const {ri} = m; ev = ev || L.evaluate(team);
@@ -588,6 +588,7 @@ function teamInner(m, ids, name) {
   }).join('') + '</div>';
   // to-dos for these members
   const todo = openMoves(m).filter(x => (x.species && ids.includes(x.species)) || (x.id.startsWith('get:') && ids.includes(x.id.slice(4))) || (x.id.startsWith('park:') && ids.includes(x.id.slice(5))));
+  h += reviewCard(ids, !!saved);
   h += `<div class="sec">To do for this team</div>`;
   h += todo.length ? todo.map(moveCard).join('') : `<div class="note">Nothing open: the members you own are at the cap and carry the right moves.</div>`;
   // weak spots
@@ -684,9 +685,48 @@ function mdLite(t) {                          // minimal markdown: paragraphs, b
 function toggleCoachCtx() { COACH.showCtx = !COACH.showCtx; renderToday(); }
 
 /* builder coach: the same server call with the slots, their weak spots and the app's candidates attached */
-const BCOACH = Object.assign({thread: [], busy: false, error: '', secs: 0}, JSON.parse(localStorage.getItem('bcoach') || '{}'));
+const BCOACH = Object.assign({thread: [], reviews: {}, busy: false, error: '', secs: 0}, JSON.parse(localStorage.getItem('bcoach') || '{}'));
+BCOACH.reviews = BCOACH.reviews || {}; BCOACH.reviewBusy = {}; BCOACH.reviewFailed = {};
 if (!Array.isArray(BCOACH.thread)) BCOACH.thread = [];
-const saveBCoach = () => localStorage.setItem('bcoach', JSON.stringify({thread: BCOACH.thread.slice(-8)}));
+const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, b) => b[1].t - a[1].t).slice(0, 30); localStorage.setItem('bcoach', JSON.stringify({thread: BCOACH.thread.slice(-8), reviews: Object.fromEntries(keep)})); };
+
+/* ---------- always-on AI review: every complete team gets one structured review, cached per trio and league ---------- */
+const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
+const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
+const coachOn = () => !!(window.Sync && Sync.available() && Sync.state.code && Sync.coachAvailable());
+function parseReview(text) {                   // the review prompt asks for **Verdict** / **Strengths** / **Weak spots** / **Swaps**
+  const out = {}, re = /\*\*(Verdict|Strengths|Weak spots|Swaps)\*\*:?\s*/gi, parts = text.split(re);
+  if (parts.length < 3) return {Verdict: text.trim()};
+  for (let i = 1; i < parts.length; i += 2) out[parts[i][0].toUpperCase() + parts[i].slice(1).toLowerCase()] = (parts[i + 1] || '').trim();
+  return out;
+}
+const verdictOf = rv => { const v = (parseReview(rv.text).Verdict || rv.text).replace(/\*\*/g, '').split(/\n/)[0]; return v.length > 140 ? v.slice(0, 137) + '…' : v; };
+async function autoReview(ids) {
+  if (!coachOn() || !APP || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
+  const key = reviewKey(ids);
+  if (BCOACH.reviews[key] || BCOACH.reviewBusy[key] || BCOACH.reviewFailed[key]) return;
+  BCOACH.reviewBusy[key] = true;
+  const paint = () => { const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); if (v === 'teams') renderTeams(); };
+  try {
+    const m = M(), L = builderLeague(m), ctx = builderContext(m, L, ids);
+    const text = await Sync.coach(ctx, '', null, 'review');
+    BCOACH.reviews[key] = {t: Date.now(), text, slots: ids.slice()}; saveBCoach();
+  } catch (e) { BCOACH.reviewFailed[key] = (e && e.message) || 'no answer'; }
+  delete BCOACH.reviewBusy[key]; paint();
+}
+function refreshReview(ids) { const key = reviewKey(ids); delete BCOACH.reviews[key]; delete BCOACH.reviewFailed[key]; saveBCoach(); autoReview(ids); const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); }
+function reviewCard(ids, auto) {                // the card; auto = ask Claude by itself when there is no review yet (builder and saved parties), else offer a button
+  if (!coachOn() || ids.length !== 3) return '';
+  const key = reviewKey(ids), rv = BCOACH.reviews[key], busy = BCOACH.reviewBusy[key], failed = BCOACH.reviewFailed[key];
+  if (!rv && auto && !busy && !failed) setTimeout(() => autoReview(ids), 0);
+  const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>AI review <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
+  if (busy || (!rv && auto && !failed)) return `<div class="team card" style="cursor:default">${head('thinking, 20 to 90 seconds')}<div class="dt">Claude is judging this team: roles, weak spots and swaps from your roster.</div></div>`;
+  if (!rv && failed) return `<div class="team card" style="cursor:default">${head('not available')}<div class="dt">⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a></div></div>`;
+  if (!rv) return `<div class="team card" style="cursor:default">${head('')}<div class="dt"><a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Get an AI review</a> of this team: roles, weak spots and swaps from your roster.</div></div>`;
+  const sec = parseReview(rv.text), order = ['Verdict', 'Strengths', 'Weak spots', 'Swaps'];
+  const body = order.filter(k => sec[k]).map(k => k === 'Verdict' ? `<div class="verdict">${linkNames(mdLite(sec[k]))}</div>` : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('');
+  return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
+}
 function clearBuilderCoach() { BCOACH.thread = []; BCOACH.error = ''; saveBCoach(); renderMeta(); }
 function builderContext(m, L, filled) {
   const ctx = coachContext(m), ev = L.evaluate(filled);
@@ -1273,6 +1313,7 @@ function renderBuilder(m, L) {
       <div class="dim" style="font-size:12px;margin-top:8px">${rl.map(r => `${r.role}: <b style="color:var(--ink)">${esc(nm(r.id))}</b>`).join(' · ')}</div>
       <div class="dim" style="font-size:12px;margin-top:6px">${d.unansweredMeta.length ? `No answer to ${chip(d.unansweredMeta.join(', '), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `Two lose to ${esc(d.sharedWeaknesses.join(', '))}.` : ''}</div>
       <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
+    h += reviewCard(filled, true);
     h += builderCoachCard(m, L, filled);
   } else {
     const ev = filled.length ? L.evaluate(filled) : null;
@@ -1469,7 +1510,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

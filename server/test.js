@@ -80,6 +80,10 @@ assert.equal(r.statusCode, 202, 'builder mode accepted');
   assert.ok(out && out.text.includes('mode: builder'), 'builder mode reaches the coach'); }
 r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {}, mode: 'evil' } });
 assert.equal(r.statusCode, 202, 'unknown modes fall back to roster');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['a', 'b', 'c'] } }, mode: 'review' } });
+assert.equal(r.statusCode, 202, 'review mode accepted');
+{ let out; for (let i = 0; i < 40 && !(out && out.status === 'done'); i++) { await new Promise(x => setTimeout(x, 50)); out = (await app.inject({ method: 'GET', url: '/api/coach/' + r.json().jobId, headers: H })).json(); }
+  assert.ok(out && out.text.includes('mode: review'), 'review mode reaches the coach'); }
 r = await app.inject({ method: 'GET', url: '/api/coach/nope', headers: H });
 assert.equal(r.statusCode, 404);
 r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId });

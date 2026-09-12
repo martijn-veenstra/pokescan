@@ -29,6 +29,17 @@ Answer in short markdown, under 300 words:
 Only name Pokémon that appear in the summary. Do not invent stats, moves or matchups; lean on the app's numbers. No preamble,
 no closing offer.`;
 
+const SYSTEM_REVIEW = `You are a Pokémon GO PvP coach for a casual player. The JSON summary has a "builder" object with a complete team of
+three (slots with the moves used for scoring), the meta Pokémon it leaves unanswered ("weakSpots"), the meta Pokémon that beat two
+of the three, the player's roster and the current top meta. The league and CP cap are named in the summary.
+
+Review the team in markdown with exactly these four sections, under 180 words in total, no other text:
+**Verdict** one sentence: how good this team is and its main idea.
+**Strengths** up to 3 bullets: what it handles well, who leads / swaps / closes.
+**Weak spots** up to 3 bullets: the meta Pokémon or patterns it fears, and what to do when you meet them.
+**Swaps** up to 2 bullets, each "X → Y: why", preferring Pokémon the player OWNS (mark others "to catch or build"). Write "none" if the team should stay as it is.
+Only name Pokémon that appear in the summary. Do not invent stats, moves or matchups; lean on the app's numbers.`;
+
 export function makeCoach(apiKey) {
   if (!apiKey) return null;
   const client = new Anthropic({ apiKey });
@@ -36,11 +47,11 @@ export function makeCoach(apiKey) {
     const user = `${question ? `Question: ${question}\n\n` : ''}Roster and meta summary (JSON):\n${context}`;
     const msg = await client.beta.messages.create({
       model: 'claude-opus-5',
-      max_tokens: 4000,
+      max_tokens: mode === 'review' ? 1500 : 4000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: mode === 'builder' ? SYSTEM_BUILDER : SYSTEM,
+      system: mode === 'builder' ? SYSTEM_BUILDER : mode === 'review' ? SYSTEM_REVIEW : SYSTEM,
       messages: [{ role: 'user', content: user }],
     });
     if (msg.stop_reason === 'refusal') return { refused: true };
