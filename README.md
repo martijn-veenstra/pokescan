@@ -1,6 +1,6 @@
 # pokescan
 
-Pokémon GO screenshot scanner and Great League team planner. Runs entirely in the browser,
+Pokémon GO screenshot scanner and GO Battle League team planner (Great, Ultra, Little and the featured cups). Runs entirely in the browser,
 installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 
 - **Today** tab: the best team you can build from what you own, with lead / swap / closer and a score bar
@@ -21,6 +21,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Builder** tab: any three Pokémon, scored live with roles, coverage grid and what you would still need
   to catch; save as a party or add missing members to wanted; best-third suggestions from your roster or
   the meta; an AI coach conversation with tappable Pokémon names.
+- **Leagues**: the ≡ menu switches the whole app between Great, Ultra and Little League and the GO Battle League
+  cups PvPoke currently features (`data/cups.json`, rebuilt daily by `scripts/build_cups.py`): rankings, meta
+  teams, the cap used for readiness and power-up targets, search strings and roster tiles all follow.
 - **≡ menu** (top left): saved teams, the derived meta teams (each opens a team page), PvPoke's full
   rankings with search and type filter, **Raids** (the best PvE attackers per type: DPS, TDO, Elite TM
   moves, megas and shadows toggle, computed by `scripts/build_pve_data.py` from the PokeMiners game

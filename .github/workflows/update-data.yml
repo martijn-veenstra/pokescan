@@ -2,7 +2,7 @@ name: Update PvPoke data
 
 on:
   schedule:
-    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+    - cron: '0 6 * * *'   # daily 06:00 UTC: GO Battle League cups rotate every one or two weeks
   workflow_dispatch:
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
         run: |
           python3 scripts/generate_pvpoke_rankings.py
           python3 scripts/generate_pvpoke_team_comps.py
-          python3 scripts/build_app_data.py
+          python3 scripts/build_cups.py
           python3 scripts/build_pve_data.py
           python3 scripts/evaluate_teams.py data/community-teams-great.json -o data/community-teams-great-analysis.json
           python3 scripts/generate_roster_team_comps.py --pretty

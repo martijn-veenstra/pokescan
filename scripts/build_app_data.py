@@ -28,13 +28,32 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--league", choices=sorted(LEAGUES), default="great")
     ap.add_argument("-o", "--output")
+    # a GO Battle League cup instead of an open league: PvPoke cup slug + CP cap (+ optional title, meta group and output slug)
+    ap.add_argument("--cup", help="PvPoke cup slug, e.g. willpower")
+    ap.add_argument("--cp", type=int, help="CP cap of the cup, e.g. 1500")
+    ap.add_argument("--title", help="display title, e.g. 'Willpower Cup'")
+    ap.add_argument("--group", help="PvPoke meta group name (defaults to the cup slug; top 40 of the rankings when the group does not exist)")
+    ap.add_argument("--slug", help="output slug: data/app-<slug>.json (defaults to <cup>-<cp>)")
+    ap.add_argument("--rules", nargs="*", default=None, help="rule lines shown in the app")
+    ap.add_argument("--gamemaster", help="path of an already downloaded gamemaster.min.json")
     args = ap.parse_args(argv)
-    cp, title, cup = LEAGUES[args.league]
-    out_path = args.output or f"data/app-{args.league}.json"
+    if args.cup:
+        cp, cup = args.cp or 1500, args.cup
+        slug = args.slug or f"{cup}-{cp}"
+        title = args.title or f"{cup.title()} Cup"
+        group_name = args.group or cup
+    else:
+        cp, title, cup = LEAGUES[args.league]
+        slug, group_name = args.league, args.league
+    out_path = args.output or f"data/app-{slug}.json"
 
-    gm = fetch_json(GAMEMASTER_URL)
+    gm = json.load(open(args.gamemaster, encoding="utf-8")) if args.gamemaster else fetch_json(GAMEMASTER_URL)
     entries = fetch_json(rankings_url(cp, cup))
-    group = fetch_json(GROUP_URL.format(league=args.league))
+    try:
+        group = fetch_json(GROUP_URL.format(league=group_name))
+    except Exception as e:                      # no curated group for this cup: the top of its own rankings is the meta
+        print(f"no meta group {group_name} ({e}); using the top 40 of the rankings", file=sys.stderr)
+        group = [{"speciesId": e["speciesId"]} for e in entries[:40]]
     gm_pokemon = {p["speciesId"]: p for p in gm["pokemon"]}
     gm_moves = {m["moveId"]: m for m in gm["moves"]}
 
@@ -95,7 +114,7 @@ def main(argv=None):
                 extra[evo] = {"name": gp["speciesName"], "types": [t for t in gp["types"] if t != "none"]}
 
     # Benchmark for the score bar: best and median trio score over the top 40 of the meta group.
-    league = League(args.league, gm, entries, group)
+    league = League(slug, gm, entries, group)
     scores = sorted(ev["score"] for ev, _ in ((league.evaluate(list(t)), t)
                     for t in __import__("itertools").combinations([g["speciesId"] for g in league.meta[:40]], 3)
                     if len({x.replace("_shadow", "") for x in t}) == 3))
@@ -115,15 +134,18 @@ def main(argv=None):
     # Derived meta teams (data/pvpoke-team-comps.json, produced by generate_pvpoke_team_comps.py)
     meta_teams = []
     comps_path = "data/pvpoke-team-comps.json"
+    comps = []
     if os.path.exists(comps_path):
         with open(comps_path, encoding="utf-8") as f:
-            comps = json.load(f).get("leagues", {}).get(args.league, {}).get("teams", [])
-        for t in comps:
-            meta_teams.append({"score": t["teamScore"], "members": [m["speciesId"] for m in t["members"]],
-                               "holes": t.get("unansweredMeta", []), "shared": t.get("sharedWeaknesses", [])})
+            comps = json.load(f).get("leagues", {}).get(slug, {}).get("teams", [])
+    if not comps:                                # cups are not in the comps file: derive their teams here with the same heuristic
+        comps, _ = league.best_teams(25, 40)
+    for t in comps:
+        meta_teams.append({"score": t["teamScore"], "members": [m["speciesId"] for m in t["members"]],
+                           "holes": t.get("unansweredMeta", []), "shared": t.get("sharedWeaknesses", [])})
 
     result = {
-        "league": {"slug": args.league, "title": title, "cp": cp, "cup": cup},
+        "league": {"slug": slug, "title": title, "cp": cp, "cup": cup, **({"rules": args.rules} if args.rules else {})},
         "benchmark": benchmark,
         "metaTeams": meta_teams,
         "prevo": prevo,

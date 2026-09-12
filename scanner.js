@@ -69,7 +69,18 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.43';
+const APP_VERSION='9.44';
+/* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
+const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
+const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
+function leagueSlug(){ return localStorage.getItem('league')||'great'; }
+function applyLeague(l){ Object.assign(LEAGUE,{slug:l.slug,cp:l.cp,title:l.title,short:(l.title||'').replace(' League','').replace(' Cup',''),abbr:ABBR[l.slug]||(l.cp+' CP'),cup:l.cup,rules:l.rules||null}); paintLeague(); }
+function paintLeague(){
+  const lb=$('leaguelbl'); if(lb) lb.textContent=LEAGUE.title;
+  const f=$('filter'); if(f){ const o=k=>f.querySelector(`option[value="${k}"]`); if(o('gl')) o('gl').text=`${LEAGUE.abbr} eligible (≤${LEAGUE.cp})`; if(o('ready')) o('ready').text=`Ready for ${LEAGUE.abbr}`; }
+  const so=$('sort'); if(so){ const o=k=>so.querySelector(`option[value="${k}"]`); if(o('gl')) o('gl').text=`Best ${LEAGUE.abbr} rank`; if(o('meta')) o('meta').text=`${LEAGUE.abbr} meta`; }
+}
+function setLeague(slug){ if(slug===leagueSlug()&&APP) return; localStorage.setItem('league',slug); status(`Switching to ${slug}…`); loadMeta(); }
 function showLoadError(msg){
   for(const id of ['today','board']){ const el=$(id); if(el) el.innerHTML=`<div class="empty"><b>Could not load the planner.</b><br>${msg}<br><br><button class="btn sec" style="margin:0" onclick="location.reload()">Reload</button> <button class="btn sec" style="margin:0" onclick="localStorage.removeItem('roster');location.reload()">Reset planner data and reload</button></div>`; }
 }
@@ -77,9 +88,11 @@ async function loadMeta(){
   let loaded=false;
   const slow=setTimeout(()=>{ if(!loaded) showLoadError('The PvPoke data file is taking long to load. Offline, or the first visit on a slow connection?'); }, 12000);
   try{
-    const r=await fetch('data/app-great.json?v='+APP_VERSION,{cache:'no-cache'});
+    let slug=leagueSlug(), r=await fetch(`data/app-${slug}.json?v=`+APP_VERSION,{cache:'no-cache'});
+    if(!r.ok && slug!=='great'){ localStorage.setItem('league','great'); slug='great'; r=await fetch('data/app-great.json?v='+APP_VERSION,{cache:'no-cache'}); }   // a cup that is no longer featured
     if(!r.ok) throw new Error('HTTP '+r.status);
     APP=await r.json(); loaded=true; clearTimeout(slow);
+    applyLeague(APP.league||{slug:'great',cp:1500,title:'Great League'}); rankCache.clear();
     APP.prevo=APP.prevo||{}; APP.unranked=APP.unranked||{}; APP.benchmark=APP.benchmark||{best:720.9,median:521.5};
     META={}; for(const [id,e] of Object.entries(APP.pokemon)) META[id]=[e.rank, e.score, e.moveset];
     const di=$('datainfo'); if(di) di.textContent=`PvPoke ${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} meta Pokémon`;
@@ -87,7 +100,7 @@ async function loadMeta(){
     try{ migrateScans(); dedupeScans(); }catch(e){ console.warn('migration skipped', e); }
   }catch(e){
     clearTimeout(slow);
-    showLoadError('data/app-great.json did not load ('+(e&&e.message||e)+').');
+    showLoadError(`data/app-${leagueSlug()}.json did not load (`+(e&&e.message||e)+').');
     try{  // fallback: live PvPoke rankings, meta chips only
       const r=await fetch('https://raw.githubusercontent.com/pvpoke/pvpoke/master/src/data/rankings/all/overall/rankings-1500.json');
       const arr=await r.json();
@@ -986,14 +999,14 @@ function render(){
   $('count').textContent=results.length+' scanned';
   const em=$('empty'); if(em) em.style.display=results.length?'none':'block';
   const mode=($('sort')||{}).value||'new', q=(($('q')||{}).value||'').trim().toUpperCase(), flt=($('filter')||{}).value||'all';
-  const glOf=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return null; const b=bestOf2(r); return pvpRank(b[4]||DATA.stats[r.species][0],b[1],b[2],b[3],1500); };
-  const bestCopy={}; results.forEach((r,i)=>{ const g=glOf(r); if(g&&r.cp<=1500&&!r.bench&&(!(r.species in bestCopy)||g.n<bestCopy[r.species].n)) bestCopy[r.species]={n:g.n,i}; });
+  const glOf=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return null; const b=bestOf2(r); return pvpRank(b[4]||DATA.stats[r.species][0],b[1],b[2],b[3],LEAGUE.cp); };
+  const bestCopy={}; results.forEach((r,i)=>{ const g=glOf(r); if(g&&r.cp<=LEAGUE.cp&&!r.bench&&(!(r.species in bestCopy)||g.n<bestCopy[r.species].n)) bestCopy[r.species]={n:g.n,i}; });
   const order=results.map((r,i)=>i).filter(i=>{ const r=results[i];
     if(q&&!(r.species||'').includes(q)) return false;
     const g=glOf(r), b=r.combos.length?bestOf2(r):null;
-    if(flt==='gl') return r.cp&&r.cp<=1500&&g;
-    if(flt==='power') return g&&r.cp<=1500&&b&&g.lv>b[0]&&g.lv<=40;
-    if(flt==='ready') return g&&r.cp<=1500&&b&&g.lv<=b[0];
+    if(flt==='gl') return r.cp&&r.cp<=LEAGUE.cp&&g;
+    if(flt==='power') return g&&r.cp<=LEAGUE.cp&&b&&g.lv>b[0]&&g.lv<=40;
+    if(flt==='ready') return g&&r.cp<=LEAGUE.cp&&b&&g.lv<=b[0];
     if(flt==='appr') return !!r.appraisal;
     if(flt==='fav') return !!r.fav;
     if(flt==='bench') return !!r.bench;
@@ -1008,7 +1021,7 @@ function render(){
     order.sort((a,b)=>mr(results[a])-mr(results[b])); }
   if(mode==='gl'){
     const gr=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return 9999;
-      return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],1500).n)); };
+      return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],LEAGUE.cp).n)); };
     order.sort((a,b)=>gr(results[a])-gr(results[b]));
   }
   $('out').innerHTML=order.map(i=>{ const r=results[i];
@@ -1020,11 +1033,11 @@ function render(){
     const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.level&&'level?'].filter(Boolean).join(' ');
     const ivpct=ps.length?(lo===hi?hi.toFixed(0):lo.toFixed(0)+'–'+hi.toFixed(0))+'%':'—';
     let status='', gl=null;
-    if(best){ const bb2=best[4]||DATA.stats[r.species][0]; gl=pvpRank(bb2,best[1],best[2],best[3],1500);
-      if(r.cp>1500) status='<span class="chip warn">over the GL cap</span>';
+    if(best){ const bb2=best[4]||DATA.stats[r.species][0]; gl=pvpRank(bb2,best[1],best[2],best[3],LEAGUE.cp);
+      if(r.cp>LEAGUE.cp) status=`<span class="chip warn">over the ${LEAGUE.abbr} cap</span>`;
       else if(gl.lv>40) status=`<span class="chip warn">needs L${gl.lv} · XL candy</span>`;
       else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
-      else status='<span class="chip meta1">ready for GL</span>'; }
+      else status=`<span class="chip meta1">ready for ${LEAGUE.abbr}</span>`; }
     const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
       r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
       (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length?'<span class="chip" title="no attacks screenshot yet; the planner falls back to PvPoke\'s moveset without showing it as fact">moves not read</span>':'',
@@ -1037,7 +1050,7 @@ function render(){
       <div class="ivrow">
         <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>
         <span><small>IV%</small><b class="pctc">${ivpct}</b></span>
-        <span><small>GL rank</small>${gl?`<b>#${gl.n}</b> <span class="dim">${gl.pct.toFixed(1)}%</span>`:'<b class="dim">—</b>'}</span>
+        <span><small>${LEAGUE.abbr} rank</small>${gl?`<b>#${gl.n}</b> <span class="dim">${gl.pct.toFixed(1)}%</span>`:'<b class="dim">—</b>'}</span>
       </div>
       <div class="chips row2"><span>${status||'<span class="chip warn">no match: tap to correct</span>'}${r.combos.length>1?`<span class="chip">${r.combos.length} possible</span>`:''}${tags}</span>${mt?`<span class="chip">meta #${mt[0]}</span>`:''}</div>
     </div>`;
@@ -1072,8 +1085,8 @@ function planFor(r,best){                       // the evolution chain of a scan
     const eb=evoBaseStats(evo); if(!eb) continue;
     const name=(APP.pokemon[evo]||APP.unranked[evo]||{name:evo}).name;
     const cpNow=calcCP(eb,best[1],best[2],best[3],cpmAt(best[0]));
-    if(cpNow>1500){ lines.push(`→ <b>${name}</b> would be ${cpNow} CP: <span class="no">over the 1500 cap</span>`); }
-    else { const rk=pvpRank(eb,best[1],best[2],best[3],1500), mr=APP.pokemon[evo]?` · meta #${APP.pokemon[evo].rank}`:'', c=costTo(best[0],rk.lv);
+    if(cpNow>LEAGUE.cp){ lines.push(`→ <b>${name}</b> would be ${cpNow} CP: <span class="no">over the ${LEAGUE.cp} cap</span>`); }
+    else { const rk=pvpRank(eb,best[1],best[2],best[3],LEAGUE.cp), mr=APP.pokemon[evo]?` · meta #${APP.pokemon[evo].rank}`:'', c=costTo(best[0],rk.lv);
       lines.push(`→ <b>${name}</b> ${cpNow} CP now, <span class="ok">fits</span> up to L${rk.lv} (${rk.cp} CP, IV #${rk.n}, ${rk.pct.toFixed(1)}%${mr}) · ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy to power up, plus the candy to evolve`); }
     if(depth<2) walk(evo,depth+1);
   } };

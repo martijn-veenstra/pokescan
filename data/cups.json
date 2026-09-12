@@ -1,0 +1,90 @@
+{
+ "generatedAt": "2026-09-12T11:24:38Z",
+ "gamemasterTimestamp": "2026-09-10 22:49:06",
+ "leagues": [
+  {
+   "slug": "great",
+   "title": "Great League",
+   "short": "Great",
+   "cp": 1500,
+   "cup": "all",
+   "kind": "league",
+   "file": "data/app-great.json"
+  },
+  {
+   "slug": "ultra",
+   "title": "Ultra League",
+   "short": "Ultra",
+   "cp": 2500,
+   "cup": "all",
+   "kind": "league",
+   "file": "data/app-ultra.json"
+  },
+  {
+   "slug": "little",
+   "title": "Little League",
+   "short": "Little",
+   "cp": 500,
+   "cup": "little",
+   "kind": "league",
+   "file": "data/app-little.json"
+  },
+  {
+   "slug": "mega-1500",
+   "title": "Mega Great League",
+   "short": "Mega Great",
+   "cp": 1500,
+   "cup": "mega",
+   "kind": "cup",
+   "rules": [
+    "Pokemon must be at or below 1,500 CP to enter.",
+    "Mega Evolutions are eligible."
+   ],
+   "file": "data/app-mega-1500.json"
+  },
+  {
+   "slug": "mega-2500",
+   "title": "Mega Ultra League",
+   "short": "Mega Ultra",
+   "cp": 2500,
+   "cup": "mega",
+   "kind": "cup",
+   "rules": [
+    "Pokemon must be at or below 2,500 CP to enter.",
+    "Mega Evolutions are eligible."
+   ],
+   "file": "data/app-mega-2500.json"
+  },
+  {
+   "slug": "willpower-1500",
+   "title": "Willpower Cup",
+   "short": "Willpower",
+   "cp": 1500,
+   "cup": "willpower",
+   "kind": "cup",
+   "rules": [
+    "Pokemon must be at or below 1,500 CP to enter.",
+    "Only Fighting-, Psychic-, and Dark-type Pokémon are eligible.",
+    "The following Pokemon are not allowed: Gardevoir, Zorua, Zoroark."
+   ],
+   "file": "data/app-willpower-1500.json"
+  },
+  {
+   "slug": "laic2027-1500",
+   "title": "LAIC 2027 Championship Series Cup",
+   "short": "LAIC 2027 Championship Series",
+   "cp": 1500,
+   "cup": "laic2027",
+   "kind": "cup",
+   "rules": [
+    "Pokemon must be at or below 1,500 CP to enter.",
+    "Allowed Types: All besides those explicitly prohibited.",
+    "Allowed Categories: Shadow Pokemon, Mega Evolution and Primal Reversion Pokemon. All Mega Evolution Pokémon are eligible even if they would otherwise be prohibited by a species, typing, or category.",
+    "Prohibited Types: Dark, Fairy, Fire, Steel.",
+    "Prohibited Categories: Legendary, Mythical, Ultra Beasts.",
+    "Prohibited Pokemon: Altaria, Annihilape, Araquanid, Chansey, Clodsire, Corsola (Galarian), Dusclops, Furret, Jellicent, Kingdra, Medicham, Oranguru, Snorlax, Wobbuffet, Mega Sableye."
+   ],
+   "file": "data/app-laic2027-1500.json"
+  }
+ ]
+}

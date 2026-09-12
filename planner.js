@@ -3,7 +3,6 @@
    pvpRank, costTo, maxLevelUnderCap, pct, bestOf2, planFor, refixScan, toggleFav, toggleBench, shareFile, status, pvpokeIdFor, evoBaseStats, showTab. */
 (function () {
 'use strict';
-const CAP = 1500;
 const ROSTER = Object.assign({owned: {}, pending: {}, candidates: {}, tagged: {}, moves: {}, exclude: [], done: {}, snooze: {}, log: []},
                              JSON.parse(localStorage.getItem('roster') || '{}'));
 const UI = {selected: null, showAll: false, expect: null, mon: null, scan: null, monFrom: 'roster',
@@ -50,12 +49,12 @@ function rosterOwned() {
   const own = {};
   if (!APP) return own;
   for (const r of results) {
-    const s = scanId(r); if (!s || !s.id || !r.cp || r.cp > CAP || r.bench || ROSTER.exclude.includes(s.id)) continue;
+    const s = scanId(r); if (!s || !s.id || !r.cp || r.cp > LEAGUE.cp || r.bench || ROSTER.exclude.includes(s.id)) continue;
     const {best, base, id} = s;
     // a pre-evolution whose evolution fits under the cap is a pending piece, not a team member
     if ((APP.pokemon[id].evo || []).some(ev => { const eb = APP.pokemon[ev] && evoBaseStats(ev);
-        return eb && calcCP(eb, best[1], best[2], best[3], cpmAt(best[0])) <= CAP; })) continue;
-    const gl = pvpRank(base, best[1], best[2], best[3], CAP);
+        return eb && calcCP(eb, best[1], best[2], best[3], cpmAt(best[0])) <= LEAGUE.cp; })) continue;
+    const gl = pvpRank(base, best[1], best[2], best[3], LEAGUE.cp);
     if (!own[id] || gl.n < own[id].glRank)
       own[id] = {id, key: r.key, glRank: gl.n, glPct: gl.pct, cp: r.cp, level: best[0], toLevel: gl.lv, toCP: gl.cp,
                  ivs: [best[1], best[2], best[3]], txt: r.txt, scan: r, moves: movesFor(r, id)};
@@ -70,8 +69,8 @@ function autoEvolutions(own) {
     const s = scanId(r); if (!s || !s.id || r.bench) continue;
     for (const evo of (APP.pokemon[s.id].evo || [])) {
       if (!APP.pokemon[evo] || own[evo] || ROSTER.exclude.includes(evo)) continue;
-      const eb = evoBaseStats(evo); if (!eb || calcCP(eb, s.best[1], s.best[2], s.best[3], cpmAt(s.best[0])) > CAP) continue;
-      const rk = pvpRank(eb, s.best[1], s.best[2], s.best[3], CAP);
+      const eb = evoBaseStats(evo); if (!eb || calcCP(eb, s.best[1], s.best[2], s.best[3], cpmAt(s.best[0])) > LEAGUE.cp) continue;
+      const rk = pvpRank(eb, s.best[1], s.best[2], s.best[3], LEAGUE.cp);
       if (!out[evo] || rk.n < out[evo].glRank) out[evo] = {from: APP.pokemon[s.id].name, fromId: s.id, glRank: rk.n, glPct: rk.pct, level: s.best[0], toLevel: rk.lv, toCP: rk.cp, cpNow: calcCP(eb, s.best[1], s.best[2], s.best[3], cpmAt(s.best[0]))};
     }
   }
@@ -109,7 +108,7 @@ function safeCap(preId, evoId) {
   let minBad = Infinity, maxOk = 0;
   for (let a = 0; a < 16; a++) for (let d = 0; d < 16; d++) for (let s = 0; s < 16; s++) for (let l = 2; l <= 70; l++) {
     const m = cpmAt(l / 2), cpre = calcCP(pre, a, d, s, m);
-    if (calcCP(evo, a, d, s, m) <= CAP) { if (cpre > maxOk) maxOk = cpre; } else if (cpre < minBad) minBad = cpre;
+    if (calcCP(evo, a, d, s, m) <= LEAGUE.cp) { if (cpre > maxOk) maxOk = cpre; } else if (cpre < minBad) minBad = cpre;
   }
   return capCache[k] = {safe: minBad - 1, max: maxOk};
 }
@@ -214,13 +213,13 @@ function onNewScan(s) {                        // called by the scanner after a 
       logEntry({kind: 'evolve', id: 'get:' + newId, title: `${nm(rid)} evolved into ${nm(newId)}`, evidence: s.key});
     }
   }
-  if (newId && (ROSTER.candidates[newId] !== undefined || ROSTER.pending[newId] !== undefined) && s.cp <= CAP) {
+  if (newId && (ROSTER.candidates[newId] !== undefined || ROSTER.pending[newId] !== undefined) && s.cp <= LEAGUE.cp) {
     logEntry({kind: 'catch', id: 'get:' + newId, title: `${nm(newId)} caught, ${s.cp} CP`, evidence: s.key});
     delete ROSTER.candidates[newId]; delete ROSTER.pending[newId];
   } else if (newId) {
     for (const evo of (APP.pokemon[newId].evo || [])) if (ROSTER.candidates[evo] !== undefined) {
       const eb = evoBaseStats(evo), b = sid.best;
-      if (eb && calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) <= CAP) logEntry({kind: 'catch', id: 'get:' + evo, title: `${nm(newId)} caught for ${nm(evo)}, ${s.cp} CP`, evidence: s.key});
+      if (eb && calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) <= LEAGUE.cp) logEntry({kind: 'catch', id: 'get:' + evo, title: `${nm(newId)} caught for ${nm(evo)}, ${s.cp} CP`, evidence: s.key});
     }
   }
   saveRoster(); dirty = true;
@@ -262,7 +261,7 @@ function afterImport(newScans) {               // called by the scanner when an 
       let why = 'the scan did not change it';
       if (sp && mv && mv.id.startsWith('get:')) { const evo = mv.id.slice(4), sid = scanId(sp);
         if (sid && sid.id && (APP.pokemon[sid.id].evo || []).includes(evo)) { const eb = evoBaseStats(evo), b = sid.best, cp = eb ? calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) : 0;
-          why = cp > CAP ? `${nm(sid.id)} would be ${cp} CP as ${nm(evo)}, over the cap` : 'the scan could not be solved'; }
+          why = cp > LEAGUE.cp ? `${nm(sid.id)} would be ${cp} CP as ${nm(evo)}, over the cap` : 'the scan could not be solved'; }
         else if (sid && sid.id) why = `that is a ${nm(sid.id)}, not what this item needs`; }
       status(`Scan added, but "${ex.title}" is still open: ${why}`);
     }
@@ -346,7 +345,7 @@ function renderTodayInner(el) {
   const bm = APP.benchmark || {best: 721, median: 521};
   let h = `<div class="note">PvPoke ${esc(APP.league.title)} · gamemaster ${esc(APP.gamemasterTimestamp.slice(0, 10))} · ${Object.keys(own).length} owned, ${Object.keys(m.ri.pending).length} pending, ${Object.keys(m.ri.candidates).length} wanted</div>`;
   if (!best) {
-    h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under 1500 CP, add them by name in Roster, or tap <b>Load saved roster</b> there.</div>`;
+    h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under ${LEAGUE.cp} CP, add them by name in Roster, or load the saved roster from its ⋮ menu.</div>`;
     el.innerHTML = h; return;
   }
   const ids = best.members.map(x => x.speciesId), rl = roles(L, ids);
@@ -411,18 +410,18 @@ function meterInfo(r, best, lv) {
   const bb = best[4] || DATA.stats[r.species][0], cur = best[0], cp = calcCP(bb, best[1], best[2], best[3], cpmAt(lv));
   if (lv <= cur) return {cp: r.cp || cp, txt: `L${cur} · drag the knob for power-up costs`, over: false};
   const c = costTo(cur, lv);
-  return {cp, txt: `L${cur} → L${lv} · ${fmt(c.dust)} dust · ${c.candy} candy${c.xl ? ` · ${c.xl} XL candy` : ''}${cp > 1500 ? ' · over the GL cap' : ''}`, over: cp > 1500};
+  return {cp, txt: `L${cur} → L${lv} · ${fmt(c.dust)} dust · ${c.candy} candy${c.xl ? ` · ${c.xl} XL candy` : ''}${cp > LEAGUE.cp ? ` · over the ${LEAGUE.abbr} cap` : ''}`, over: cp > LEAGUE.cp};
 }
 function cpMeter(r, best) {
   const maxLv = maxL() / 2, cur = best[0], lv = UI.meter && UI.meter.key === r.key ? Math.max(cur, Math.min(maxLv, UI.meter.lv)) : cur;
-  const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500);
+  const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp);
   const capLv = Math.min(gl.lv, maxLv), p0 = meterGeom(cur, maxLv), pk = meterGeom(lv, maxLv), pc = meterGeom(capLv, maxLv), info = meterInfo(r, best, lv);
   const out = (p, d) => { const dx = p.x - MCX, dy = p.y - MCY, n = Math.hypot(dx, dy) || 1; return {x: MCX + dx / n * (MR + d), y: MCY + dy / n * (MR + d)}; };
   const a = out(pc, -6), b = out(pc, 6), l = out(pc, 14);
   return `<div class="meter" id="meter" data-key="${esc(r.key)}"><svg viewBox="0 0 200 120" onpointerdown="Planner.meterDown(event)">
     <path class="track" d="M ${MCX - MR} ${MCY} A ${MR} ${MR} 0 0 1 ${MCX + MR} ${MCY}"/>
     <path class="fill" id="mfill" d="${meterArc(Math.min(lv, capLv), maxLv)}"/><path class="fill over" id="mover" d="${meterArc(lv, maxLv, capLv)}"/>
-    <line class="capt" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/><text class="capl" x="${l.x.toFixed(1)}" y="${(l.y + 3).toFixed(1)}" text-anchor="middle">1500</text>
+    <line class="capt" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/><text class="capl" x="${l.x.toFixed(1)}" y="${(l.y + 3).toFixed(1)}" text-anchor="middle">${LEAGUE.cp}</text>
     <circle class="cur" cx="${p0.x.toFixed(1)}" cy="${p0.y.toFixed(1)}" r="3.5"/>
     <circle class="knob" id="mknob" cx="${pk.x.toFixed(1)}" cy="${pk.y.toFixed(1)}" r="7"/>
     <text class="lbl" x="100" y="72" text-anchor="middle">CP</text><text class="cp" id="mcp" x="100" y="102" text-anchor="middle">${info.cp}</text>
@@ -444,7 +443,7 @@ function meterDown(ev) {
 }
 function meterPaint(el, r, best, lv) {
   const maxLv = maxL() / 2, p = meterGeom(lv, maxLv), info = meterInfo(r, best, lv), k = el.querySelector('#mknob'), mi = el.querySelector('#minfo');
-  const bb = best[4] || DATA.stats[r.species][0], capLv = Math.min(pvpRank(bb, best[1], best[2], best[3], 1500).lv, maxLv);
+  const bb = best[4] || DATA.stats[r.species][0], capLv = Math.min(pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp).lv, maxLv);
   el.querySelector('#mfill').setAttribute('d', meterArc(Math.min(lv, capLv), maxLv)); el.querySelector('#mover').setAttribute('d', meterArc(lv, maxLv, capLv));
   k.setAttribute('cx', p.x.toFixed(1)); k.setAttribute('cy', p.y.toFixed(1));
   el.querySelector('#mcp').textContent = info.cp; mi.textContent = info.txt; mi.classList.toggle('over', info.over);
@@ -455,14 +454,14 @@ const FORM_FILTER = {shadow: 'shadow', galarian: 'galar', alolan: 'alola', hisui
 const baseName = id => nm(id).replace(/\s*\(.*\)\s*$/, '').trim();
 const formFilters = id => id.split('_').slice(1).map(p => FORM_FILTER[p]).filter(Boolean);
 function searchFor(id) {                       // "+ninetales&shadow&cp-1500": the whole evolution family, this form, GL-eligible copies
-  return ['+' + baseName(id).toLowerCase()].concat(formFilters(id), 'cp-1500').join('&');
+  return ['+' + baseName(id).toLowerCase()].concat(formFilters(id), 'cp-' + LEAGUE.cp).join('&');
 }
 function candidateSearch(id) {                 // "jigglypuff&cp-479": wild pre-evolutions that evolve into a GL-legal copy
   const pre = (APP.prevo || {})[id]; if (!pre || !DATA.stats[pre.split('_')[0].toUpperCase()]) return null;
   const sc = safeCap(pre, id); if (!sc) return null;
   return {q: [baseName(pre).toLowerCase()].concat(formFilters(pre), 'cp-' + sc.safe).join('&'), pre, cap: sc.safe};
 }
-function teamSearch(ids) { return ids.map(id => '+' + baseName(id).toLowerCase()).join(',') + '&cp-1500'; }
+function teamSearch(ids) { return ids.map(id => '+' + baseName(id).toLowerCase()).join(',') + '&cp-' + LEAGUE.cp; }
 async function copyText(q, btn) {
   try { await navigator.clipboard.writeText(q); }
   catch { const ta = document.createElement('textarea'); ta.value = q; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch {} ta.remove(); }
@@ -471,13 +470,13 @@ async function copyText(q, btn) {
 }
 const searchRow = (label, q, sub) => `<div class="srch"><span class="lb">${esc(label)}</span><span class="tx"><code>${esc(q)}</code>${sub ? `<div class="dt">${sub}</div>` : ''}</span><button onclick="Planner.copyText(${attr(q)},this)">Copy</button></div>`;
 function searchBlock(ids) {                    // for a team page: one string for the team, one per member, plus catch strings for missing members
-  const rows = [searchRow('Team', teamSearch(ids), 'every member\'s evolution family under 1500 CP')];
+  const rows = [searchRow('Team', teamSearch(ids), `every member's evolution family under ${LEAGUE.cp} CP`)];
   for (const id of ids) {
     rows.push(searchRow(nm(id), searchFor(id)));
     const c = candidateSearch(id); if (c) rows.push(searchRow('catch', c.q, `${esc(nm(c.pre))} that evolves into a GL-legal ${esc(nm(id))}`));
   }
   return `<div class="team srchs" style="cursor:default">${rows.join('')}</div>
-    <div class="note">Paste into the search box of your Pokémon storage. <b>+name</b> lists the whole evolution family, so a pre-evolution you can still evolve shows up too; <b>&amp;shadow</b>, <b>&amp;galar</b> filter the form; <b>cp-1500</b> keeps it to Great League copies. The team string cannot filter forms per member, so a normal Ninetales also matches a Shadow slot.</div>`;
+    <div class="note">Paste into the search box of your Pokémon storage. <b>+name</b> lists the whole evolution family, so a pre-evolution you can still evolve shows up too; <b>&amp;shadow</b>, <b>&amp;galar</b> filter the form; <b>cp-${LEAGUE.cp}</b> keeps it to ${esc(LEAGUE.title)} copies. The team string cannot filter forms per member, so a normal Ninetales also matches a Shadow slot.</div>`;
 }
 
 /* ---------- Teams page and team detail ---------- */
@@ -499,7 +498,7 @@ function renderTeamsInner(el) {
   if (best) {
     const ids = best.members.map(x => x.speciesId);
     h += `<div class="sec">Recommended <small>best of ${rep.todayAll.length >= 12 ? '12+' : rep.todayAll.length} buildable from your roster</small></div>` + teamRow(m, ids, null, 'run this one');
-  } else h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under 1500 CP, or add them by name in Roster.</div>`;
+  } else h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under ${LEAGUE.cp} CP, or add them by name in Roster.</div>`;
   h += `<div class="sec">Your in-game parties <small>as you built them in the game</small></div>`;
   h += parties.length ? parties.map(([name, v]) => teamRow(m, v, name)).join('') : `<div class="note">None yet. Add the three Pokémon of a battle party below, or build one under Meta › Builder and save it.</div>`;
   h += `<div class="add"><input id="tagname" placeholder="name" style="min-width:70px;flex:.6"><input id="tag1" list="species" placeholder="1"><input id="tag2" list="species" placeholder="2"><input id="tag3" list="species" placeholder="3"><button onclick="Planner.addTag()">Add</button></div>`;
@@ -819,7 +818,7 @@ function readiness(m, id) {
 }
 function todoList(m, id) {
   const rd = readiness(m, id); if (!rd) return '';
-  if (rd.ready) return `<div class="todo ok"><span class="okc">✓</span> Ready for Great League: at the cap with PvPoke's moves.</div>`;
+  if (rd.ready) return `<div class="todo ok"><span class="okc">✓</span> Ready for ${esc(LEAGUE.title)}: at the cap with PvPoke's moves.</div>`;
   return `<ul class="todo">${rd.items.map(x => `<li class="${x.k}"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></li>`).join('')}</ul>`;
 }
 
@@ -932,6 +931,14 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
+/* ---------- leagues: data/cups.json lists Great / Ultra / Little plus the cups PvPoke currently features ---------- */
+let CUPS = JSON.parse(localStorage.getItem('cups') || 'null');
+const DEFAULT_CUPS = [{slug: 'great', title: 'Great League', cp: 1500, kind: 'league'}, {slug: 'ultra', title: 'Ultra League', cp: 2500, kind: 'league'}, {slug: 'little', title: 'Little League', cp: 500, kind: 'league'}];
+async function loadCups() {
+  try { const r = await fetch('data/cups.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}); if (r.ok) { const j = await r.json(); if (j && j.leagues && j.leagues.length) { CUPS = j.leagues; localStorage.setItem('cups', JSON.stringify(CUPS)); paintDrawer(); } } } catch {}
+}
+function setLeague(slug) { drawer(false); if (typeof window.setLeague === 'function') window.setLeague(slug); }
+
 /* ---------- side drawer ---------- */
 const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★']]],
                 ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
@@ -942,6 +949,8 @@ function paintDrawer() {
   const cur = onView(), on = {mon: UI.monFrom, team: UI.teamFrom}[cur] || cur;
   let h = `<div class="ttl">Menu <span class="x" onclick="Planner.drawer(false)">✕</span></div>`;
   for (const [g, items] of DRAWER) h += `<div class="grp">${g}</div>` + items.map(([k, label, ic]) => `<a href="#/${k}" class="${on === k ? 'on' : ''}" onclick="Planner.nav('#/${k}');return false"><span class="ic">${ic}</span>${label}</a>`).join('');
+  const cups = CUPS || DEFAULT_CUPS, curL = LEAGUE.slug;
+  h += `<div class="grp">League</div>` + cups.map(c => `<a href="#" class="${c.slug === curL ? 'on' : ''}" onclick="Planner.setLeague('${c.slug}');return false"><span class="ic">${c.kind === 'cup' ? '◆' : '◇'}</span>${esc(c.title)}<small>${c.cp} CP</small></a>`).join('');
   h += `<div class="grp">You</div><a href="#" onclick="Planner.drawer(false);toggleProfile();return false"><span class="ic">☺</span>Trainer profile</a>`;
   if (window.Sync && Sync.available) h += `<a href="#" onclick="Planner.drawer(false);Sync.toggle();return false"><span class="ic">☁</span>Sync<small>${Sync.state && Sync.state.code ? 'connected' : 'off'}</small></a>`;
   h += `<a href="#" onclick="Planner.drawer(false);toggleHelp();return false"><span class="ic">?</span>Help &amp; glossary</a>`;
@@ -985,17 +994,17 @@ function scanSection(m, r) {
   h += `<div class="scanhero"><div class="dh" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></div>`;
   const rows = [];
   if (best) {
-    const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], 1500), ul = pvpRank(bb, best[1], best[2], best[3], 2500);
+    const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp), ul = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp === 2500 ? 1500 : 2500);
     const barRow = (l, v) => `<span>${l}</span><span class="tr"><i class="${v === 15 ? 'max' : ''}" style="width:${v / 15 * 100}%"></i></span><span class="iv">${v}</span>`;
     h += `<div class="bars">${barRow('Atk', best[1])}${barRow('Def', best[2])}${barRow('HP', best[3])}</div>`;
     h += `<div class="kpis"><div><small>IV%</small><b>${lo === hi ? hi.toFixed(1) : lo.toFixed(0) + '–' + hi.toFixed(0)}%</b><span class="sub">${best[1] + best[2] + best[3]} of 45</span></div><div><small>GL rank</small><b>#${gl.n}</b><span class="sub">${gl.pct.toFixed(1)}%</span></div><div><small>UL rank</small><b>#${ul.n}</b><span class="sub">${ul.pct.toFixed(1)}%</span></div></div>`;
     let st;
     const cpMax = calcCP(bb, best[1], best[2], best[3], cpmAt(maxL() / 2));
-    if (r.cp > 1500) st = `${chip('over the GL cap', 'warn')} <span class="dim">cannot battle in Great League</span>`;
-    else if (cpMax < 1500) st = `${chip(`caps at ${cpMax} CP`, 'warn')} <span class="dim">stays under 1500 even at L${maxL() / 2}: evolve it, see below</span>`;
+    if (r.cp > LEAGUE.cp) st = `${chip(`over the ${LEAGUE.abbr} cap`, 'warn')} <span class="dim">cannot battle in ${esc(LEAGUE.title)}</span>`;
+    else if (cpMax < LEAGUE.cp) st = `${chip(`caps at ${cpMax} CP`, 'warn')} <span class="dim">stays under ${LEAGUE.cp} even at L${maxL() / 2}: evolve it, see below</span>`;
     else if (gl.lv > 40) st = `${chip(`needs L${gl.lv}`, 'warn')} <span class="dim">XL candy · ${gl.cp} CP at the cap</span>`;
     else if (gl.lv > best[0]) { const c = costTo(best[0], gl.lv); st = `${chip(`power up to L${gl.lv}`, 'ul')} <span class="dim">${fmt(c.dust)} dust · ${c.candy} candy → ${gl.cp} CP</span>`; }
-    else st = `${chip('ready for GL', 'meta1')} <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
+    else st = `${chip(`ready for ${LEAGUE.abbr}`, 'meta1')} <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
     rows.push(['Status', st]);
     if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} fit this CP and HP, best shown. An appraisal pins it down.<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
   } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋮ → Correct a misread</span>`]);
@@ -1019,12 +1028,12 @@ function scanSection(m, r) {
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
   if (r.history && r.history.length) rows.push(['History', r.history.slice().reverse().map(h => `${when(h.t)}: ${h.species !== r.species ? esc(nice(h.species)) + ' · ' : ''}${h.cp} CP · L${h.level ?? '?'}`).join('<br>') + `<div class="dim" style="font-size:12px">now ${r.cp} CP · L${r.level ?? '?'}</div>`]);
   h += kv(rows) + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
-  h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, GL rank and UL rank mean?</div>`;
-  const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], 1500) : null;
-  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>GL rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the 1500 cap (#1 is the perfect Great League copy); the percentage is its stat product relative to #1. <b>UL</b> the same at 2500. Poké Genie shows the same rank; its "Rank %" is the share of spreads below this one ${g0 ? ` (${(100 - g0.n / 40.96).toFixed(1)}% here)` : ''} and its "Stat Prod" is our percentage. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
+  h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, ${LEAGUE.abbr} rank and ${LEAGUE.cp === 2500 ? 'GL' : 'UL'} rank mean?</div>`;
+  const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
+  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Poké Genie shows the same rank; its "Rank %" is the share of spreads below this one ${g0 ? ` (${(100 - g0.n / 40.96).toFixed(1)}% here)` : ''} and its "Stat Prod" is our percentage. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
   h += `</div>`;
   if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in the meta</div>`;
-  else h += `<div class="note">${esc(nice(r.species))} is not in PvPoke's Great League rankings, so there is no meta page for it.</div>`;
+  else h += `<div class="note">${esc(nice(r.species))} is not in PvPoke's ${esc(LEAGUE.title)} rankings, so there is no meta page for it.</div>`;
   return h;
 }
 function editScan(key) {
@@ -1414,9 +1423,9 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
-route();
+route(); loadCups();
 })();
