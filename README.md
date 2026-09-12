@@ -41,6 +41,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+- **Matchups** (menu): your builder team or a saved party against any of ~150 simulated opponents per shield scenario
+  (0-0, 1-1, 2-2), with a verdict per member and a "their lead is X" mode that says stay / swap / shield. The numbers
+  come from `data/matrix-<league>.json`, built daily by `scripts/build_matrix.mjs` with PvPoke's own battle engine
+  (`vendor/pvpoke`, MIT) for the meta pool and the top 300 of each league; they match pvpoke.com's matrix and battle
+  pages to within a point. The same matrix drives team roles (lead / safe swap / closer), the "N of 150 beat all
+  three" threat count on team pages and the builder, and the coverage grid (only cells without a simulation are faded).
+  Pokémon pages show move counts (fast moves and turns per charged move) from the game master.
 - **AI review**: every complete team in the builder, and every saved party, gets one structured Claude review (verdict,
   strengths, weak spots, swaps from your roster), cached per trio and league so it costs one call; saved-team rows show
   the verdict, ⋮ → Refresh review asks again. Other team pages offer the review on tap.

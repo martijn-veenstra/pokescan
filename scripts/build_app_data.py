@@ -152,7 +152,11 @@ def main(argv=None):
         "source": "https://pvpoke.com/rankings/",
         "gamemasterTimestamp": gm.get("timestamp"),
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "moves": {m: {"n": gm_moves[m]["name"], "t": gm_moves[m]["type"]} for m in sorted(used_moves) if m in gm_moves},
+        # n name, t type, e energy (fast: gain per use, charged: cost as a negative number), tr turns per fast move, p power
+        "moves": {m: {"n": gm_moves[m]["name"], "t": gm_moves[m]["type"], "p": gm_moves[m].get("power", 0),
+                      "e": gm_moves[m].get("energyGain", 0) or -abs(gm_moves[m].get("energy", 0)),
+                      **({"tr": max(1, round(gm_moves[m]["cooldown"] / 500))} if gm_moves[m].get("energyGain") else {})}
+                  for m in sorted(used_moves) if m in gm_moves},
         "meta": meta,
         "pokemon": pokemon,
         "unranked": extra,

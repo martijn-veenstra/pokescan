@@ -39,9 +39,20 @@
         }
   }
 
+  /* data/matrix-<league>.json: ratings simulated with PvPoke's engine for rows × cols × scenarios (0-0, 1-1, 2-2 shields) */
+  function decodeMatrix(mx) {
+    if (!mx || !mx.data || mx.decoded) return mx || null;
+    const b64 = mx.data, bin = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+    const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    mx.arr = new Uint16Array(bytes.buffer); mx.rowIdx = new Map(mx.rows.map((r, i) => [r, i])); mx.colIdx = new Map(mx.cols.map((c, i) => [c, i]));
+    mx.scen = new Map(mx.scenarios.map((x, i) => [x, i])); mx.decoded = true; delete mx.data;
+    return mx;
+  }
+
   class League {
-    constructor(data, overrides) {
+    constructor(data, overrides, matrix) {
       this.data = data;
+      this.mx = decodeMatrix(matrix);
       this.pokemon = data.pokemon;
       this.moves = data.moves;
       this.meta = data.meta.slice();
@@ -61,13 +72,35 @@
     }
     has(id) { return !!this.pokemon[id]; }
     isPublished(atk, dfn) { return this.pub.has(atk + '|' + dfn); }
+    /* where a rating comes from: 'sim' (matrix, same moveset), 'sim-default' (matrix, PvPoke's moveset while yours differs), 'pub' (PvPoke's published top matchups), 'est' (type heuristic) */
+    source(atk, dfn) {
+      if (this.simCell(atk, dfn, 1) !== null) return this.movesMatch(atk) && this.movesMatch(dfn) ? 'sim' : 'sim-default';
+      return this.pub.has(atk + '|' + dfn) ? 'pub' : 'est';
+    }
+    movesMatch(id) {                            // does the moveset used for scoring equal the one the matrix was simulated with?
+      const mx = this.mx; if (!mx || !mx.moves[id]) return true;
+      const a = this.movesOf(id).filter(Boolean), b = mx.moves[id];
+      return a[0] === b[0] && a.slice(1).slice().sort().join() === b.slice(1).slice().sort().join();
+    }
+    simCell(atk, dfn, s) {                      // matrix rating for scenario index s, using the transposed cell when only that exists
+      const mx = this.mx; if (!mx) return null;
+      const n = mx.scenarios.length, r = mx.rowIdx.get(atk), c = mx.colIdx.get(dfn);
+      if (r !== undefined && c !== undefined) return mx.arr[(r * mx.cols.length + c) * n + s];
+      const r2 = mx.rowIdx.get(dfn), c2 = mx.colIdx.get(atk);
+      if (r2 !== undefined && c2 !== undefined) return 1000 - mx.arr[(r2 * mx.cols.length + c2) * n + s];
+      return null;
+    }
+    scenarioIndex(sc) { const mx = this.mx; if (!mx) return 1; if (sc === undefined) return mx.scen.get('1-1') ?? 0; return typeof sc === 'number' ? sc : (mx.scen.get(sc) ?? 0); }
+    pool() { return this.mx ? this.mx.cols : this.meta; }   // the opponents a matrix knows (meta group ∪ top of the rankings), else the meta group
     movesOf(id) { return (this.overrides[id] && this.overrides[id].length) ? this.overrides[id] : this.pokemon[id].moveset; }
     moveTypes(id) { return this.movesOf(id).filter(m => this.moves[m]).map(m => this.moves[m].t); }
-    rating(atk, dfn) {
-      const key = atk + '|' + dfn;
+    rating(atk, dfn, scenario) {
+      const si = this.scenarioIndex(scenario), key = atk + '|' + dfn + (si === this.scenarioIndex() ? '' : '|' + si);
       if (this.cache.has(key)) return this.cache.get(key);
       let r;
-      if (this.pub.has(key)) r = this.pub.get(key);
+      const sim = this.simCell(atk, dfn, si);
+      if (sim !== null) r = sim;
+      else if (this.pub.has(atk + '|' + dfn)) r = this.pub.get(atk + '|' + dfn);
       else {
         const A = this.pokemon[atk], D = this.pokemon[dfn];
         const off = Math.max(...this.moveTypes(atk).map(t => eff(t, D.types)));
@@ -77,6 +110,33 @@
       }
       this.cache.set(key, r);
       return r;
+    }
+    /* Roles from the simulated matrix over the pool: lead = best mean 1-1; safe switch = fewest 1-1 losses under 400; closer = best mean of 0-0 and 2-2. */
+    simRoles(team) {
+      if (!this.mx || team.length !== 3 || !this.mx.scen.has('0-0') || !this.mx.scen.has('2-2')) return null;
+      const pool = this.pool().filter(o => !team.includes(o)), s11 = this.scenarioIndex('1-1'), s00 = this.scenarioIndex('0-0'), s22 = this.scenarioIndex('2-2');
+      const stat = team.map(id => { let sum11 = 0, bad = 0, sumClose = 0, n = 0;
+        for (const o of pool) { const a = this.simCell(id, o, s11); if (a === null) continue; n++; sum11 += a; if (a < 400) bad++; sumClose += (this.simCell(id, o, s00) + this.simCell(id, o, s22)) / 2; }
+        return {id, lead: n ? sum11 / n : 0, bad, close: n ? sumClose / n : 0, n}; });
+      if (stat.some(x => !x.n)) return null;
+      const left = stat.slice(), pick = (key, asc) => { left.sort((a, b) => asc ? a[key] - b[key] : b[key] - a[key]); return left.shift(); };
+      const sw = pick('bad', true), cl = pick('close', false), ld = left[0];
+      return [{role: 'Lead', id: ld.id, why: `mean ${ld.lead.toFixed(0)} in 1-1`}, {role: 'Swap', id: sw.id, why: `${sw.bad} hard losses in 1-1`}, {role: 'Closer', id: cl.id, why: `mean ${cl.close.toFixed(0)} with 0 or 2 shields`}];
+    }
+    /* Pool Pokémon that beat every member (1-1), best first; each with the three ratings from the members' side. */
+    threatList(team, limit) {
+      const pool = this.pool(), out = [];
+      for (const o of pool) { if (team.includes(o)) continue; const rs = team.map(m => this.rating(m, o)); const mx = Math.max(...rs); if (mx < 500) out.push({id: o, ratings: rs, worst: mx}); }
+      out.sort((a, b) => a.worst - b.worst);
+      return {threats: out.slice(0, limit || 10), count: out.length, pool: pool.length};
+    }
+    /* One opponent against the team in every scenario: [{id, ratings: {'0-0': r, '1-1': r, '2-2': r}, verdict}] */
+    matchup(team, opp) {
+      const scen = this.mx ? this.mx.scenarios : ['1-1'];
+      return team.map(id => { const ratings = {}; for (const sc of scen) ratings[sc] = this.rating(id, opp, sc);
+        const vals = Object.values(ratings), wins = vals.filter(v => v >= 500).length;
+        const verdict = wins === vals.length ? 'wins' : wins === 0 ? 'loses' : 'shield-dependent';
+        return {id, ratings, verdict, source: this.source(id, opp)}; });
     }
     label(id) {
       const e = this.pokemon[id], ms = this.movesOf(id);
@@ -162,12 +222,22 @@
     }
   }
 
-  function fromRoster(data, roster) {
+  function fromRoster(data, roster, matrix) {
     const overrides = {};
     for (const blk of ['owned', 'pending', 'candidates'])
       for (const [k, v] of Object.entries(roster[blk] || {})) if (v && v.length) overrides[k] = v;
-    return new League(data, overrides);
+    return new League(data, overrides, matrix);
+  }
+  /* Move counts for a moveset: fast moves and turns to reach each charged move, and the count string ("3-3-2") over a cycle. */
+  function counts(moves, movesetIds) {
+    const f = moves[movesetIds[0]]; if (!f || !f.e || !f.tr) return null;
+    const out = {fast: movesetIds[0], gain: f.e, turns: f.tr, charged: []};
+    for (const c of movesetIds.slice(1)) { const m = moves[c]; if (!m || !m.e) continue; const cost = -m.e;
+      const first = Math.ceil(cost / f.e), seq = []; let energy = 0;
+      for (let i = 0; i < 4; i++) { let n = 0; while (energy < cost) { energy += f.e; n++; } energy -= cost; seq.push(n); }
+      out.charged.push({id: c, cost, first, turns: first * f.tr, seq: seq.join('-')}); }
+    return out;
   }
 
-  return {League, fromRoster, trios, baseSpecies, eff, CHART};
+  return {League, fromRoster, trios, baseSpecies, eff, CHART, counts, decodeMatrix};
 });

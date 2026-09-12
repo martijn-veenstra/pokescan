@@ -16,12 +16,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Regenerate data files
         run: |
           python3 scripts/generate_pvpoke_rankings.py
           python3 scripts/generate_pvpoke_team_comps.py
           python3 scripts/build_cups.py
           python3 scripts/diff_app_data.py
+          for league in great ultra little; do node scripts/build_matrix.mjs --league $league --gm /tmp/gamemaster.min.json; done
           python3 scripts/build_pve_data.py
           python3 scripts/evaluate_teams.py data/community-teams-great.json -o data/community-teams-great-analysis.json
           python3 scripts/generate_roster_team_comps.py --pretty

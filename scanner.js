@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.46';
+const APP_VERSION='9.47';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1099,15 +1099,15 @@ function planFor(r,best){                       // the evolution chain of a scan
   return lines.length?`<div class="plan">${lines.join('<br>')}</div>`:'';
 }
 
-const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon'];
-const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','scans'];
-const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:''};
+const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups'];
+const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','scans','matchups'];
+const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:''};
 function showView(t){                              // switch the visible page; navigation goes through Planner.nav so the URL hash stays in step
   if(!PAGES.includes(t)) t='today';
   for(const k of PAGES){ const v=$('view-'+k); if(v) v.classList.toggle('on',k===t); }
   for(const k of ['today','builder','roster']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',BAR_FOR[t]===k); }
   if(TOP_PAGES.includes(t)) localStorage.setItem('tab',t);
-  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('meta'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
+  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('meta'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon,matchups:P.renderMatchups}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
 }
 function showTab(t){ if(window.Planner&&Planner.nav&&TOP_PAGES.includes(t)) Planner.nav('#/'+t); else showView(t); }
 if(!location.hash) showView(localStorage.getItem('tab')||'today');
