@@ -1529,12 +1529,19 @@ function renderRosterInner(el) {
   h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span>${ctxMenu([['Add by name…', 'Planner.toggleAdd()'], ['Export roster JSON', 'Planner.exportRoster()'], ['Load saved roster', 'Planner.loadRepoRoster()'], ['Clear all scans…', 'clearAll()', true]])}</div>`;
   h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
   const q = (UI.rosterQ || '').trim().toLowerCase();
-  const shown = ts.filter(t => !stSel || t.st === stSel).filter(t => !q || nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q)));
+  const shown = ts.filter(t => !stSel || t.st === stSel).filter(t => !q || nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (t.txt || '').toLowerCase().includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q)));
   if (!shown.length) h += `<div class="note">${q || stSel ? 'Nothing in your roster matches.' : 'Your roster is empty: import status screenshots under Scans, or add Pokémon by name from the ⋮ menu.'}</div>`;
-  // one card per Pokémon: the same card as the Scans list for scanned copies, a dashed card for pieces you do not hold yet
+  // one card per Pokémon: the same card as the Scans list for scanned copies (a scanned pre-evolution such as Jigglypuff stands for the
+  // evolution it becomes, so one scan is shown once even when it could evolve into several), a dashed card for pieces you do not hold yet
+  const seenScan = new Set();
   h += shown.map(t => {
     const o = m.own[t.id];
     if (o && !o.manual && o.scan) { const idx = results.indexOf(o.scan); return typeof cardHTML === 'function' && idx >= 0 ? cardHTML(o.scan, idx, null) : ''; }
+    const a = t.st === 'pending' && m.auto[t.id];
+    if (a && a.fromKey && typeof cardHTML === 'function') {
+      const idx = results.findIndex(r => r.key === a.fromKey);
+      if (idx >= 0) { if (seenScan.has(a.fromKey)) return ''; seenScan.add(a.fromKey); return cardHTML(results[idx], idx, null); }
+    }
     const e = APP.pokemon[t.id], why = {manual: 'added by hand · not scanned', pending: t.txt, wanted: t.txt === 'wanted' ? 'wanted · nothing to catch yet' : `catch ${t.txt}`, bench: 'benched'}[t.st] || t.txt;
     const cls = {pending: 'gl', wanted: '', manual: '', bench: ''}[t.st] || '';
     return `<div class="mon compact ghost" onclick="Planner.openMon('${t.id}')"><div class="top"><span class="name">${esc(nm(t.id))}</span><span class="cp">#${e.rank} <span class="dim">· ${esc(e.types.join(' / '))}</span></span></div>
