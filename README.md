@@ -15,7 +15,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   status, the to-dos for its members, the meta Pokémon that beat two or all three (with who to swap to),
   one-member swaps from your roster, the coverage grid (wins / even / loses, faded cells are estimated),
   and rename / delete for saved parties.
-- **Roster** tab: every Pokémon as a status tile (ready, powering up, pending, wanted, XL gated, benched).
+- **Roster** tab: one card per Pokémon in the same design as the scan list (CP, IVs, IV%, league rank) with the
+  planner's status on it (ready, power-up cost, needs moves, XL gated, evolve → …, in which party); pieces you do
+  not hold yet (pending evolutions, wanted, benched) are dashed cards. Tap a status count to filter.
   Tap for rank, cost to the cap, moves, what it beats and loses to, and actions. Owned tiles come from
   scans at or under 1500 CP; add others by name or load the roster committed in the repo.
 - **Builder** tab: any three Pokémon, scored live with roles, coverage grid and what you would still need

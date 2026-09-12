@@ -75,9 +75,10 @@ export function parseRocketPage(html) {
 
 export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) {
   let cache = null, loading = null;
-  const get = async (url, timeoutMs) => {
+  const get = async (url, timeoutMs, browserUa) => {
     const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), timeoutMs || 15000);
-    try { const r = await fetchImpl(url, {signal: ctl.signal, headers: {'user-agent': 'PokeScan/1.0 (+https://github.com/martijn-veenstra/pokescan)'}}); if (!r.ok) throw new Error(url + ' HTTP ' + r.status); return r; }
+    const ua = browserUa ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15 PokeScan/1.0' : 'PokeScan/1.0 (+https://github.com/martijn-veenstra/pokescan)';
+    try { const r = await fetchImpl(url, {signal: ctl.signal, headers: {'user-agent': ua, accept: 'text/html,application/json;q=0.9,*/*;q=0.8'}}); if (!r.ok) throw new Error(url + ' HTTP ' + r.status); return r; }
     finally { clearTimeout(to); }
   };
   async function refresh() {
@@ -103,10 +104,12 @@ export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) 
     }
     // Team GO Rocket lineups (Shadow Pokémon): one fixed page; keep the previous parse when Leek Duck is slow or changed its markup
     try {
-      const lineups = parseRocketPage(await (await get(ROCKET_URL, 10000)).text());
+      const html = await (await get(ROCKET_URL, 15000, true)).text();
+      const lineups = parseRocketPage(html);
       if (lineups) out.rocket = {t: Date.now(), lineups};
-      else throw new Error('no lineups recognised');
+      else throw new Error(`no lineups recognised in ${html.length} bytes (${(html.match(/rocket-profile/g) || []).length} profiles, ${(html.match(/data-pokemon=/g) || []).length} data-pokemon)`);
     } catch (e) {
+      out.rocketError = String(e && e.message || e).slice(0, 300);   // visible in /api/sources so a broken scrape can be diagnosed from outside
       if (prev && prev.rocket) out.rocket = prev.rocket;
       if (log) log.warn ? log.warn({err: e.message}, 'rocket lineups not read') : log.log('rocket lineups not read', e.message);
     }

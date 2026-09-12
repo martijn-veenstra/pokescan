@@ -9,7 +9,7 @@ r = d.get("rocket") or {}
 lus = r.get("lineups") or []
 print("sources: raids", len(d.get("raids") or []), "eggs", len(d.get("eggs") or []), "research", len(d.get("research") or []),
       "events", len(d.get("events") or []), "enriched pages", d.get("enriched"))
-print("rocket lineups:", len(lus))
+print("rocket lineups:", len(lus), ("| error: " + d["rocketError"]) if d.get("rocketError") else "")
 for l in lus[:8]:
     print("  ", l.get("who"), "|", " / ".join(", ".join(s) for s in l.get("slots", [])))
 if not lus:

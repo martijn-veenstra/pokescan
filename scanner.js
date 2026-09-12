@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.51';
+const APP_VERSION='9.52';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -671,7 +671,7 @@ function toggleProfile(){ const b=$('profile'); b.classList.toggle('open'); if(b
 
 /* ---------- import log: one line per file, what it gave or why it failed ---------- */
 const SCANLOG=(()=>{ try{ return JSON.parse(localStorage.getItem('scanlog')||'[]'); }catch(e){ return []; } })();
-let GAIN=null, showLog=localStorage.getItem('showlog')==='1';
+let GAIN=null, showLog=false;                 // the import log starts collapsed; the header toggles it for this visit
 function gainStart(){ GAIN={new:[],moves:[],appr:[],profile:null,reads:0,frames:0,mode:'',note:[]}; }
 let UPDATE=null;                                   // key of the card an import is meant to update (set from its page); its own key follows the update
 function gain(kind,v){ if(!GAIN) return; if(kind==='reads'||kind==='frames') GAIN[kind]++; else if(Array.isArray(GAIN[kind])) GAIN[kind].push(v); else GAIN[kind]=v; }
@@ -697,7 +697,7 @@ function renderLog(){
   const el=$('implog'); if(!el) return;
   if(!SCANLOG.length){ el.innerHTML=''; return; }
   const fails=SCANLOG.filter(e=>!e.ok).length;
-  let h=`<div class="hd" onclick="showLog=!showLog;localStorage.setItem('showlog',showLog?'1':'0');renderLog()"><span>${showLog?'▾':'▸'} Import log · ${SCANLOG.length} file${SCANLOG.length===1?'':'s'}${fails?` · ${fails} failed`:''}</span>${showLog?`<a href="#" onclick="event.stopPropagation();SCANLOG.length=0;localStorage.removeItem('scanlog');renderLog();return false">clear</a>`:''}</div>`;
+  let h=`<div class="hd" onclick="showLog=!showLog;renderLog()"><span>${showLog?'▾':'▸'} Import log · ${SCANLOG.length} file${SCANLOG.length===1?'':'s'}${fails?` · ${fails} failed`:''}</span>${showLog?`<a href="#" onclick="event.stopPropagation();SCANLOG.length=0;localStorage.removeItem('scanlog');renderLog();return false">clear</a>`:''}</div>`;
   if(showLog) h+=SCANLOG.slice(0,25).map(e=>{ const d=new Date(e.t); const name=(e.file||'').length>28?(e.file||'').slice(0,14)+'…'+(e.file||'').slice(-10):(e.file||'');
     return `<div class="il"><span class="t">${d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}<br>${d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</span><span><span class="f">${name}</span> <span class="dim">${e.kind||''}${e.size?` · ${(e.size/1e6).toFixed(1)} MB`:''}${e.ms?` · ${(e.ms/1000).toFixed(0)}s`:''}</span><br><span class="r ${e.ok?'ok':'err'}">${e.ok?'✓ ':'⚠ '}${e.msg||''}</span>${e.detail?`<br><span class="d">${e.detail}</span>`:''}</span></div>`; }).join('');
   el.innerHTML=h;
@@ -1043,38 +1043,43 @@ function render(){
       return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],LEAGUE.cp).n)); };
     order.sort((a,b)=>gr(results[a])-gr(results[b]));
   }
-  $('out').innerHTML=order.map(i=>{ const r=results[i];
-    const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
-    const cls=hi>=90?'g':hi>=70?'m':'b';
-    const mt=metaFor(r.species);
-    const best=r.combos.length?bestOf2(r):null;
-    const nice=(r.species||'?').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-    const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.level&&'level?'].filter(Boolean).join(' ');
-    const ivpct=ps.length?(lo===hi?hi.toFixed(0):lo.toFixed(0)+'–'+hi.toFixed(0))+'%':'—';
-    let status='', gl=null;
-    if(best){ const bb2=best[4]||DATA.stats[r.species][0]; gl=pvpRank(bb2,best[1],best[2],best[3],LEAGUE.cp);
-      if(r.cp>LEAGUE.cp) status=`<span class="chip warn">over the ${LEAGUE.abbr} cap</span>`;
-      else if(gl.lv>40) status=`<span class="chip warn">needs L${gl.lv} · XL candy</span>`;
-      else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
-      else status=`<span class="chip meta1">ready for ${LEAGUE.abbr}</span>`; }
-    const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
-      r.shadow?'<span class="chip ul">shadow</span>':'',
-      r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
-      (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length?'<span class="chip" title="no attacks screenshot yet; the planner falls back to PvPoke\'s moveset without showing it as fact">moves not read</span>':'',
-      !r.bench&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
-      ].join('');
-    const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
-    return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="Planner.openScan('${r.key.replace(/'/g,'')}')">${lineageBanner(r)}
-      <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${nice}</span>
-        <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
-      <div class="ivrow">
-        <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>
-        <span><small>IV%</small><b class="pctc">${ivpct}</b></span>
-        <span><small>${LEAGUE.abbr} rank</small>${gl?`<b>#${gl.n}</b> <span class="dim">${gl.pct.toFixed(1)}%</span>`:'<b class="dim">—</b>'}</span>
-      </div>
-      <div class="chips row2"><span>${status||'<span class="chip warn">no match: tap to correct</span>'}${r.combos.length>1?`<span class="chip">${r.combos.length} possible</span>`:''}${tags}</span>${mt?`<span class="chip">meta #${mt[0]}</span>`:''}</div>
-    </div>`;
-  }).join('');
+  $('out').innerHTML=order.map(i=>cardHTML(results[i], i, bestCopy)).join('');
+}
+/* one card per Pokémon, shared by the Scans list and the Roster page: scan facts (CP, IVs, rank) plus what the planner says it still needs */
+function cardHTML(r, i, bestCopy){
+  const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
+  const cls=hi>=90?'g':hi>=70?'m':'b';
+  const mt=metaFor(r.species);
+  const best=r.combos.length?bestOf2(r):null;
+  const nice=(r.species||'?').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  const flags=[!r.cp&&'CP?',!r.hp&&'HP?',!r.level&&'level?'].filter(Boolean).join(' ');
+  const ivpct=ps.length?(lo===hi?hi.toFixed(0):lo.toFixed(0)+'–'+hi.toFixed(0))+'%':'—';
+  const ex=(window.Planner&&Planner.cardExtras)?Planner.cardExtras(r):null;   // roster view of this copy: ready / power up / needs moves / evolve / spare
+  let status='', gl=null;
+  if(best){ const bb2=best[4]||DATA.stats[r.species][0]; gl=pvpRank(bb2,best[1],best[2],best[3],LEAGUE.cp);
+    if(ex&&ex.status) status=ex.status;
+    else if(r.cp>LEAGUE.cp) status=`<span class="chip warn">over the ${LEAGUE.abbr} cap</span>`;
+    else if(gl.lv>40) status=`<span class="chip warn">needs L${gl.lv} · XL candy</span>`;
+    else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
+    else status=`<span class="chip meta1">ready for ${LEAGUE.abbr}</span>`; }
+  const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
+    r.shadow?'<span class="chip ul">shadow</span>':'',
+    r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
+    (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length&&!(ex&&ex.movesSaid)?'<span class="chip" title="no attacks screenshot yet; the planner falls back to PvPoke\'s moveset without showing it as fact">moves not read</span>':'',
+    ...(ex&&ex.chips?ex.chips:[]),
+    !r.bench&&bestCopy&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
+    ].join('');
+  const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
+  return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="Planner.openScan('${r.key.replace(/'/g,'')}')">${lineageBanner(r)}
+    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span>
+      <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
+    <div class="ivrow">
+      <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>
+      <span><small>IV%</small><b class="pctc">${ivpct}</b></span>
+      <span><small>${LEAGUE.abbr} rank</small>${gl?`<b>#${gl.n}</b> <span class="dim">${gl.pct.toFixed(1)}%</span>`:'<b class="dim">—</b>'}</span>
+    </div>
+    <div class="chips row2"><span>${status||'<span class="chip warn">no match: tap to correct</span>'}${r.combos.length>1?`<span class="chip">${r.combos.length} possible</span>`:''}${tags}</span>${ex&&ex.right?ex.right:(mt?`<span class="chip">meta #${mt[0]}</span>`:'')}</div>
+  </div>`;
 }
 /* ---------- planning helpers ---------- */
 function pvpokeIdFor(species, form, shadow){  // scanner species (UPPERCASE) + base-stat form (+ shadow flag) -> PvPoke speciesId

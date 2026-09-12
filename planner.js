@@ -63,15 +63,21 @@ function rosterOwned() {
     if (!own[id] && APP.pokemon[id] && !ROSTER.exclude.includes(id)) own[id] = {id, manual: true, moves: ROSTER.moves[id] || mv || APP.pokemon[id].moveset.slice()};
   return own;
 }
+function unrankedId(r) {                       // a scanned species PvPoke does not rank in this league (Jigglypuff): its id in APP.unranked, if any
+  if (!r || !r.species) return null;
+  const base = r.species.toLowerCase(); if (APP.unranked[base]) return base;
+  return Object.keys(APP.unranked).find(k => k.split('_')[0] === base) || null;
+}
 function autoEvolutions(own) {
   const out = {};
   for (const r of results) {
-    const s = scanId(r); if (!s || !s.id || r.bench) continue;
-    for (const evo of (APP.pokemon[s.id].evo || [])) {
+    const s = scanId(r); if (!s || r.bench || r.superseded) continue;
+    const sid = s.id || unrankedId(r); if (!sid) continue;
+    for (const evo of evosOf(sid)) {
       if (!APP.pokemon[evo] || own[evo] || ROSTER.exclude.includes(evo)) continue;
       const eb = evoBaseStats(evo); if (!eb || calcCP(eb, s.best[1], s.best[2], s.best[3], cpmAt(s.best[0])) > LEAGUE.cp) continue;
       const rk = pvpRank(eb, s.best[1], s.best[2], s.best[3], LEAGUE.cp);
-      if (!out[evo] || rk.n < out[evo].glRank) out[evo] = {from: APP.pokemon[s.id].name, fromId: s.id, glRank: rk.n, glPct: rk.pct, level: s.best[0], toLevel: rk.lv, toCP: rk.cp, cpNow: calcCP(eb, s.best[1], s.best[2], s.best[3], cpmAt(s.best[0]))};
+      if (!out[evo] || rk.n < out[evo].glRank) out[evo] = {from: nm(sid), fromId: sid, fromKey: r.key, glRank: rk.n, glPct: rk.pct, level: s.best[0], toLevel: rk.lv, toCP: rk.cp, cpNow: calcCP(eb, s.best[1], s.best[2], s.best[3], cpmAt(s.best[0]))};
     }
   }
   return out;
@@ -808,6 +814,36 @@ function coverageInner(L, team, m) {
 function closeSheet() { $('sheet').classList.remove('open'); }
 
 /* ---------- rendering: Roster board (D) ---------- */
+/* what the roster knows about one scan card: the status chip, extra chips and the right-hand chip; used by cardHTML() in scanner.js */
+function cardExtras(r) {
+  if (!APP || !window.PVP || !r || !r.combos || !r.combos.length) return null;
+  const m = M(), s = scanId(r), id = s && s.id, chipS = (t, c) => `<span class="chip ${c || ''}">${t}</span>`;
+  const out = {status: '', chips: [], right: '', movesSaid: false};
+  if (r.superseded) return out;
+  const own = id && m.own[id];
+  if (own && own.key === r.key) {                                   // this copy is the roster copy of its species
+    const t = tiles(m).find(x => x.id === id);
+    if (t) {
+      const cls = {ready: 'meta1', power: 'ul', moves: 'gold', xl: 'warn'}[t.st] || '';
+      if (t.st === 'ready') out.status = chipS(`ready for ${LEAGUE.abbr}`, 'meta1');
+      else if (t.st === 'power') { const c = costTo(own.level, own.toLevel); out.status = chipS(`→ L${own.toLevel} · ${c.dust >= 1000 ? (c.dust / 1000).toFixed(c.dust % 1000 ? 1 : 0) + 'k' : c.dust} dust · ${c.candy} candy`, 'ul'); }
+      else if (t.st === 'moves') { out.status = chipS(t.txt, 'gold'); out.movesSaid = true; }
+      else if (t.st === 'xl') out.status = chipS(t.txt, 'warn');
+      const parties = Object.entries(ROSTER.tagged).filter(([, ids]) => ids.includes(id)).map(([n]) => n);
+      const inBest = m.rep.today[0] && m.rep.today[0].members.some(x => x.speciesId === id);
+      if (parties.length) out.chips.push(chipS(`in ${esc(parties.slice(0, 2).join(', '))}${parties.length > 2 ? ` +${parties.length - 2}` : ''}`, 'gl'));
+      else if (inBest) out.chips.push(chipS('in your best team', 'gl'));
+      if (cls === 'gold' && t.txt.startsWith('scan')) out.movesSaid = true;
+    }
+    return out;
+  }
+  const sid = id || unrankedId(r);
+  const auto = sid ? Object.entries(m.auto).find(([, a]) => a.fromKey === r.key) : null;
+  if (auto) { const [evo, a] = auto; out.status = chipS(`evolve → ${esc(nm(evo))} #${APP.pokemon[evo].rank}`, 'gl'); out.right = chipS(`fits to L${a.toLevel}`); return out; }
+  if (!id && sid) { out.status = chipS(`not ranked in ${LEAGUE.abbr}`, ''); return out; }
+  if (own && own.key !== r.key && r.cp <= LEAGUE.cp) out.chips.push(chipS('spare copy'));
+  return out;
+}
 function tiles(m) {
   const {own, auto, ri, rep} = m, out = [];
   const inTeams = id => rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
@@ -1487,15 +1523,23 @@ function renderRosterInner(el) {
   const counts = {}; ts.forEach(t => counts[t.st] = (counts[t.st] || 0) + 1);
   const lbl = {ready: 'ready', power: 'powering up', moves: 'need moves', manual: 'not scanned', pending: 'pending', wanted: 'wanted', xl: 'XL gated', bench: 'benched'};
   const clsOf = {ready: 'ok', power: 'gold', moves: 'gold', manual: '', pending: 'gl', wanted: '', xl: 'warn', bench: ''};
-  let h = `<div class="chips" style="margin:0 0 10px">${Object.entries(counts).map(([k, v]) => chip(`${v} ${lbl[k]}`, clsOf[k])).join('')}</div>`;
+  const stSel = UI.rosterSt || '';
+  let h = `<div class="chips" style="margin:0 0 10px">${Object.entries(counts).map(([k, v]) => `<span class="chip ${clsOf[k]} ${stSel === k ? 'sel' : ''}" style="cursor:pointer" onclick="Planner.rosterStatus('${k}')">${v} ${lbl[k]}</span>`).join('')}${stSel ? `<span class="chip" style="cursor:pointer" onclick="Planner.rosterStatus('')">✕ all</span>` : ''}</div>`;
   const live = results.filter(r => !r.superseded).length;
-  h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span>${ctxMenu([['Export roster JSON', 'Planner.exportRoster()'], ['Load saved roster', 'Planner.loadRepoRoster()'], ['Clear all scans…', 'clearAll()', true]])}</div>`;
+  h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span>${ctxMenu([['Add by name…', 'Planner.toggleAdd()'], ['Export roster JSON', 'Planner.exportRoster()'], ['Load saved roster', 'Planner.loadRepoRoster()'], ['Clear all scans…', 'clearAll()', true]])}</div>`;
   h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
   const q = (UI.rosterQ || '').trim().toLowerCase();
-  const shown = q ? ts.filter(t => nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q))) : ts;
-  if (q && !shown.length) h += `<div class="note">Nothing in your roster matches “${esc(q)}”. Search by name, type or status (ready, power, pending, wanted).</div>`;
-  h += `<div class="tiles">${shown.map(t => `<div class="tile ${t.st}" onclick="Planner.openMon('${t.id}')"><b>${esc(nm(t.id))}</b>${t.iv ? `<span class="ivl">${t.iv}</span>` : ''}<small>${esc(t.sub)}</small>${t.bar !== null && t.bar !== undefined ? `<div class="pb"><div style="width:${Math.round(t.bar * 100)}%"></div></div>` : ''}<span class="st">${esc(t.txt)}</span></div>`).join('')}
-    <div class="tile add" onclick="Planner.toggleAdd()"><b>+</b><span class="st">add</span></div></div>`;
+  const shown = ts.filter(t => !stSel || t.st === stSel).filter(t => !q || nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q)));
+  if (!shown.length) h += `<div class="note">${q || stSel ? 'Nothing in your roster matches.' : 'Your roster is empty: import status screenshots under Scans, or add Pokémon by name from the ⋮ menu.'}</div>`;
+  // one card per Pokémon: the same card as the Scans list for scanned copies, a dashed card for pieces you do not hold yet
+  h += shown.map(t => {
+    const o = m.own[t.id];
+    if (o && !o.manual && o.scan) { const idx = results.indexOf(o.scan); return typeof cardHTML === 'function' && idx >= 0 ? cardHTML(o.scan, idx, null) : ''; }
+    const e = APP.pokemon[t.id], why = {manual: 'added by hand · not scanned', pending: t.txt, wanted: t.txt === 'wanted' ? 'wanted · nothing to catch yet' : `catch ${t.txt}`, bench: 'benched'}[t.st] || t.txt;
+    const cls = {pending: 'gl', wanted: '', manual: '', bench: ''}[t.st] || '';
+    return `<div class="mon compact ghost" onclick="Planner.openMon('${t.id}')"><div class="top"><span class="name">${esc(nm(t.id))}</span><span class="cp">#${e.rank} <span class="dim">· ${esc(e.types.join(' / '))}</span></span></div>
+      <div class="chips row2" style="margin-top:6px"><span>${chip(esc(why), cls)}</span>${t.sub && /fits/.test(t.sub) ? `<span class="chip">${esc(t.sub.split(' · ').pop())}</span>` : ''}</div></div>`;
+  }).join('');
   h += `<div class="add" id="addrow" style="${UI.adding ? '' : 'display:none'}"><input id="addid" list="species" placeholder="species id, e.g. lickilicky"><select id="addkind"><option value="owned">owned</option><option value="pending">pending</option><option value="candidates">wanted</option></select><button onclick="Planner.add()">Add</button></div>`;
   h += `<div class="note">Your in-game parties and the teams you can build are under <a href="#" onclick="Planner.nav('#/teams');return false">Saved teams</a>.</div>`;
   el.innerHTML = h;
@@ -1739,6 +1783,7 @@ function renderRaids(m) {
 }
 function pveType(t) { UI.pveType = t; renderMeta(); }
 function pveBasic(v) { UI.pveBasic = !!v; renderMeta(); }
+function rosterStatus(k) { UI.rosterSt = UI.rosterSt === k ? '' : k; renderRoster(); }
 function rosterSearch(v) { UI.rosterQ = v; const pos = $('rosterq') && $('rosterq').selectionStart; renderRoster(); const q = $('rosterq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 function rankSearch(v) { UI.rankQ = v; UI.rankLimit = 50; const pos = $('rankq') && $('rankq').selectionStart; renderMeta(); const q = $('rankq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 function rankType(v) { UI.rankType = v; UI.rankLimit = 50; renderMeta(); }
@@ -1811,7 +1856,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

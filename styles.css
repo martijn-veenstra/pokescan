@@ -321,3 +321,7 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .avb .rh{font-weight:700;font-size:14px;margin-bottom:4px}.avb .rh small{color:var(--dim);font-weight:500;font-size:12px;margin-left:4px}
 .avb .rf{font-size:13px;line-height:1.45;margin:3px 0}.avb .rf.dim{color:var(--dim);font-size:12.5px}.avb .rf.good{color:var(--green)}
 .avb .rf a{color:var(--green)}
+
+/* ---------- roster cards for pieces you do not hold yet ---------- */
+.mon.compact.ghost{border-style:dashed;padding:10px 15px}.mon.compact.ghost .name{font-size:15px;color:var(--dim)}
+.chip.sel{outline:2px solid var(--ink)}
