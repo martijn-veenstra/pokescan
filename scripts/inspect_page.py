@@ -12,8 +12,10 @@ print("classes:", ", ".join(f"{c}×{n}" for c, n in classes.most_common(60)))
 ids = collections.Counter(m.group(1) for m in re.finditer(r'\bid="([^"]+)"', html))
 print("ids:", ", ".join(f"{c}×{n}" for c, n in ids.most_common(30)))
 m = re.search(r'(?i)grunt|rocket', html[html.lower().find("<body") if "<body" in html.lower() else 0:])
+blocks = [b.start() for b in re.finditer(r'(?i)<div[^>]*class="rocket-profile', html)]
+grunt = next((b for b in blocks if re.search(r'(?i)>\s*grunt\s*<', html[b:b + 3000])), None)
 anchor = re.search(r'(?i)class="[^"]*(?:lineup|grunt|rocket-|profile)[^"]*"', html)
-at = anchor.start() if anchor else (m.start() if m else 0)
+at = grunt if grunt is not None else anchor.start() if anchor else (m.start() if m else 0)
 snippet = html[at:at + 6000]
 snippet = re.sub(r"<script[\s\S]*?</script>", "", snippet)
 snippet = re.sub(r"\s+", " ", snippet)

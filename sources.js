@@ -111,7 +111,8 @@ function forSpecies(names, opts) {
     }
   }
   if (opts.shadow) {                          // Shadow Pokémon: Team GO Rocket grunts and leaders (lineups read from Leek Duck by the server)
-    for (const lu of ((S.rocket || {}).lineups) || []) lu.slots.forEach((slot, i) => { for (const n of slot) { const h = hit(n); if (!h) continue;
+    for (const lu of ((S.rocket || {}).lineups) || []) lu.slots.forEach((slot, i) => { if (lu.encounter && lu.encounter !== i + 1) return;   // only the encounter slot can be caught
+      for (const n of slot) { const h = hit(n); if (!h) continue;
       push({kind: 'rocket', name: h.w.name, what: `${lu.who}${lu.slots.length > 1 ? ` · slot ${i + 1}` : ''}`, who: lu.who, slot: lu.slots.length > 1 ? i + 1 : null, quote: lu.quote || '', now: true, when: 'Team GO Rocket now', sort: 0, remote: false, shiny: false, note: ''}); } });
   }
   if (!opts.shadow) {

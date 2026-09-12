@@ -37,28 +37,38 @@ export function parseEventPage(html) {
   return out.raids.length || out.spawns.length || out.eggs.length ? out : null;
 }
 
-/* parseRocketPage(html) -> [{who, type, quote, slots:[[names],[names],[names]]}] or null.
-   Leek Duck's Rocket lineups page: one block per grunt type or leader (Arlo, Cliff, Sierra, Giovanni), the Pokémon of each of
-   the three slots listed as .pkmn-list-item / .pkmn-name like the event pages. Tolerant of markup drift: blocks are cut at
-   headings or "rocket-profile"-like containers, slots at "slot"-like containers, else the block's Pokémon go into one list. */
+/* parseRocketPage(html) -> [{who, title, type, quote, encounter, slots:[[names],[names],[names]]}] or null.
+   Leek Duck's Rocket lineups page (verified against the live markup): <div class="rocket-profile"> per grunt or leader, with
+   .employee-info (.name, .title, .quote-text) and .lineup-info holding <div class="slot [encounter]"> blocks whose Pokémon are
+   <span class="shadow-pokemon" data-pokemon="Persian" data-type1="normal"> (alt="…" on the image as a fallback). The slot with
+   "encounter" is the one you can catch. */
 export function parseRocketPage(html) {
   if (!html) return null;
-  const content = (html.match(/<div[^>]*class="[^"]*page-content[^"]*"[^>]*>([\s\S]*)/) || [null, html])[1];
-  const starts = [...content.matchAll(/<(?:div|section|article)[^>]*class="[^"]*(?:rocket-profile|grunt-|leader-|profile)[^"]*"[^>]*>|<h[2-3][^>]*>/gi)].map(m => m.index);
-  if (starts.length < 3) return null;
+  const blocks = html.split(/<div[^>]*class="rocket-profile[^"]*"/i).slice(1);
+  if (!blocks.length) return null;
   const out = [];
-  for (let i = 0; i < starts.length; i++) {
-    const block = content.slice(starts[i], starts[i + 1] || content.length);
-    const names = [...block.matchAll(/class="[^"]*pkmn-name[^"]*"[^>]*>([\s\S]*?)<\//g)].map(m => decode(m[1])).filter(n => n && n.length <= 40);
-    if (!names.length) continue;
-    const title = decode((block.match(/<h[2-4][^>]*>([\s\S]*?)<\/h[2-4]>/i) || block.match(/class="(?:[^"]*\s)?(?:name|title|grunt-type|leader-name)(?:\s[^"]*)?"[^>]*>([\s\S]*?)<\//i) || [])[1]);
-    const quote = decode((block.match(/class="[^"]*quote[^"]*"[^>]*>([\s\S]*?)<\//i) || [])[1]);
-    const type = (title.match(/\b(normal|fire|water|grass|electric|ice|fighting|poison|ground|flying|psychic|bug|rock|ghost|dragon|dark|steel|fairy)\b/i) || [])[1];
-    const slotChunks = [...block.matchAll(/class="[^"]*slot[^"]*"/gi)].map(m => m.index);
-    let slots;
-    if (slotChunks.length >= 2) slots = slotChunks.map((at, j) => [...block.slice(at, slotChunks[j + 1] || block.length).matchAll(/class="[^"]*pkmn-name[^"]*"[^>]*>([\s\S]*?)<\//g)].map(m => decode(m[1])).filter(Boolean));
-    else slots = [names];
-    out.push({who: title || (type ? type[0].toUpperCase() + type.slice(1) + '-type Grunt' : 'Grunt'), type: type ? type.toLowerCase() : null, quote, slots: slots.filter(x => x.length)});
+  for (const b of blocks) {
+    const name = decode((b.match(/class="name"[^>]*>([\s\S]*?)<\/div>/i) || [])[1]);
+    const title = decode((b.match(/class="title"[^>]*>([\s\S]*?)<\/div>/i) || [])[1]);
+    const quote = decode((b.match(/class="quote-text"[^>]*>([\s\S]*?)<\//i) || [])[1]);
+    const typeTag = decode((b.match(/class="type[^"]*"[^>]*>([\s\S]*?)<\//i) || [])[1]);
+    const lineup = b.split(/class="lineup-info"/i)[1] || b;
+    const slotChunks = lineup.split(/<div[^>]*class="slot[^"]*"/i);
+    const slotHeads = [...lineup.matchAll(/<div[^>]*class="slot([^"]*)"/gi)].map(m => m[1]);
+    const slots = [], enc = [];
+    slotChunks.slice(1).forEach((chunk, i) => {
+      const names = [...chunk.matchAll(/data-pokemon="([^"]+)"/g)].map(m => decode(m[1]));
+      if (!names.length) for (const m of chunk.matchAll(/<img[^>]*class="pokemon-image"[^>]*alt="([^"]+)"/g)) names.push(decode(m[1]));
+      if (!names.length) return;
+      slots.push([...new Set(names)]);
+      if (/\bencounter\b/i.test(slotHeads[i] || '')) enc.push(slots.length);
+    });
+    if (!slots.length) continue;
+    const typeWord = (typeTag || title || name).match(/\b(normal|fire|water|grass|electric|ice|fighting|poison|ground|flying|psychic|bug|rock|ghost|dragon|dark|steel|fairy)\b/i);
+    const type = typeWord ? typeWord[1].toLowerCase() : null;
+    const generic = !name || /^grunt$/i.test(name) || /^team go rocket grunt$/i.test(name);
+    const who = generic ? (type ? type[0].toUpperCase() + type.slice(1) + '-type Grunt' : (typeTag || title || 'Grunt')) : name;
+    out.push({who, title: title || '', type, quote, encounter: enc[0] || null, slots});
   }
   return out.length >= 3 ? out : null;
 }

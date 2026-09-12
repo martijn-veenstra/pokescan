@@ -956,13 +956,14 @@ function howToGet(m, id) {
   // 3 · shadows: Team GO Rocket
   if (shadow) {
     const targets = fam.slice().reverse(), lineups = ready ? Sources.rocket() : [], hits = [];
-    for (const lu of lineups) lu.slots.forEach((slot, si) => { for (const n of slot) for (const t of targets) if (n.toLowerCase().replace(/\s*\(.*\)$/, '') === nm(evoBase(t)).toLowerCase().replace(/\s*\(.*\)$/, '')) hits.push({who: lu.who, slot: lu.slots.length > 1 ? si + 1 : null, quote: lu.quote, t}); });
+    for (const lu of lineups) lu.slots.forEach((slot, si) => { for (const n of slot) for (const t of targets) if (n.toLowerCase().replace(/\s*\(.*\)$/, '') === nm(evoBase(t)).toLowerCase().replace(/\s*\(.*\)$/, '')) hits.push({who: lu.who, slot: lu.slots.length > 1 ? si + 1 : null, quote: lu.quote, t, catchable: !lu.encounter || lu.encounter === si + 1}); });
+    hits.sort((a, b) => b.catchable - a.catchable);
     const pu = EVO && EVO.purify && EVO.purify[evoBase(fam[fam.length - 1])], base = APP.pokemon[evoBase(id)];
     let html = `<div class="rf">Shadow Pokémon come from <b>Team GO Rocket</b>: beat a grunt or leader whose lineup has ${targets.map(t => `Shadow ${esc(nm(evoBase(t)))}`).join(' or ')}, catch it${fam.length > 1 ? ', then evolve' : ''}.</div>`;
-    if (hits.length) html += `<div class="chips" style="margin:6px 0 2px">${hits.map(h => `<span class="chip ok" title="${esc(h.quote || '')}">${esc(h.who)}${h.slot ? ` · slot ${h.slot}` : ''} <span style="opacity:.7">${esc(nm(evoBase(h.t)))}</span></span>`).join('')}</div><div class="rf dim">Lineups today, from Leek Duck${Sources.rocketAt ? ' (' + when(Sources.rocketAt()) + ')' : ''}. Grunt lineups rotate every few weeks.</div>`;
+    if (hits.length) html += `<div class="chips" style="margin:6px 0 2px">${hits.map(h => `<span class="chip ${h.catchable ? 'ok' : ''}" title="${esc(h.quote || '')}${h.catchable ? '' : ' · in the lineup, but not the encounter you catch'}">${esc(h.who)}${h.slot ? ` · slot ${h.slot}` : ''} <span style="opacity:.7">${esc(nm(evoBase(h.t)))}${h.catchable ? '' : ' · not catchable'}</span></span>`).join('')}</div><div class="rf dim">${hits.some(h => h.catchable) ? 'Green = the encounter you get after winning.' : 'Only the marked encounter slot can be caught; these lineups have it in another slot.'} Lineups today, from Leek Duck${Sources.rocketAt ? ' (' + when(Sources.rocketAt()) + ')' : ''}; grunt lineups rotate every few weeks.</div>`;
     else html += `<div class="rf dim">${lineups.length ? `Not in today's grunt or leader lineups.` : 'Lineups rotate; '}<a href="https://leekduck.com/rocket-lineups/" target="_blank" rel="noopener">Leek Duck's Rocket lineups</a> show who has it right now.</div>`;
     if (pu) html += `<div class="rf dim">Purifying (${fmt(pu.dust)} dust · ${pu.candy} candy) makes it the normal form${base ? `: meta #${base.rank} instead of #${e.rank}` : ''}.</div>`;
-    routes.push({live: hits.length > 0, order: hits.length ? -1 : 9, html: `<div class="rt"><div class="rh">Team GO Rocket</div>${html}</div>`});
+    routes.push({live: hits.some(h => h.catchable), order: hits.length ? -1 : 9, html: `<div class="rt"><div class="rh">Team GO Rocket</div>${html}</div>`});
   }
   routes.sort((a, b) => (b.live - a.live) || (a.order - b.order));
   let h = `<div class="sec">How to get ${esc(name)} <small>Leek Duck schedule · game master</small></div>`;

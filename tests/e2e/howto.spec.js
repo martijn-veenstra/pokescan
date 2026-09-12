@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { openApp } from './helpers.js';
 
 const SOURCES = { t: Date.now(), raids: [{ name: 'Ninetales', tier: '3-Star Raids', canBeShiny: false }], eggs: [{ name: 'Vulpix', eggType: '2 km', canBeShiny: true }], research: [], events: [],
-  rocket: { t: Date.now(), lineups: [{ who: 'Fire-type Grunt', type: 'fire', quote: 'Do you know how hot Pokémon fire attacks can get?', slots: [['Vulpix', 'Growlithe'], ['Ninetales'], ['Arcanine']] }, { who: 'Cliff', type: null, quote: '', slots: [['Aerodactyl'], ['Vulpix']] }, { who: 'Water-type Grunt', type: 'water', quote: '', slots: [['Marill'], ['Azumarill']] }] } };
+  rocket: { t: Date.now(), lineups: [{ who: 'Fire-type Grunt', type: 'fire', quote: 'Do you know how hot Pokémon fire attacks can get?', encounter: 1, slots: [['Vulpix', 'Growlithe'], ['Ninetales'], ['Arcanine']] }, { who: 'Cliff', type: null, quote: '', encounter: 1, slots: [['Aerodactyl'], ['Vulpix']] }, { who: 'Water-type Grunt', type: 'water', quote: '', slots: [['Marill'], ['Azumarill']] }] } };
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/sources*', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SOURCES) }));
@@ -21,6 +21,7 @@ test('Ninetales (Shadow): evolve a Shadow Vulpix from Team GO Rocket', async ({ 
   await expect(card).toContainText('Team GO Rocket');
   await expect(card).toContainText('Fire-type Grunt · slot 1');
   await expect(card).toContainText('Cliff · slot 2');
+  await expect(card).toContainText('not catchable');
   await expect(card).toContainText('Evolve Vulpix (Shadow) → Ninetales (Shadow)');
   await expect(card).toContainText('50 candy');
   await expect(card).toContainText('Shadow evolution keeps the Shadow bonus');
