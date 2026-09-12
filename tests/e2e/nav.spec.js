@@ -16,7 +16,7 @@ test('bottom bar, drawer and hash routes', async ({ page }) => {
   await expect(page.locator('#drawer')).toHaveClass(/open/);
   const items = await page.locator('#dr a').evaluateAll(els => els.map(e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()));
   expect(items).toEqual(expect.arrayContaining(['Today', 'Builder', 'Saved teams', 'Meta teams', 'Rankings', 'Raids', 'Roster', 'Scans & import', 'Trainer profile', 'Help & glossary']));
-  await expect(page.locator('#dr a.on')).toHaveText(/Roster/);
+  await expect(page.locator('#dr a.on').first(), 'current page highlighted (the league entry is highlighted too)').toHaveText(/Roster/);
 
   await page.click('#dr a[href="#/rank"]');
   await expect(page.locator('#drawer')).not.toHaveClass(/open/);
