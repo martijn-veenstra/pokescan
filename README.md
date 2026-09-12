@@ -217,6 +217,20 @@ To hand the passcode era's data to your own account, set `OWNER_USER_ID` to your
 server re-keys the rows once (only if the account has none yet) and you can remove the variable. Without Clerk keys
 the `PASSCODE` mode keeps working exactly as before; tests and the e2e suite run in that mode.
 
+Setting it up with the Clerk CLI (from your own machine; the CLI needs a browser login):
+
+```bash
+npm install -g clerk
+clerk auth login
+clerk init --app app_3JE08WigyV4pOCuZphrKZJUNkwj   # links this project to the PokeScan Clerk app and writes .env
+clerk doctor
+npm run start:local                                 # reads .env: the server starts in Clerk mode on http://localhost:8080
+```
+
+`.env` is git-ignored. For the live app copy `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from `.env` into the
+Railway service's variables (plus `APP_ORIGIN`, and once `OWNER_USER_ID`). In the Clerk dashboard enable Google and
+Email + password under User & Authentication.
+
 `auth.js` loads ClerkJS from Clerk's CDN in plain JavaScript (no framework), mounts the sign-in UI in the cloud
 button's sheet, and `sync.js` sends a fresh session token with every `/api` call. `GET /api/me` returns the user id
 and enabled features. Offline or signed out, the app keeps working on local data and sync pauses.
