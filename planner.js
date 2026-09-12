@@ -937,7 +937,7 @@ function ownedCopies(preId) {                  // your live scans of this specie
 }
 function howToGet(m, id) {
   const e = APP.pokemon[id], name = e.name, shadow = /_shadow$/.test(id), fam = family(id);
-  const ready = window.Sources && Sources.ready(), srcOf = pid => ready ? Sources.forSpecies([nm(pid)], {shadow}) : null;
+  const ready = window.Sources && Sources.ready(), srcOf = pid => ready ? Sources.forSpecies([nm(pid)], {shadow}).filter(x => x.kind !== 'rocket') : null;   // Rocket lineups get their own card below
   const block = (label, now, html) => `<div class="avl ${now ? 'now' : ''}"><span class="lb">${label}</span><span class="tx">${html}</span></div>`;
   const routes = [];
   // 1 · catch it as it is
