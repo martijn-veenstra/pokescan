@@ -2,18 +2,18 @@
  "league": "great",
  "title": "Great League",
  "source": "YouTube video transcript: '10 best teams for the Great League' (5 community teams from Twitter, 5 from the creator)",
- "gamemasterTimestamp": "2026-09-01 18:36:39",
- "generatedAt": "2026-09-07T11:53:06Z",
+ "gamemasterTimestamp": "2026-09-10 22:49:06",
+ "generatedAt": "2026-09-13T10:50:05Z",
  "derivedTopScoreRange": [
-  720.9,
-  692.3
+  670.9,
+  642.6
  ],
  "poolTrioScoreRange": [
-  229.2,
-  720.9
+  230.7,
+  670.9
  ],
- "poolTrioMedian": 520.8,
- "poolTrios": 9690,
+ "poolTrioMedian": 520.5,
+ "poolTrios": 9804,
  "method": "Same heuristic as generate_pvpoke_team_comps.py, using the video's movesets for the video Pokemon.",
  "teams": [
   {
@@ -23,8 +23,8 @@
     {
      "speciesId": "forretress",
      "name": "Forretress",
-     "rank": 11,
-     "score": 91.5,
+     "rank": 55,
+     "score": 89,
      "types": [
       "bug",
       "steel"
@@ -40,14 +40,14 @@
       "Rock Tomb"
      ],
      "role": "lead",
-     "inMetaGroup": true,
+     "inMetaGroup": false,
      "note": "Non-shadow; Volt Switch preferred over Bug Bite"
     },
     {
      "speciesId": "sealeo_shadow",
      "name": "Sealeo (Shadow)",
-     "rank": 42,
-     "score": 89.7,
+     "rank": 179,
+     "score": 84,
      "types": [
       "ice",
       "water"
@@ -63,13 +63,13 @@
       "Body Slam"
      ],
      "role": "safe swap",
-     "inMetaGroup": true
+     "inMetaGroup": false
     },
     {
      "speciesId": "umbreon",
      "name": "Umbreon",
-     "rank": 33,
-     "score": 90.2,
+     "rank": 38,
+     "score": 89.9,
      "types": [
       "dark"
      ],
@@ -87,26 +87,38 @@
      "inMetaGroup": false
     }
    ],
-   "teamScore": 535.8,
-   "coverage": 631.8,
+   "teamScore": 359.0,
+   "coverage": 593.0,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 57.3,
+   "percentileOfPoolTrios": 1.5,
    "unansweredMeta": [
-    "Quagsire (Shadow)",
-    "Ninetales",
-    "Ninetales (Shadow)"
+    "Ninetales (Shadow)",
+    "Melmetal",
+    "Snorlax",
+    "Florges",
+    "Mimikyu (Busted)",
+    "Furret",
+    "Deoxys (Defense)",
+    "Marowak",
+    "Annihilape (Shadow)",
+    "Malamar",
+    "Electrode (Hisuian)",
+    "Snorlax (Shadow)",
+    "Sableye",
+    "Medicham"
    ],
    "sharedWeaknesses": [
     "Tinkaton",
-    "Altaria",
     "Ninetales (Shadow)",
-    "Sableye (Shadow)",
-    "Medicham",
-    "Sableye",
-    "Malamar",
-    "Charjabug",
+    "Quagsire (Shadow)",
+    "Melmetal",
     "Annihilape (Shadow)",
-    "Primeape"
+    "Malamar",
+    "Sableye (Shadow)",
+    "Snorlax (Shadow)",
+    "Sableye",
+    "Medicham",
+    "Charjabug"
    ]
   },
   {
@@ -116,8 +128,8 @@
     {
      "speciesId": "corviknight",
      "name": "Corviknight",
-     "rank": 20,
-     "score": 90.7,
+     "rank": 4,
+     "score": 91.4,
      "types": [
       "flying",
       "steel"
@@ -139,8 +151,8 @@
     {
      "speciesId": "aegislash_shield",
      "name": "Aegislash (Blade)",
-     "rank": 67,
-     "score": 88.7,
+     "rank": 72,
+     "score": 88.2,
      "types": [
       "steel",
       "ghost"
@@ -156,13 +168,13 @@
       "Gyro Ball"
      ],
      "role": "flex",
-     "inMetaGroup": true
+     "inMetaGroup": false
     },
     {
      "speciesId": "dragonite",
      "name": "Dragonite",
-     "rank": 335,
-     "score": 79.8,
+     "rank": 344,
+     "score": 79.7,
      "types": [
       "dragon",
       "flying"
@@ -182,45 +194,44 @@
      "note": "Inferred: the video names a Dragon partner and mentions Dragonite; Altaria is the other plausible reading"
     }
    ],
-   "teamScore": 426.0,
-   "coverage": 594.0,
+   "teamScore": 436.1,
+   "coverage": 610.1,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 11.4,
+   "percentileOfPoolTrios": 12.4,
    "unansweredMeta": [
+    "Corsola (Galarian)",
     "Altaria",
-    "Forretress",
-    "Forretress (Shadow)",
-    "Azumarill",
-    "Diggersby",
+    "Thievul",
+    "Electrode (Hisuian)",
     "Charjabug",
-    "Stunfisk"
+    "Diggersby",
+    "Forretress (Shadow)"
    ],
    "sharedWeaknesses": [
-    "Mimikyu (Busted)",
-    "Forretress",
     "Ninetales (Shadow)",
-    "Forretress (Shadow)",
-    "Feraligatr (Shadow)",
-    "Guzzlord",
-    "Furret",
-    "Seismitoad",
-    "Talonflame",
+    "Altaria",
+    "Snorlax",
     "Thievul",
+    "Feraligatr",
+    "Furret",
+    "Marowak",
+    "Malamar",
+    "Electrode (Hisuian)",
+    "Guzzlord",
+    "Hippowdon (Shadow)",
     "Diggersby",
-    "Dewgong",
-    "Stunfisk",
-    "Seaking"
+    "Forretress (Shadow)",
+    "Talonflame",
+    "Dunsparce"
    ],
    "alternatives": [
     {
      "replace": "dragonite",
      "with": "altaria",
-     "teamScore": 499.0,
+     "teamScore": 542.9,
      "unansweredMeta": [
-      "Cramorant",
-      "Feraligatr",
-      "Azumarill",
-      "Stunfisk"
+      "Corsola (Galarian)",
+      "Thievul"
      ]
     }
    ]
@@ -232,8 +243,8 @@
     {
      "speciesId": "castform",
      "name": "Castform",
-     "rank": 177,
-     "score": 84.5,
+     "rank": 285,
+     "score": 80.9,
      "types": [
       "normal"
      ],
@@ -253,8 +264,8 @@
     {
      "speciesId": "sableye",
      "name": "Sableye",
-     "rank": 47,
-     "score": 89.5,
+     "rank": 48,
+     "score": 89.4,
      "types": [
       "dark",
       "ghost"
@@ -276,8 +287,8 @@
     {
      "speciesId": "tinkaton",
      "name": "Tinkaton",
-     "rank": 2,
-     "score": 92.6,
+     "rank": 1,
+     "score": 93,
      "types": [
       "fairy",
       "steel"
@@ -296,19 +307,18 @@
      "inMetaGroup": true
     }
    ],
-   "teamScore": 608.8,
-   "coverage": 668.8,
+   "teamScore": 593.5,
+   "coverage": 647.5,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 89.2,
+   "percentileOfPoolTrios": 91.5,
    "unansweredMeta": [
-    "Forretress",
-    "Forretress (Shadow)",
+    "Corviknight",
+    "Melmetal",
     "Clodsire",
-    "Corviknight"
+    "Electrode (Hisuian)"
    ],
    "sharedWeaknesses": [
-    "Tinkaton",
-    "Quagsire"
+    "Corviknight"
    ]
   },
   {
@@ -318,8 +328,8 @@
     {
      "speciesId": "ninetales_shadow",
      "name": "Ninetales (Shadow)",
-     "rank": 14,
-     "score": 91.1,
+     "rank": 2,
+     "score": 92.1,
      "types": [
       "fire"
      ],
@@ -339,8 +349,8 @@
     {
      "speciesId": "pidgeot_shadow",
      "name": "Pidgeot (Shadow)",
-     "rank": 282,
-     "score": 81.4,
+     "rank": 287,
+     "score": 80.9,
      "types": [
       "normal",
       "flying"
@@ -364,11 +374,11 @@
    "suggestedThird": {
     "speciesId": "mimikyu",
     "name": "Mimikyu (Busted)",
-    "rank": 5,
-    "teamScore": 646.6,
+    "rank": 18,
+    "teamScore": 549.6,
     "unansweredMeta": [
-     "Diggersby",
-     "Morpeko (Hangry)"
+     "Cramorant",
+     "Empoleon"
     ]
    }
   },
@@ -379,8 +389,8 @@
     {
      "speciesId": "kingdra_shadow",
      "name": "Kingdra (Shadow)",
-     "rank": 27,
-     "score": 90.3,
+     "rank": 47,
+     "score": 89.4,
      "types": [
       "water",
       "dragon"
@@ -401,8 +411,8 @@
     {
      "speciesId": "lickilicky",
      "name": "Lickilicky",
-     "rank": 1,
-     "score": 93.7,
+     "rank": 155,
+     "score": 84.6,
      "types": [
       "normal"
      ],
@@ -417,19 +427,19 @@
       "Shadow Ball"
      ],
      "role": "safe swap",
-     "inMetaGroup": true
+     "inMetaGroup": false
     }
    ],
    "incomplete": "Lead is not named; the video only says it is weak to Fairy types",
    "suggestedThird": {
-    "speciesId": "mimikyu",
-    "name": "Mimikyu (Busted)",
-    "rank": 5,
-    "teamScore": 644.3,
+    "speciesId": "tinkaton",
+    "name": "Tinkaton",
+    "rank": 1,
+    "teamScore": 599.6,
     "unansweredMeta": [
-     "Tinkaton",
-     "Jumpluff",
-     "Corviknight"
+     "Corviknight",
+     "Feraligatr",
+     "Electrode (Hisuian)"
     ]
    }
   },
@@ -440,8 +450,8 @@
     {
      "speciesId": "mantine",
      "name": "Mantine",
-     "rank": 55,
-     "score": 89.3,
+     "rank": 11,
+     "score": 90.9,
      "types": [
       "water",
       "flying"
@@ -462,8 +472,8 @@
     {
      "speciesId": "lickilicky",
      "name": "Lickilicky",
-     "rank": 1,
-     "score": 93.7,
+     "rank": 155,
+     "score": 84.6,
      "types": [
       "normal"
      ],
@@ -478,14 +488,14 @@
       "Shadow Ball"
      ],
      "role": "safe swap",
-     "inMetaGroup": true,
+     "inMetaGroup": false,
      "note": "Solar Beam Lickilicky also suggested"
     },
     {
      "speciesId": "stunfisk_galarian",
      "name": "Stunfisk (Galarian)",
-     "rank": 71,
-     "score": 88.5,
+     "rank": 99,
+     "score": 86.9,
      "types": [
       "ground",
       "steel"
@@ -504,42 +514,57 @@
      "inMetaGroup": false
     }
    ],
-   "teamScore": 495.9,
-   "coverage": 615.9,
+   "teamScore": 335.7,
+   "coverage": 581.7,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 37.9,
+   "percentileOfPoolTrios": 0.7,
    "unansweredMeta": [
-    "Clodsire",
     "Corviknight",
-    "Azumarill",
-    "Furret",
-    "Grumpig",
+    "Snorlax",
+    "Florges",
     "Thievul",
-    "Cradily"
+    "Furret",
+    "Azumarill",
+    "Vigoroth",
+    "Deoxys (Defense)",
+    "Malamar",
+    "Electrode (Hisuian)",
+    "Snorlax (Shadow)",
+    "Sableye",
+    "Cradily",
+    "Rillaboom",
+    "Forretress (Shadow)",
+    "Dunsparce"
    ],
    "sharedWeaknesses": [
-    "Quagsire",
-    "Forretress",
-    "Forretress (Shadow)",
-    "Medicham",
+    "Melmetal",
+    "Snorlax",
+    "Vigoroth",
+    "Deoxys (Defense)",
     "Malamar",
-    "Morpeko (Hangry)"
+    "Sableye (Shadow)",
+    "Snorlax (Shadow)",
+    "Sableye",
+    "Forretress (Shadow)"
    ],
    "alternatives": [
     {
      "replace": "lickilicky",
      "with": "ferrothorn",
-     "teamScore": 429.2,
+     "teamScore": 339.5,
      "unansweredMeta": [
-      "Forretress",
-      "Forretress (Shadow)",
-      "Corsola (Galarian)",
-      "Clodsire",
-      "Furret",
-      "Grumpig",
+      "Snorlax",
       "Thievul",
+      "Furret",
+      "Vigoroth",
+      "Deoxys (Defense)",
+      "Malamar",
+      "Electrode (Hisuian)",
+      "Snorlax (Shadow)",
       "Sableye",
-      "Wigglytuff"
+      "Rillaboom",
+      "Forretress (Shadow)",
+      "Dunsparce"
      ]
     }
    ]
@@ -551,8 +576,8 @@
     {
      "speciesId": "stunfisk",
      "name": "Stunfisk",
-     "rank": 72,
-     "score": 88.4,
+     "rank": 113,
+     "score": 86.3,
      "types": [
       "ground",
       "electric"
@@ -573,8 +598,8 @@
     {
      "speciesId": "seaking",
      "name": "Seaking",
-     "rank": 84,
-     "score": 87.9,
+     "rank": 100,
+     "score": 86.7,
      "types": [
       "water"
      ],
@@ -589,14 +614,14 @@
       "Icy Wind"
      ],
      "role": "safe swap",
-     "inMetaGroup": true,
+     "inMetaGroup": false,
      "note": "Two legacy moves"
     },
     {
      "speciesId": "pelipper",
      "name": "Pelipper",
-     "rank": 81,
-     "score": 88,
+     "rank": 114,
+     "score": 86.2,
      "types": [
       "water",
       "flying"
@@ -615,63 +640,70 @@
      "inMetaGroup": false
     }
    ],
-   "teamScore": 301.7,
-   "coverage": 583.7,
+   "teamScore": 250.8,
+   "coverage": 556.8,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 0.2,
+   "percentileOfPoolTrios": 0.0,
    "unansweredMeta": [
-    "Mimikyu (Busted)",
-    "Forretress",
-    "Feraligatr",
-    "Forretress (Shadow)",
     "Corsola (Galarian)",
-    "Feraligatr (Shadow)",
-    "Kingdra",
+    "Corviknight",
+    "Snorlax",
+    "Mimikyu (Busted)",
+    "Feraligatr",
+    "Jellicent",
+    "Furret",
     "Azumarill",
-    "Sableye (Shadow)",
-    "Seismitoad",
-    "Sealeo (Shadow)",
-    "Thievul",
-    "Sableye",
-    "Wigglytuff",
-    "Cradily",
-    "Florges",
-    "Dewgong",
+    "Vigoroth",
+    "Deoxys (Defense)",
     "Malamar",
-    "Charjabug"
+    "Sableye (Shadow)",
+    "Electrode (Hisuian)",
+    "Dondozo",
+    "Snorlax (Shadow)",
+    "Kingdra",
+    "Sableye",
+    "Charjabug",
+    "Cradily",
+    "Forretress (Shadow)",
+    "Dunsparce"
    ],
    "sharedWeaknesses": [
-    "Mimikyu (Busted)",
-    "Quagsire",
-    "Jellicent",
-    "Forretress",
-    "Forretress (Shadow)",
-    "Sableye (Shadow)",
-    "Cradily",
+    "Quagsire (Shadow)",
+    "Furret",
+    "Vigoroth",
+    "Deoxys (Defense)",
+    "Electrode (Hisuian)",
     "Charjabug",
-    "Electrode (Hisuian)"
+    "Cradily",
+    "Forretress (Shadow)",
+    "Dunsparce"
    ],
    "alternatives": [
     {
      "replace": "pelipper",
      "with": "mantine",
-     "teamScore": 368.9,
+     "teamScore": 278.4,
      "unansweredMeta": [
-      "Mimikyu (Busted)",
-      "Forretress",
-      "Feraligatr",
-      "Forretress (Shadow)",
       "Corsola (Galarian)",
-      "Feraligatr (Shadow)",
-      "Azumarill",
-      "Seismitoad",
-      "Sealeo (Shadow)",
-      "Thievul",
-      "Sableye",
-      "Wigglytuff",
-      "Cradily",
+      "Corviknight",
+      "Snorlax",
       "Florges",
-      "Charjabug"
+      "Thievul",
+      "Mimikyu (Busted)",
+      "Jellicent",
+      "Furret",
+      "Azumarill",
+      "Vigoroth",
+      "Deoxys (Defense)",
+      "Malamar",
+      "Electrode (Hisuian)",
+      "Snorlax (Shadow)",
+      "Sableye",
+      "Charjabug",
+      "Cradily",
+      "Rillaboom",
+      "Forretress (Shadow)",
+      "Dunsparce"
      ]
     }
    ]
@@ -683,8 +715,8 @@
     {
      "speciesId": "altaria",
      "name": "Altaria",
-     "rank": 3,
-     "score": 92.2,
+     "rank": 8,
+     "score": 91.1,
      "types": [
       "dragon",
       "flying"
@@ -706,7 +738,7 @@
      "speciesId": "ninetales",
      "name": "Ninetales",
      "rank": 12,
-     "score": 91.4,
+     "score": 90.9,
      "types": [
       "fire"
      ],
@@ -721,14 +753,14 @@
       "Energy Ball"
      ],
      "role": "safe swap",
-     "inMetaGroup": true,
+     "inMetaGroup": false,
      "note": "Dewgong if Mantine is a problem"
     },
     {
      "speciesId": "empoleon",
      "name": "Empoleon",
-     "rank": 4,
-     "score": 92.2,
+     "rank": 10,
+     "score": 90.9,
      "types": [
       "water",
       "steel"
@@ -747,45 +779,39 @@
      "inMetaGroup": true
     }
    ],
-   "teamScore": 510.0,
-   "coverage": 624.0,
+   "teamScore": 493.4,
+   "coverage": 601.4,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 44.4,
+   "percentileOfPoolTrios": 34.2,
    "unansweredMeta": [
-    "Mimikyu (Busted)",
-    "Corsola (Galarian)",
-    "Guzzlord",
-    "Mantine"
+    "Mantine",
+    "Snorlax",
+    "Clodsire",
+    "Dunsparce"
    ],
    "sharedWeaknesses": [
-    "Mimikyu (Busted)",
-    "Jellicent",
-    "Corsola (Galarian)",
-    "Fearow",
-    "Kingdra",
-    "Guzzlord",
-    "Seismitoad",
-    "Cradily",
+    "Snorlax",
     "Florges",
-    "Stunfisk",
-    "Seaking"
+    "Clodsire",
+    "Fearow",
+    "Guzzlord",
+    "Kingdra",
+    "Medicham",
+    "Cradily",
+    "Dunsparce",
+    "Stunfisk"
    ],
    "alternatives": [
     {
      "replace": "ninetales",
      "with": "dewgong",
-     "teamScore": 417.1,
+     "teamScore": 491.9,
      "unansweredMeta": [
-      "Mimikyu (Busted)",
-      "Jellicent",
-      "Corsola (Galarian)",
-      "Feraligatr (Shadow)",
-      "Seismitoad",
-      "Medicham",
-      "Grumpig",
+      "Snorlax",
       "Thievul",
-      "Sableye",
-      "Mantine"
+      "Clodsire",
+      "Medicham",
+      "Dunsparce"
      ]
     }
    ]
@@ -797,8 +823,8 @@
     {
      "speciesId": "swanna",
      "name": "Swanna",
-     "rank": 217,
-     "score": 83.1,
+     "rank": 270,
+     "score": 81.2,
      "types": [
       "water",
       "flying"
@@ -819,8 +845,8 @@
     {
      "speciesId": "seismitoad",
      "name": "Seismitoad",
-     "rank": 32,
-     "score": 90.2,
+     "rank": 77,
+     "score": 88,
      "types": [
       "water",
       "ground"
@@ -836,13 +862,13 @@
       "Icy Wind"
      ],
      "role": "safe swap",
-     "inMetaGroup": true
+     "inMetaGroup": false
     },
     {
      "speciesId": "diggersby",
      "name": "Diggersby",
-     "rank": 44,
-     "score": 89.6,
+     "rank": 62,
+     "score": 88.8,
      "types": [
       "normal",
       "ground"
@@ -861,27 +887,37 @@
      "inMetaGroup": true
     }
    ],
-   "teamScore": 467.5,
-   "coverage": 599.5,
+   "teamScore": 337.4,
+   "coverage": 577.4,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 24.7,
+   "percentileOfPoolTrios": 0.7,
    "unansweredMeta": [
-    "Lickilicky",
-    "Jellicent",
     "Cramorant",
+    "Quagsire (Shadow)",
+    "Mantine",
+    "Snorlax",
+    "Thievul",
+    "Mimikyu (Busted)",
     "Feraligatr",
-    "Feraligatr (Shadow)",
+    "Azumarill",
+    "Deoxys (Defense)",
+    "Malamar",
+    "Electrode (Hisuian)",
+    "Dondozo",
+    "Snorlax (Shadow)",
     "Kingdra",
-    "Furret",
+    "Sableye",
     "Cradily"
    ],
    "sharedWeaknesses": [
-    "Altaria",
-    "Mimikyu (Busted)",
-    "Jellicent",
+    "Cramorant",
+    "Quagsire (Shadow)",
+    "Mantine",
+    "Araquanid",
     "Furret",
-    "Cradily",
-    "Electrode (Hisuian)"
+    "Deoxys (Defense)",
+    "Electrode (Hisuian)",
+    "Cradily"
    ]
   },
   {
@@ -891,8 +927,8 @@
     {
      "speciesId": "starmie_shadow",
      "name": "Starmie (Shadow)",
-     "rank": 288,
-     "score": 81.3,
+     "rank": 269,
+     "score": 81.2,
      "types": [
       "water",
       "psychic"
@@ -913,8 +949,8 @@
     {
      "speciesId": "diggersby",
      "name": "Diggersby",
-     "rank": 44,
-     "score": 89.6,
+     "rank": 62,
+     "score": 88.8,
      "types": [
       "normal",
       "ground"
@@ -935,8 +971,8 @@
     {
      "speciesId": "tinkaton",
      "name": "Tinkaton",
-     "rank": 2,
-     "score": 92.6,
+     "rank": 1,
+     "score": 93,
      "types": [
       "fairy",
       "steel"
@@ -955,37 +991,30 @@
      "inMetaGroup": true
     }
    ],
-   "teamScore": 467.4,
-   "coverage": 647.4,
+   "teamScore": 517.4,
+   "coverage": 643.4,
    "positionInDerivedTop": null,
-   "percentileOfPoolTrios": 24.6,
+   "percentileOfPoolTrios": 48.1,
    "unansweredMeta": [
-    "Quagsire (Shadow)",
+    "Mimikyu (Busted)",
+    "Feraligatr",
     "Jellicent",
-    "Ninetales",
-    "Seismitoad",
-    "Seaking",
-    "Annihilape (Shadow)"
+    "Electrode (Hisuian)"
    ],
    "sharedWeaknesses": [
-    "Empoleon",
-    "Quagsire (Shadow)",
-    "Quagsire",
-    "Jellicent",
-    "Forretress",
-    "Ninetales",
-    "Ninetales (Shadow)",
-    "Forretress (Shadow)",
     "Corviknight",
-    "Feraligatr (Shadow)",
+    "Cramorant",
+    "Mimikyu (Busted)",
+    "Feraligatr",
+    "Jellicent",
     "Furret",
-    "Seismitoad",
-    "Grumpig",
-    "Thievul",
+    "Deoxys (Defense)",
+    "Malamar",
+    "Sableye (Shadow)",
     "Sableye",
     "Cradily",
-    "Malamar",
-    "Gourgeist (Super)"
+    "Forretress (Shadow)",
+    "Dunsparce"
    ]
   }
  ]
