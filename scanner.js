@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.63';
+const APP_VERSION='9.64';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -837,12 +837,15 @@ async function scanVideo(file,trainer){
   // one frame of video time, ~3 per second: detect a held screen, read it once
   // film study (Share anything): keep a dozen small snapshots spread over the recording plus the last seconds, in case it is a battle
   const snaps=[], snapAt=[]; { const n=Math.min(12,Math.max(4,Math.round(dur/15))); for(let i=0;i<n;i++) snapAt.push(dur*(i+0.5)/n); for(let s=4;s>=1;s--) if(dur-s>0) snapAt.push(dur-s); snapAt.sort((a,b)=>a-b); }
-  let snapI=0; const SN=document.createElement('canvas');
+  let snapI=0, battleMode=false; const SN=document.createElement('canvas');
   const snapshot=(t)=>{ if(snapI>=snapAt.length||t<snapAt[snapI]) return; while(snapI<snapAt.length&&snapAt[snapI]<=t) snapI++;
     const s=Math.min(1,768/Math.max(cv.width,cv.height)); SN.width=Math.round(cv.width*s); SN.height=Math.round(cv.height*s); SN.getContext('2d').drawImage(cv,0,0,SN.width,SN.height);
     snaps.push({t:Math.round(t), image:SN.toDataURL('image/jpeg',0.7).split(',')[1], mediaType:'image/jpeg'}); };
+  // a long recording with no status screen in its first half minute is a battle: stop pausing for text and only keep the snapshots
+  const checkBattleMode=(t)=>{ if(!battleMode && dur>90 && t>30 && reads===0 && results.length===before){ battleMode=true; mode+='+battle'; gain('note','no status screens in the first 30 s: watching it as a battle recording'); status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · watching the battle…`); } return battleMode; };
   const analyse=async(t)=>{
     ctx.drawImage(vid,0,0); frames++; gain('frames'); snapshot(t);
+    if(checkBattleMode(t)){ progress(Math.min(1,t/dur)); return false; }
     const vec=frameVec(cv);
     // two consecutive frames look alike: the swipe has stopped. The animated Pokémon model and video compression alone
     // move the 16x16 thumbnail by 4–6 grey levels; a swipe or screen change moves it by 15–75.
@@ -876,7 +879,7 @@ async function scanVideo(file,trainer){
   };
   // Preferred: let the video play (muted, inline: allowed everywhere) and sample frames as they come, pausing for each read.
   // iPhones do not seek reliably in a freshly picked recording, so seeking is only the fallback.
-  let played=false, playErr='';
+  let played=false, playErr='', stalledAt=null;
   try{ vid.playbackRate=2; }catch(e){}
   try{ vid.currentTime=0; await vid.play(); played=!vid.paused; mode='play'; }catch(e){ played=false; playErr=(e&&e.name)||String(e); }
   if(!played){                                          // autoplay refused (Low Power Mode, or no gesture left): one tap starts it
@@ -898,14 +901,16 @@ async function scanVideo(file,trainer){
         else if(Date.now()-lastProgressAt>6000){
           if(vid.ended||t>=dur-0.5) return finish();
           if(nudged<3){ nudged++; lastProgressAt=Date.now(); status(`Video ${Math.round(t)}s · playback stalled, nudging…`); try{ await vid.play(); }catch(e){} return; }
+          if(snaps.length>=3){ stalledAt=t; gain('note',`playback stalled at ${Math.round(t)} s; kept the ${snaps.length} frames seen so far`); return finish(); }   // a battle: keep what we have
           return finish(fail('the video stalled three times; try again or record a shorter clip'));
         }
         if(t-lastT<1/3) return;
         busy=true; lastT=t;
         try{
-          vid.pause();                                             // hold the frame still while we look at it
-          await analyse(t);
-          if(!done){ await vid.play().catch(()=>{}); }
+          if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); progress(Math.min(1,t/dur)); }   // no pause/play churn: the big file plays through smoothly
+          else { vid.pause();                                      // hold the frame still while we look at it
+            await analyse(t);
+            if(!done){ await vid.play().catch(()=>{}); } }
         }catch(e){ finish(e); return; }
         busy=false;
       },80);
@@ -917,6 +922,17 @@ async function scanVideo(file,trainer){
       if(!seeked){ skipped++; if(skipped>15) throw fail(`the video could neither play (${playErr||'refused'}) nor seek in this browser`); continue; }
       await analyse(t);
     }
+  }
+  // the ending decides a battle: when playback gave up early, seek for the missing snapshots (the last seconds above all)
+  if(snapI<snapAt.length && (stalledAt!==null || snaps.length>=3)){
+    vid.pause(); let got=0;
+    for(const t of snapAt.slice(snapI)){
+      const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),3000); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
+      if(!seeked) break;
+      ctx.drawImage(vid,0,0); frames++; snapI=snapAt.indexOf(t); snapshot(t+0.01); got++;
+    }
+    vid.onseeked=null;
+    if(got) gain('note',`${got} closing frame${got===1?'':'s'} fetched by seeking`);
   }
   gain('mode',mode);
   status(`Video done · ${results.length-before} new · ${reads} screens read`);

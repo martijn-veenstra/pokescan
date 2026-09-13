@@ -101,7 +101,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   A **battle recording** (Pokémon GO shows no results screen, so record the match) is sampled by the video scanner: a
   dozen small frames spread over the match plus the last four seconds go to the model in one call when the recording
   holds no status screens; the answer is the battle record plus up to three timestamped film-study notes on the
-  decisions that decided it. An **end-of-battle screenshot** becomes a battle-log entry with both teams, their lead and the result; the Battles page
+  decisions that decided it. A recording longer than 90 s with no status screen in its first 30 s switches to a light
+  battle mode (no pausing for text, the big file plays through); a playback stall keeps the frames seen so far and
+  the closing frames are fetched by seeking, so the import never fails on a stall once frames exist. An **end-of-battle screenshot** becomes a battle-log entry with both teams, their lead and the result; the Battles page
   gains "What you face", the species you actually meet with your record against each, and the AI review gets that
   list. A **Team GO Rocket taunt** is matched to Leek Duck's lineups: which Shadow you will meet and whether your
   roster wants it (evolves into a wanted Pokémon, ranks in your league, or skip). Results sit as cards at the top of
