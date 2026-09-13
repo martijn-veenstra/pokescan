@@ -220,9 +220,12 @@ a production instance needs a custom domain for Clerk's CNAME records and your o
 switches from the single passcode to sign-in with Google or email and password. Every account has its own scans,
 roster, parties, battles and coach budget (`COACH_PER_USER_HOUR`, default 10, under the global `COACH_PER_HOUR`).
 Set `APP_ORIGIN` (e.g. `https://pokescan-production.up.railway.app`) so tokens minted for another site are refused.
-To hand the passcode era's data to your own account, set `OWNER_USER_ID` to your Clerk user id for one deploy; the
-server re-keys the rows once (only if the account has none yet) and you can remove the variable. Without Clerk keys
-the `PASSCODE` mode keeps working exactly as before; tests and the e2e suite run in that mode.
+To bring the passcode era's data into your account, sign in, open the cloud button and use **Import passcode data**:
+enter the server passcode once and the scans, roster, teams and battle log stored under the passcode move to your
+account (`POST /api/migrate`; only kinds the account does not have yet, five attempts per hour). The same sheet shows
+your Clerk user id with a Copy button. Alternatively set `OWNER_USER_ID` to that id for one deploy and the server does
+the same move at boot. Without Clerk keys the `PASSCODE` mode keeps working exactly as before; tests and the e2e suite
+run in that mode.
 
 Setting it up with the Clerk CLI (from your own machine; the CLI needs a browser login):
 
@@ -235,7 +238,7 @@ npm run start:local                                 # reads .env: the server sta
 ```
 
 `.env` is git-ignored. For the live app copy `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from `.env` into the
-Railway service's variables (plus `APP_ORIGIN`, and once `OWNER_USER_ID`). In the Clerk dashboard enable Google and
+Railway service's variables (plus `APP_ORIGIN`; keep `PASSCODE` until you have imported the old data). In the Clerk dashboard enable Google and
 Email + password under User & Authentication.
 
 `auth.js` loads ClerkJS from Clerk's CDN in plain JavaScript (no framework), mounts the sign-in UI in the cloud

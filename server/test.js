@@ -176,11 +176,38 @@ r = await app2.inject({ method: 'POST', url: '/api/coach', headers: A, payload: 
 assert.equal(r.statusCode, 429, 'per-user budget (10/hour)');
 r = await app2.inject({ method: 'POST', url: '/api/coach', headers: B, payload: { context: { x: 1 } } });
 assert.equal(r.statusCode, 202, 'bob still has budget');
-// migration of the passcode era's rows
+// migration of the passcode era's rows: kind by kind, never over a kind the account already has
 await app2.db.put('default', 'roster', { owned: { azumarill: null } });
-assert.equal(await app2.db.migrateUser('default', 'user_carol'), 1);
+await app2.db.put('default', 'scans', [{ key: 'old' }]);
+await app2.db.put('user_carol', 'scans', [{ key: 'mine' }]);
+assert.deepEqual(await app2.db.migrateUser('default', 'user_carol'), ['roster'], 'only the missing kind moves');
 assert.deepEqual((await app2.db.get('user_carol', 'roster')).data, { owned: { azumarill: null } });
-assert.equal(await app2.db.migrateUser('default', 'user_carol'), 0, 'idempotent');
-await app2.db.clear('user_alice'); await app2.db.clear('user_bob'); await app2.db.clear('user_carol');
+assert.deepEqual((await app2.db.get('user_carol', 'scans')).data, [{ key: 'mine' }], 'existing kind untouched');
+assert.deepEqual((await app2.db.get('default', 'scans')).data, [{ key: 'old' }], 'unmoved kind stays with the passcode account');
+assert.deepEqual(await app2.db.migrateUser('default', 'user_carol'), [], 'idempotent');
+// the in-app import: signed in, prove the passcode, only in accounts mode with a passcode still set
+r = await app2.inject({ method: 'POST', url: '/api/migrate', headers: A, payload: { passcode: 'x' } });
+assert.equal(r.statusCode, 409, 'no passcode on this server → nothing to import');
+const app3 = await buildServer({ passcode: 'secret', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '' });
+r = await app3.inject({ method: 'GET', url: '/api/health' });
+assert.equal(r.json().auth, 'clerk'); assert.equal(r.json().passcodeData, true, 'health says passcode-era data may exist');
+await app3.db.put('default', 'roster', { owned: { medicham: null } });
+await app3.db.put('default', 'battles', [{ t: 1 }]);
+r = await app3.inject({ method: 'POST', url: '/api/migrate', headers: { authorization: 'Bearer nope', 'content-type': 'application/json' }, payload: { passcode: 'secret' } });
+assert.equal(r.statusCode, 401, 'needs a signed-in account');
+r = await app3.inject({ method: 'POST', url: '/api/migrate', headers: A, payload: { passcode: 'wrong' } });
+assert.equal(r.statusCode, 403, 'wrong passcode');
+r = await app3.inject({ method: 'GET', url: '/api/state', headers: A });
+assert.deepEqual(r.json().state, {}, 'nothing moved on a wrong passcode');
+r = await app3.inject({ method: 'POST', url: '/api/migrate', headers: A, payload: { passcode: 'secret' } });
+assert.equal(r.statusCode, 200); assert.deepEqual(r.json().moved.sort(), ['battles', 'roster']);
+r = await app3.inject({ method: 'GET', url: '/api/state/roster', headers: A });
+assert.deepEqual(r.json().data, { owned: { medicham: null } }, 'alice now owns the passcode era roster');
+r = await app3.inject({ method: 'POST', url: '/api/migrate', headers: A, payload: { passcode: 'secret' } });
+assert.deepEqual(r.json().moved, [], 'second import finds nothing');
+for (let i = 0; i < 3; i++) r = await app3.inject({ method: 'POST', url: '/api/migrate', headers: A, payload: { passcode: 'wrong' } });
+assert.equal(r.statusCode, 429, 'five attempts per hour per account');
+await app3.db.clear('user_alice'); await app3.close();
+await app2.db.clear('user_alice'); await app2.db.clear('user_bob'); await app2.db.clear('user_carol'); await app2.db.clear('default');
 await app2.close();
 console.log('accounts-mode tests passed');

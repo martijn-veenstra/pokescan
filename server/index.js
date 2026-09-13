@@ -39,7 +39,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   const authMode = verify ? 'clerk' : passcode ? 'passcode' : 'none';
   if (ownerMigrateFrom && db.migrateUser) {         // one-off: hand the passcode era's rows to the owner's Clerk account
     const moved = await db.migrateUser('default', ownerMigrateFrom);
-    app.log.info(`migrated ${moved} state rows from 'default' to ${ownerMigrateFrom}`);
+    app.log.info(`migrated ${moved.length ? moved.join(', ') : 'nothing'} from 'default' to ${ownerMigrateFrom}`);
   }
   const hash = s => createHash('sha256').update(String(s)).digest();
   const okCode = given => !!passcode && !!given && timingSafeEqual(hash(given), hash(passcode));
@@ -59,7 +59,22 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   app.get('/api/health', async () => {
     let dbOk = false;
     try { dbOk = await db.ping(); } catch { dbOk = false; }
-    return { ok: true, db: dbOk, storage: db.kind, sync: authMode !== 'none', auth: authMode, ...(authMode === 'clerk' && clerkPublishableKey ? { clerkPublishableKey } : {}), coach: !!coach, sources: true, version: VERSION };
+    return { ok: true, db: dbOk, storage: db.kind, sync: authMode !== 'none', auth: authMode, ...(authMode === 'clerk' && clerkPublishableKey ? { clerkPublishableKey } : {}),
+             ...(authMode === 'clerk' && passcode ? { passcodeData: true } : {}), coach: !!coach, sources: true, version: VERSION };
+  });
+  // One-time import of the passcode era's rows into a signed-in account: the passcode proves ownership of that data.
+  // Only kinds the account does not have yet move over, so it never overwrites what the account already synced.
+  const migrateTries = new Map();
+  app.post('/api/migrate', { preHandler: auth }, async (req, reply) => {
+    if (authMode !== 'clerk') return reply.code(404).send({ error: 'not_in_accounts_mode' });
+    if (!passcode) return reply.code(409).send({ error: 'no_passcode_data', message: 'PASSCODE is not set on the server, so there is no passcode-era data to import.' });
+    const now = Date.now(), tries = (migrateTries.get(req.userId) || []).filter(t => t >= now - 3600e3);
+    if (tries.length >= 5) return reply.code(429).send({ error: 'rate_limited', message: 'too many attempts; try again in an hour' });
+    tries.push(now); migrateTries.set(req.userId, tries);
+    if (!okCode((req.body || {}).passcode)) return reply.code(403).send({ error: 'bad_passcode', message: 'that is not the server passcode' });
+    const moved = await db.migrateUser('default', req.userId);
+    req.log.info(`imported ${moved.length ? moved.join(', ') : 'nothing'} from 'default' to ${req.userId}`);
+    return { moved };
   });
   // Public schedule (Leek Duck via ScrapedDuck, event pages enriched server-side). No passcode: nothing personal in it.
   app.get('/api/sources', async (req, reply) => {

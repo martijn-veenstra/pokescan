@@ -335,3 +335,8 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 /* ---------- roster cards for pieces you do not hold yet ---------- */
 .mon.compact.ghost{border-style:dashed;padding:10px 15px}.mon.compact.ghost .name{font-size:15px;color:var(--dim)}
 .chip.sel{outline:2px solid var(--ink)}
+#syncbox .imp{margin-top:10px;border:1px dashed var(--line);border-radius:12px;padding:8px 12px}#syncbox .imp summary{cursor:pointer;font-weight:600;color:var(--ink)}
+#syncbox .imp .add input{background:#0E1626;border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:8px}
+#syncbox .imp .add button{background:var(--green);border:none;border-radius:9px;padding:7px 13px;font-weight:700;color:#062018}
+#syncbox .mini{background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--dim);font-size:11px;padding:1px 7px;cursor:pointer;vertical-align:middle}
+#syncbox #uid{font-size:11px;color:var(--dim);word-break:break-all}

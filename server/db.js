@@ -49,13 +49,17 @@ export async function openDb(url) {
       return r.rows[0].updated_at.toISOString();
     },
     async clear(user) { await pool.query('DELETE FROM state WHERE user_id=$1', [user]); await pool.query('DELETE FROM history WHERE user_id=$1', [user]); },
-    async migrateUser(from, to) {                // re-key one user's rows to another id, only when the target has none yet
-      if (!from || !to || from === to) return 0;
-      const has = await pool.query('SELECT 1 FROM state WHERE user_id=$1 LIMIT 1', [to]);
-      if (has.rows.length) return 0;
-      const r = await pool.query('UPDATE state SET user_id=$2 WHERE user_id=$1', [from, to]);
-      await pool.query('UPDATE history SET user_id=$2 WHERE user_id=$1', [from, to]);
-      return r.rowCount;
+    async migrateUser(from, to) {                // move one user's rows to another id, kind by kind, only the kinds the target lacks; returns the moved kinds
+      if (!from || !to || from === to) return [];
+      const r = await pool.query(
+        `INSERT INTO state (user_id, kind, data, updated_at) SELECT $2, kind, data, updated_at FROM state WHERE user_id=$1
+         ON CONFLICT (user_id, kind) DO NOTHING RETURNING kind`, [from, to]);
+      const kinds = r.rows.map(x => x.kind);
+      if (kinds.length) {
+        await pool.query('DELETE FROM state WHERE user_id=$1 AND kind = ANY($2)', [from, kinds]);
+        await pool.query('UPDATE history SET user_id=$2 WHERE user_id=$1 AND kind = ANY($3)', [from, to, kinds]);
+      }
+      return kinds;
     },
     async close() { await pool.end(); },
   };
@@ -76,10 +80,13 @@ function memoryDb() {
     async put(user, kind, data) { const updatedAt = new Date().toISOString(); m.set(key(user, kind), { data, updatedAt }); return updatedAt; },
     async clear(user) { for (const k of [...m.keys()]) if (k.startsWith(user + ' ')) m.delete(k); },
     async migrateUser(from, to) {
-      if (!from || !to || from === to || [...m.keys()].some(k => k.startsWith(to + ' '))) return 0;
-      let n = 0;
-      for (const k of [...m.keys()]) if (k.startsWith(from + ' ')) { m.set(to + ' ' + k.slice(from.length + 1), m.get(k)); m.delete(k); n++; }
-      return n;
+      if (!from || !to || from === to) return [];
+      const kinds = [];
+      for (const k of [...m.keys()]) if (k.startsWith(from + ' ')) {
+        const kind = k.slice(from.length + 1); if (m.has(key(to, kind))) continue;
+        m.set(key(to, kind), m.get(k)); m.delete(k); kinds.push(kind);
+      }
+      return kinds;
     },
     async close() {},
   };

@@ -158,8 +158,13 @@ function renderBox() {
   if (clerkMode()) {
     const mode = Auth.mode();
     box.innerHTML = `<div class="box"><h2>${signedIn() ? 'Your account' : 'Sign in'} <span class="x" onclick="Sync.toggle()">✕</span></h2>
-      ${signedIn() ? `<div class="team" style="cursor:default"><b>${Auth.email() || 'Signed in'}</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div></div>
+      ${signedIn() ? `<div class="team" style="cursor:default"><b>${Auth.email() || 'Signed in'}</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div>
+          <div class="dt" style="margin-top:4px">id <code id="uid">${Auth.userId() || ''}</code> <button class="mini" onclick="Sync.copyId(this)">Copy</button></div></div>
         <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out</button></div>
+        ${health.passcodeData ? `<details class="imp" ${importMsg ? 'open' : ''}><summary>Import passcode data</summary>
+          <p class="dim" style="font-size:12px">One-time: move the scans, roster, teams and battles saved under the old passcode into this account. Only what this account does not have yet is moved.</p>
+          <div class="add" style="margin:6px 0"><input id="impcode" type="password" placeholder="server passcode" autocomplete="off"><button onclick="Sync.importPasscode()" ${busy ? 'disabled' : ''}>Import</button></div>
+          ${importMsg ? `<div class="note" ${/^⚠/.test(importMsg) ? 'style="color:#F59A8B"' : ''}>${importMsg}</div>` : ''}</details>` : ''}
         <p class="dim" style="font-size:12px;margin-top:10px">Scans, roster, parties, battles and the completion log follow your account to every device. Local storage stays the working copy, so the app keeps working offline.</p>`
       : mode === 'offline' ? `<p class="dim">Could not reach the sign-in service. You can keep using the app; sync resumes when you are back online.</p>`
       : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}</div>`;
@@ -198,14 +203,33 @@ async function coach(context, question, onProgress, mode) {   // server-side Cla
   }
   throw new Error('the coach took more than five minutes; try again later');
 }
-function toggle() { const box = $('syncbox'); box.classList.toggle('open'); if (box.classList.contains('open')) renderBox(); else if (window.Auth) Auth.unmountSignIn($('clerk-signin')); }
+function toggle() { const box = $('syncbox'); box.classList.toggle('open'); if (box.classList.contains('open')) renderBox(); else { importMsg = ''; if (window.Auth) Auth.unmountSignIn($('clerk-signin')); } }
+let importMsg = '';
+const KIND_LABEL = {scans: 'scans', roster: 'roster and teams', appr: 'appraisals', battles: 'battle log'};
+async function importPasscode() {              // one-time: the passcode era's rows become this account's, then a pull brings them to this phone
+  const code = ($('impcode') || {}).value || '';
+  if (!code) { importMsg = '⚠ enter the server passcode'; renderBox(); return; }
+  busy = true; importMsg = ''; renderBox();
+  try {
+    const r = await fetch('/api/migrate', {method: 'POST', headers: await hdr(), body: JSON.stringify({passcode: code})});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.message || j.error || ('HTTP ' + r.status));
+    const moved = (j.moved || []).map(k => KIND_LABEL[k] || k);
+    await pull();
+    importMsg = moved.length ? `Imported: ${moved.join(', ')}.` : 'Nothing to import: this account already has every kind, or the passcode account is empty.';
+    lastError = '';
+    if (window.Planner) { Planner.refresh(); }
+  } catch (e) { importMsg = '⚠ ' + e.message; }
+  busy = false; renderBox(); paint();
+}
+function copyId(btn) { const id = (window.Auth && Auth.userId()) || ''; if (!id) return; navigator.clipboard && navigator.clipboard.writeText(id).then(() => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } }).catch(() => {}); }
 async function init() {
   if (await detect() && !clerkMode() && S.code) {
     try { await pull(); } catch (e) { lastError = e.message; }
     paint(); if (window.Planner) Planner.renderToday();
   }
 }
-window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, state: S, error: () => lastError, available: () => available, signedIn,
+window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, state: S, error: () => lastError, available: () => available, signedIn,
                health: () => health, coachAvailable: () => !!(health && health.coach && signedIn())};
 window.addEventListener('load', () => setTimeout(init, 300));
 window.addEventListener('online', () => { if (signedIn()) flush(); });
