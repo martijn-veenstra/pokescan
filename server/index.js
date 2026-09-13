@@ -23,7 +23,9 @@ const VERSION = (() => { try { return JSON.parse(readFileSync(path.join(ROOT, 'p
    has their own state and coach budget. Without it the old single-user PASSCODE mode stays (local dev, tests). */
 export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true, coach = makeCoach(process.env.ANTHROPIC_API_KEY), sourcesFetch = fetch,
                                     clerkSecretKey = process.env.CLERK_SECRET_KEY || '', clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || '', appOrigin = process.env.APP_ORIGIN || '',
-                                    verifyToken = null, ownerMigrateFrom = process.env.OWNER_USER_ID || '' } = {}) {
+                                    verifyToken = null, ownerMigrateFrom = process.env.OWNER_USER_ID || '',
+                                    proUserIds = (process.env.PRO_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
+                                    proCheckoutUrl = process.env.PRO_CHECKOUT_URL || '', proPrice = process.env.PRO_PRICE || '€4.99 / month', now = () => Date.now() } = {}) {
   const app = Fastify({ logger, bodyLimit: MAX_BYTES });
   // accept an empty JSON body (POST /api/auth sends none)
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
@@ -54,7 +56,19 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (!okCode(tok)) return reply.code(401).send({ error: 'bad_passcode' });
     req.userId = 'default';
   };
-  const features = () => ['sync'].concat(coach ? ['coach'] : []);   // the single seam for a paid plan later
+  /* Plans. 'pro' unlocks every AI feature. Sources, in order: the single-user passcode mode (the owner), PRO_USER_IDS
+     (comped accounts), a plan row in the database (written by whatever sells the upgrade). Everything else is 'free'. */
+  const planOf = async userId => {
+    if (authMode === 'passcode' || proUserIds.includes(userId)) return { plan: 'pro', source: authMode === 'passcode' ? 'owner' : 'comped' };
+    const p = db.getPlan ? await db.getPlan(userId) : null;
+    if (p && p.plan === 'pro' && (!p.until || new Date(p.until).getTime() > now())) return { plan: 'pro', source: p.source || 'paid' };
+    return { plan: 'free', source: null };
+  };
+  const features = async userId => { const { plan } = await planOf(userId); return ['sync'].concat(plan === 'pro' ? ['pro'] : []).concat(plan === 'pro' && coach ? ['coach'] : []); };
+  const requirePro = async (req, reply) => {
+    const { plan } = await planOf(req.userId);
+    if (plan !== 'pro') return reply.code(403).send({ error: 'upgrade_required', message: 'This is a PokeScan Pro feature.' });
+  };
 
   app.get('/api/health', async () => {
     let dbOk = false;
@@ -84,7 +98,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   // AI coach: the browser sends a compact roster/meta summary, the server asks Claude. Passcode-protected and rate-limited,
   // because every call costs money on the server owner's API key.
   const asks = [], asksBy = new Map(), jobs = new Map();
-  app.post('/api/coach', { preHandler: auth }, async (req, reply) => {
+  app.post('/api/coach', { preHandler: [auth, requirePro] }, async (req, reply) => {
     if (!coach) return reply.code(503).send({ error: 'coach_not_configured', message: 'Set ANTHROPIC_API_KEY on the server to enable the coach.' });
     const now = Date.now();
     while (asks.length && asks[0] < now - 3600e3) asks.shift();
@@ -114,7 +128,12 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     return { status: job.status, text: job.text, model: job.model, usage: job.usage, error: job.error };
   });
   app.post('/api/auth', { preHandler: auth }, async () => ({ ok: true }));
-  app.get('/api/me', { preHandler: auth }, async req => ({ userId: req.userId, auth: authMode, features: features(req.userId) }));
+  app.get('/api/me', { preHandler: auth }, async req => {
+    const { plan, source } = await planOf(req.userId);
+    // the checkout page gets the user id as a reference so the payment can be tied back to the account
+    const checkoutUrl = proCheckoutUrl && authMode === 'clerk' ? `${proCheckoutUrl}${proCheckoutUrl.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(req.userId)}` : null;
+    return { userId: req.userId, auth: authMode, plan, planSource: source, features: await features(req.userId), pro: { price: proPrice, checkoutUrl, coach: !!coach } };
+  });
   app.get('/api/state', { preHandler: auth }, async req => ({ user: req.userId, state: await db.all(req.userId) }));
   app.get('/api/state/:kind', { preHandler: auth }, async (req, reply) => {
     if (!KINDS.has(req.params.kind)) return reply.code(404).send({ error: 'unknown_kind' });

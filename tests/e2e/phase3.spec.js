@@ -41,12 +41,12 @@ test('Today shows meta changes for owned Pokémon and can dismiss them', async (
   ] }) }));
   const errors = await openApp(page, '#/today');
   await page.evaluate(seed);
-  await expect(page.locator('#today .team.card')).toContainText('Meta changed for your Pokémon');
-  await expect(page.locator('#today .team.card')).toContainText('Ninetales');
-  await expect(page.locator('#today .team.card')).not.toContainText('Medicham');
-  await page.click('#today .team.card .ctx .dots');
+  await expect(page.locator('#today .team.card:not(.start)')).toContainText('Meta changed for your Pokémon');
+  await expect(page.locator('#today .team.card:not(.start)')).toContainText('Ninetales');
+  await expect(page.locator('#today .team.card:not(.start)')).not.toContainText('Medicham');
+  await page.click('#today .team.card:not(.start) .ctx .dots');
   await page.click('#today .team.card .ctx .menu button:has-text("Dismiss")');
-  await expect(page.locator('#today .team.card')).toHaveCount(0);
+  await expect(page.locator('#today .team.card:not(.start)')).toHaveCount(0);
   expect(await page.evaluate(() => Object.keys(Planner.ROSTER.seen).length)).toBe(2);
   expect(errors).toEqual([]);
 });

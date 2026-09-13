@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.58';
+const APP_VERSION='9.59';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -667,7 +667,7 @@ function applyProfile(p, from){
   status(msg); const ps=$('pstat'); if(ps) ps.textContent=msg;
 }
 function paintProfile(){ const lv=localStorage.getItem('trainer'), nm2=localStorage.getItem('tname'); const el=$('proflbl'); if(el) el.textContent=nm2?`${nm2} · L${lv||'?'}`:lv?`L${lv}`:'Profile'; }
-function toggleProfile(){ const b=$('profile'); b.classList.toggle('open'); if(b.classList.contains('open')){ const ps=$('pstat'); if(ps) ps.textContent=''; } }
+function toggleProfile(){ const b=$('profile'); b.classList.toggle('open'); if(b.classList.contains('open')){ const ps=$('pstat'); if(ps) ps.textContent=''; if(window.Planner&&Planner.paintMilestones) Planner.paintMilestones(); } }
 
 /* ---------- import log: one line per file, what it gave or why it failed ---------- */
 const SCANLOG=(()=>{ try{ return JSON.parse(localStorage.getItem('scanlog')||'[]'); }catch(e){ return []; } })();
@@ -743,7 +743,7 @@ $('file').addEventListener('change', async e=>{
   { const folded=dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
   const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
-  status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
+  { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
   setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
 });
@@ -766,6 +766,12 @@ $('pfile').addEventListener('change', async e=>{
 function del(i){ results.splice(i,1); save(); render(); }
 
 function status(s){ $('stat').textContent=s; }
+let TOAST_T=null;
+function toast(text, onclick){                      // one short line above the bottom bar, on any page; tap runs onclick
+  const t=$('toast'); if(!t) return;
+  t.textContent=text; t.onclick=()=>{ t.classList.remove('on'); if(onclick) try{ (0,eval)(onclick); }catch{} };
+  t.classList.add('on'); clearTimeout(TOAST_T); TOAST_T=setTimeout(()=>t.classList.remove('on'),3800);
+}
 function progress(p){ $('fill').style.width=(p*100).toFixed(1)+'%'; }
 
 async function scanImage(file,trainer,batchKey){
@@ -1122,9 +1128,9 @@ function planFor(r,best){                       // the evolution chain of a scan
   return lines.length?`<div class="plan">${lines.join('<br>')}</div>`:'';
 }
 
-const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups','battles'];
+const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups','battles','pro'];
 const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','scans','matchups','battles'];
-const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',battles:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:''};
+const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',battles:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:'',pro:''};
 function showView(t){                              // switch the visible page; navigation goes through Planner.nav so the URL hash stays in step
   if(!PAGES.includes(t)) t='today';
   for(const k of PAGES){ const v=$('view-'+k); if(v) v.classList.toggle('on',k===t); }

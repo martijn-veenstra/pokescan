@@ -5,7 +5,7 @@
 'use strict';
 const S = Object.assign({code: '', last: {}, base: {}, user: ''}, JSON.parse(localStorage.getItem('sync') || '{}'));
 const save = () => localStorage.setItem('sync', JSON.stringify(S));
-let available = null, timer = null, busy = false, lastError = '', health = null;
+let available = null, timer = null, busy = false, lastError = '', health = null, me = null;   // me: /api/me (plan, features) for the signed-in account
 const dirty = new Set();
 const $ = id => document.getElementById(id);
 const clerkMode = () => !!(health && health.auth === 'clerk');
@@ -125,10 +125,19 @@ async function connect(code) {
   } catch (e) { lastError = e.message; if (e.message === 'wrong passcode') { S.code = ''; save(); } }
   paint(); if (window.Planner) Planner.refresh();
 }
+async function refreshMe() {                    // plan and features of the signed-in account; null when signed out
+  if (!signedIn()) { me = null; return null; }
+  try { const r = await fetch('/api/me', {headers: await hdr(), cache: 'no-store'}); me = r.ok ? await r.json() : null; } catch { me = null; }
+  paint(); if (window.Planner) Planner.refresh();
+  return me;
+}
+const plan = () => me ? me.plan : (health && health.auth !== 'clerk' && signedIn() ? 'pro' : 'free');   // without accounts the server is the owner's own: everything unlocked
+const isPro = () => plan() === 'pro';
 async function onUser(user) {                  // Clerk: signed in, signed out, or another account on this phone
-  if (!user) { S.base = {}; S.last = {}; lastError = ''; save(); paint(); if (window.Planner) Planner.refresh(); return; }
+  if (!user) { S.base = {}; S.last = {}; lastError = ''; me = null; save(); paint(); if (window.Planner) Planner.refresh(); return; }
   if (S.user && S.user !== user.id) { S.base = {}; S.last = {}; }   // never merge one account's local copy into another's server data by accident
   S.user = user.id; save(); lastError = '';
+  refreshMe();
   try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); await flush(); S.connectedAt = Date.now(); save(); }
   catch (e) { lastError = e.message; }
   paint(); if (window.Planner) Planner.refresh();
@@ -229,8 +238,9 @@ async function init() {
     paint(); if (window.Planner) Planner.renderToday();
   }
 }
-window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, state: S, error: () => lastError, available: () => available, signedIn,
-               health: () => health, coachAvailable: () => !!(health && health.coach && signedIn())};
+window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
+               health: () => health, me: () => me, plan, isPro, coachAvailable: () => !!(health && health.coach && signedIn() && isPro()),
+               coachOffered: () => !!(health && health.coach && signedIn() && !isPro())};   // the server has the AI, this account has not unlocked it yet
 window.addEventListener('load', () => setTimeout(init, 300));
 window.addEventListener('online', () => { if (signedIn()) flush(); });
 // the server may gain the coach (or sync) after a redeploy: re-read /api/health when the app comes back to the foreground

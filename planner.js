@@ -374,9 +374,10 @@ function renderTodayInner(el) {
   const m = M(), {L, rep, own} = m, best = rep.today[0];
   const bm = APP.benchmark || {best: 721, median: 521};
   let h = `<div class="note">PvPoke ${esc(APP.league.title)} · gamemaster ${esc(APP.gamemasterTimestamp.slice(0, 10))} · ${Object.keys(own).length} owned, ${Object.keys(m.ri.pending).length} pending, ${Object.keys(m.ri.candidates).length} wanted</div>`;
+  h += startCard(m, best);
   h += changesCard(m);
   if (!best) {
-    h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under ${LEAGUE.cp} CP, add them by name in Roster, or load the saved roster from its ⋮ menu.</div>`;
+    h += `<div class="empty"><b>No team yet.</b><br>${ONBOARD.dismissed ? `Scan at least three Pokémon at or under ${LEAGUE.cp} CP, add them by name in Roster, or load the saved roster from its ⋮ menu.` : 'The checklist above says what to scan next.'}</div>`;
     el.innerHTML = h; return;
   }
   const ids = best.members.map(x => x.speciesId), rl = roles(L, ids);
@@ -549,8 +550,8 @@ function renderTeamsInner(el) {
   el.innerHTML = h;
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
-const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles'];
-const PAGE_LABEL = {today: 'Today', builder: 'Builder', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans', matchups: 'Matchups', battles: 'Battle log'};
+const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'pro'];
+const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans', matchups: 'Matchups', battles: 'Battle log'};
 const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
@@ -729,7 +730,8 @@ async function autoReview(ids) {
 }
 function refreshReview(ids) { const key = reviewKey(ids); delete BCOACH.reviews[key]; delete BCOACH.reviewFailed[key]; saveBCoach(); autoReview(ids); const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); }
 function reviewCard(ids, auto) {                // the card; auto = ask Claude by itself when there is no review yet (builder and saved parties), else offer a button
-  if (!coachOn() || ids.length !== 3) return '';
+  if (ids.length !== 3) return '';
+  if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered() ? proTeaser('AI review', 'Claude judges this team: its plan, what it fears and the one swap from your roster that helps.') : '';
   const key = reviewKey(ids), rv = BCOACH.reviews[key], busy = BCOACH.reviewBusy[key], failed = BCOACH.reviewFailed[key];
   if (!rv && auto && !busy && !failed) setTimeout(() => autoReview(ids), 0);
   const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>AI review <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
@@ -1043,6 +1045,7 @@ function route() {
   const page = PAGES.includes(p) ? p : 'today';
   if (['builder', 'meta', 'rank', 'raids'].includes(page)) UI.metaPanel = {builder: 'build', meta: 'teams', rank: 'rank', raids: 'raids'}[page];
   UI.mon = null; UI.scan = null; UI.team = null;
+  if (page === 'pro') renderPro(); else if (PRO_POLL) { clearInterval(PRO_POLL); PRO_POLL = null; }
   showView(page);
   if (page !== cur) window.scrollTo(0, 0);
 }
@@ -1272,6 +1275,113 @@ async function loadCups() {
 function setLeague(slug) { drawer(false); if (typeof window.setLeague === 'function') window.setLeague(slug); }
 
 /* ---------- side drawer ---------- */
+/* ---------- Getting started: a checklist on Today whose steps tick themselves off; each step opens the place to do it ---------- */
+const ONBOARD = Object.assign({dismissed: false, doneAt: null}, JSON.parse(localStorage.getItem('onboard') || '{}'));
+const saveOnboard = () => localStorage.setItem('onboard', JSON.stringify(ONBOARD));
+const liveScans = () => results.filter(r => !r.superseded);
+function startSteps(m, best) {
+  const underCap = Object.keys(m.own).length, hl = (window.Sync && Sync.health()) || {};
+  const steps = [
+    {k: 'scan', title: 'Import a status screenshot', sub: 'one Pokémon\'s status screen from Pokémon GO', done: liveScans().length > 0, go: "Planner.nav('#/scans');setTimeout(()=>document.getElementById('file').click(),150)"},
+    {k: 'appr', title: 'Add the appraisal screen', sub: 'exact IVs instead of a range', done: results.some(r => r.appraisal), go: "Planner.nav('#/scans')"},
+    {k: 'moves', title: 'Scan the attacks', sub: 'the moves decide the rank', done: results.some(r => r.moves && r.moves.length), go: "Planner.nav('#/scans')"},
+    {k: 'three', title: `Three Pokémon under ${LEAGUE.cp} CP`, sub: best ? 'Today builds your first team' : `${Math.min(3, underCap)} of 3 · Today builds your first team`, done: !!best, go: "Planner.nav('#/scans')"},
+    {k: 'level', title: 'Set your trainer level', sub: 'power-up costs and the level cap depend on it', done: !!localStorage.getItem('tname') || (localStorage.getItem('trainer') || '40') !== '40', go: 'toggleProfile()'},
+    {k: 'party', title: 'Save your in-game party', sub: 'Today checks the team you actually run', done: Object.values(ROSTER.tagged).some(v => v.length === 3), go: "Planner.nav('#/teams')"},
+    {k: 'battle', title: 'Log a battle', sub: 'three taps after a GO Battle League match', done: BATTLES.length > 0, go: "Planner.nav('#/battles')"},
+  ];
+  if (window.Sync && Sync.available() && hl.auth === 'clerk') steps.push({k: 'signin', title: 'Sign in', sub: 'scans and teams follow you to every device', done: Sync.signedIn(), go: 'Sync.toggle()'});
+  return steps;
+}
+function startCard(m, best) {
+  if (ONBOARD.dismissed) return '';
+  const steps = startSteps(m, best), done = steps.filter(s => s.done).length, all = done === steps.length;
+  if (all && !ONBOARD.doneAt) { ONBOARD.doneAt = Date.now(); saveOnboard(); }
+  const next = steps.find(s => !s.done);
+  const row = s => `<div class="step ${s.done ? 'done' : s === next ? 'next' : ''}" onclick="${s.done ? '' : s.go}"><span class="tick ${s.done ? 'full' : 'hollow'}">${s.done ? '✓' : '○'}</span><div class="tx"><b>${esc(s.title)}</b>${s.done ? '' : `<div class="dt">${esc(s.sub)}</div>`}</div>${s.done ? '' : '<span class="go">›</span>'}</div>`;
+  return `<div class="team card start" style="cursor:default"><div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>${all ? 'All set' : 'Getting started'} <small>${done} of ${steps.length}</small></span>${ctxMenu([[all ? 'Close' : 'Hide this checklist', 'Planner.hideStart()']])}</div>
+    <div class="bar" style="margin:0 0 8px"><i style="width:${Math.round(done / steps.length * 100)}%"></i></div>
+    ${all ? `<div class="dt">Everything is set up. Milestones live under your trainer profile.</div>` : steps.map(row).join('')}</div>`;
+}
+function hideStart() { ONBOARD.dismissed = true; saveOnboard(); renderToday(); }
+function showStart() { ONBOARD.dismissed = false; saveOnboard(); if (typeof toggleHelp === 'function' && $('help').classList.contains('open')) toggleHelp(); nav('#/today'); renderToday(); }
+
+/* ---------- Milestones: counts that unlock named payoffs; one toast per unlock, a progress list under the profile ---------- */
+const MS = Object.assign({unlocked: {}, seeded: false}, JSON.parse(localStorage.getItem('milestones') || '{}'));
+const saveMS = () => localStorage.setItem('milestones', JSON.stringify(MS));
+const MS_TRACKS = [
+  {k: 'scans', label: n => `Roster knows ${n} Pokémon`, tiers: [1, 5, 15, 30, 60], payoff: {1: 'the first card is in', 5: 'Today can build a team', 15: 'the builder has real choices', 30: 'raid counters come from your own Pokémon', 60: 'the whole collection is in'}, count: () => liveScans().length},
+  {k: 'appr', label: n => `${n} exact-IV Pokémon`, tiers: [1, 5, 15], payoff: {1: 'ranks are exact, not a range', 5: 'power-up advice you can trust', 15: 'every core piece pinned down'}, count: () => results.filter(r => r.appraisal).length},
+  {k: 'moves', label: n => `${n} attack sets read`, tiers: [1, 5, 15], payoff: {1: 'team scores use your real moves', 5: 'the builder knows what you actually run', 15: 'no more guessing at second moves'}, count: () => results.filter(r => r.moves && r.moves.length).length},
+  {k: 'battles', label: n => `${n} battles logged`, tiers: [1, 10, 50], payoff: {1: 'your record starts', 10: 'team pages show your real record', 50: 'the trouble leads are statistically real'}, count: () => BATTLES.length},
+  {k: 'parties', label: n => `${n} parties saved`, tiers: [1, 3], payoff: {1: 'Today checks your actual team', 3: 'Today rotates advice across your parties'}, count: () => Object.values(ROSTER.tagged).filter(v => v.length === 3).length},
+  {k: 'imports', label: n => `${n} screenshots imported`, tiers: [5, 25, 100], payoff: {5: 'you have the hang of it', 25: 'a serious collection', 100: 'archivist'}, count: () => (typeof SCANLOG !== 'undefined' ? SCANLOG : []).filter(e => e.ok && e.kind !== 'cleanup').length},
+];
+function msCheck() {                           // record newly reached tiers; toast the biggest one. The first run only records, so an old device never gets a burst.
+  let best = null;
+  for (const t of MS_TRACKS) {
+    const n = t.count();
+    for (const tier of t.tiers) {
+      const key = t.k + ':' + tier;
+      if (n >= tier && !MS.unlocked[key]) { MS.unlocked[key] = Date.now(); if (MS.seeded && (!best || tier * (t.k === 'imports' ? 0.5 : 1) > best.w)) best = {t, tier, w: tier * (t.k === 'imports' ? 0.5 : 1)}; }
+    }
+  }
+  const first = !MS.seeded; MS.seeded = true; saveMS();
+  if (best && !first && typeof toast === 'function') toast(`★ ${best.t.label(best.tier)} · ${best.t.payoff[best.tier]}`, 'toggleProfile()');
+  if ($('mstones')) paintMilestones();
+}
+function nextHint(k) {                          // "3 more scans and Today builds a team": the nearest unreached tier of one track
+  const t = MS_TRACKS.find(x => x.k === k); if (!t) return '';
+  const n = t.count(), tier = t.tiers.find(x => x > n); if (!tier) return '';
+  const left = tier - n, noun = {scans: 'scan', appr: 'appraisal', moves: 'attack screen', battles: 'battle', parties: 'party', imports: 'screenshot'}[k] || 'more';
+  return `${left} more ${noun}${left === 1 ? '' : 's'} and ${t.payoff[tier]}`;
+}
+function paintMilestones() {
+  const el = $('mstones'); if (!el) return;
+  const total = MS_TRACKS.reduce((a, t) => a + t.tiers.length, 0), got = Object.keys(MS.unlocked).length;
+  el.innerHTML = `<div class="dt" style="margin:0 0 6px">${got} of ${total} milestones</div>` + MS_TRACKS.map(t => {
+    const n = t.count(), next = t.tiers.find(x => x > n), reached = t.tiers.filter(x => n >= x), pct = next ? Math.round(n / next * 100) : 100;
+    return `<div class="ms"><div class="h"><b>${esc(t.label(n))}</b><span class="dim">${next ? `${n} / ${next}` : 'complete'}</span></div><div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="dt">${next ? esc(nextHint(t.k)) : esc(t.payoff[reached[reached.length - 1]])} <span class="dots">${t.tiers.map(x => `<i class="${n >= x ? 'on' : ''}" title="${x}"></i>`).join('')}</span></div></div>`;
+  }).join('');
+}
+
+/* ---------- PokeScan Pro: the plan that unlocks every AI feature ---------- */
+const PRO_NOW = [['AI review of every team', 'Builder and saved parties get a verdict, strengths, weak spots and one swap, written from your roster and your battle log.']];
+const PRO_NEXT = [['Share anything', 'Share any Pokémon GO screenshot to PokeScan: a raid lobby shows your counters, a Rocket taunt says which Shadow you will meet, a storage grid fills the roster.'],
+                  ['Film study', 'Share a screen recording of a GO Battle League match and get a per-decision review: the switch, the shield, the energy you sat on.'],
+                  ['Replay what-ifs', 'Your logged battles re-run with a different lead or swap, so you see what would have won.'],
+                  ['Storage cleanup', 'From a storage screenshot: duplicates, dead ranks, and what to keep for Ultra League.'],
+                  ['Season Wrapped', 'One shareable card at season end: your record, the team that carried, your nemesis.']];
+function proTeaser(title, sub) {               // the locked card shown in place of an AI feature on the free plan
+  return `<div class="team card pro-lock" onclick="Planner.nav('#/pro')"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>${esc(title)} <small>Pro</small></span><span class="chip pro">✦ Pro</span></div><div class="dt">${esc(sub)}</div><div class="dt" style="margin-top:6px;color:var(--green)">See what Pro unlocks ›</div></div>`;
+}
+let PRO_POLL = null;
+function renderPro() {
+  const el = $('pro'); if (!el) return;
+  const me = window.Sync ? Sync.me() : null, signed = !!(window.Sync && Sync.signedIn()), pro = !!(window.Sync && Sync.isPro()), hl = (window.Sync && Sync.health()) || {};
+  const price = (me && me.pro && me.pro.price) || '€4.99 / month', checkout = me && me.pro && me.pro.checkoutUrl, thanks = location.hash.startsWith('#/pro/thanks');
+  const row = ([t, d], soon) => `<div class="prow"><span class="tick ${soon ? 'hollow' : 'full'}">${soon ? '◌' : '✓'}</span><div><b>${esc(t)}</b>${soon ? ' <span class="chip">in development</span>' : ''}<div class="dt">${esc(d)}</div></div></div>`;
+  let h = `<div class="pro-hero"><div class="eyebrow">PokeScan Pro</div><h2>Your Pokémon, judged like a coach would.</h2>
+    <p>The free app already scans, ranks and builds. Pro adds the model: it reads your roster and your results and tells you what to change. No chat, nothing to type, it shows up on the pages you already use.</p></div>`;
+  if (pro) {
+    h += `<div class="team card pro-on" style="cursor:default"><div class="nm">✦ You are on Pro <span class="dim" style="font-weight:400;font-size:12px">${me && me.planSource === 'comped' ? 'complimentary' : me && me.planSource === 'owner' ? 'this is your own server' : 'thank you'}</span></div><div class="dt">Every AI feature is unlocked on this account. New Pro features land here first.</div></div>`;
+  } else if (thanks) {
+    h += `<div class="team card pro-on" style="cursor:default"><div class="nm">Thank you</div><div class="dt">Activating Pro on your account, this takes a few seconds…</div></div>`;
+    if (!PRO_POLL) { let n = 0; PRO_POLL = setInterval(async () => { n++; const m = window.Sync ? await Sync.refreshMe() : null; if ((m && m.plan === 'pro') || n > 40) { clearInterval(PRO_POLL); PRO_POLL = null; if (m && m.plan === 'pro') nav('#/pro'); } }, 3000); }
+  } else {
+    h += `<div class="team card pro-cta" style="cursor:default"><div class="price"><b>${esc(price)}</b><span class="dim">cancel any time</span></div>`;
+    if (!signed) h += `<button class="btn primary" onclick="Sync.toggle()">Sign in to upgrade</button><div class="dt" style="margin-top:6px">Pro is tied to your account, so it follows you to every device.</div>`;
+    else if (checkout) h += `<a class="btn primary" href="${esc(checkout)}">Upgrade to Pro</a><div class="dt" style="margin-top:6px">You come back here afterwards and Pro switches on within seconds.</div>`;
+    else h += `<button class="btn primary" disabled>Upgrade to Pro</button><div class="dt" style="margin-top:6px">Upgrading is not open yet on this server.</div>`;
+    h += `</div>`;
+  }
+  h += `<div class="sec">In Pro today</div>` + PRO_NOW.map(x => row(x, false)).join('');
+  h += `<div class="sec">Coming to Pro <small>you get them the day they ship</small></div>` + PRO_NEXT.map(x => row(x, true)).join('');
+  h += `<div class="sec">Always free</div><div class="prow"><span class="tick full">✓</span><div><b>Everything else</b><div class="dt">Scanning, IV ranks, the roster, Today, the builder, matchups, meta teams, rankings, raids, the battle log and sync across devices stay free.</div></div></div>`;
+  h += `<div class="note">${hl.coach ? 'The AI runs on the PokeScan server with a Claude model; your roster summary is sent for the review and not kept by the model.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
+  el.innerHTML = h;
+}
 const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Matchups', '⚑'], ['battles', 'Battle log', '◔']]],
                 ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
                 ['Collection', [['roster', 'Roster', '◎'], ['scans', 'Scans & import', '⌗']]]];
@@ -1284,6 +1394,7 @@ function paintDrawer() {
   const cups = CUPS || DEFAULT_CUPS, curL = LEAGUE.slug;
   h += `<div class="grp">League</div>` + cups.map(c => `<a href="#" class="${c.slug === curL ? 'on' : ''}" onclick="Planner.setLeague('${c.slug}');return false"><span class="ic">${c.kind === 'cup' ? '◆' : '◇'}</span>${esc(c.title)}<small>${c.cp} CP</small></a>`).join('');
   h += `<div class="grp">You</div><a href="#" onclick="Planner.drawer(false);toggleProfile();return false"><span class="ic">☺</span>Trainer profile</a>`;
+  if (window.Sync && Sync.available()) h += `<a href="#" class="${cur === 'pro' ? 'on' : ''}" onclick="Planner.nav('#/pro');Planner.drawer(false);return false"><span class="ic">✦</span>PokeScan Pro<small>${Sync.isPro() ? 'active' : 'AI features'}</small></a>`;
   if (window.Sync && Sync.available()) { const hl = Sync.health() || {}; h += `<a href="#" onclick="Planner.drawer(false);Sync.toggle();return false"><span class="ic">☁</span>${hl.auth === 'clerk' ? 'Account' : 'Sync'}<small>${Sync.signedIn() ? (hl.auth === 'clerk' && window.Auth ? esc(Auth.email() || 'signed in') : 'connected') : hl.auth === 'clerk' ? 'sign in' : 'off'}</small></a>`; }
   h += `<a href="#" onclick="Planner.drawer(false);toggleHelp();return false"><span class="ic">?</span>Help &amp; glossary</a>`;
   h += `<div class="ft">PokeScan v${typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''}${APP && APP.generatedAt ? ` · PvPoke data ${esc(String(APP.generatedAt).slice(0, 10))}` : ''}</div>`;
@@ -1495,7 +1606,7 @@ function renderRosterInner(el) {
   h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
   const q = (UI.rosterQ || '').trim().toLowerCase();
   const shown = ts.filter(t => !stSel || t.st === stSel).filter(t => !q || nm(t.id).toLowerCase().includes(q) || t.id.includes(q) || t.st.includes(q) || (t.txt || '').toLowerCase().includes(q) || (APP.pokemon[t.id].types || []).some(x => x.includes(q)));
-  if (!shown.length) h += `<div class="note">${q || stSel ? 'Nothing in your roster matches.' : 'Your roster is empty: import status screenshots under Scans, or add Pokémon by name from the ⋮ menu.'}</div>`;
+  if (!shown.length) h += `<div class="note">${q || stSel ? 'Nothing in your roster matches.' : `Your roster is empty: import status screenshots under Scans, or add Pokémon by name from the ⋮ menu. ${esc(nextHint('scans'))}.`}</div>`;
   // one card per Pokémon: the same card as the Scans list for scanned copies (a scanned pre-evolution such as Jigglypuff stands for the
   // evolution it becomes, so one scan is shown once even when it could evolve into several), a dashed card for pieces you do not hold yet
   const seenScan = new Set();
@@ -1578,6 +1689,7 @@ function renderBuilder(m, L) {
     const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct).sort((a, b) => APP.pokemon[a].rank - APP.pokemon[b].rank);
     h += `<div class="sec">From your roster <small>tap to add</small></div>`;
     h += mine.length ? `<div class="tchips">${mine.map(p => `<span class="chip ${m.ri.owned[p] ? 'ok' : 'gl'}" onclick="Planner.fillSlot('${p}')">${esc(nm(p))}</span>`).join('')}</div>` : `<div class="note">Nothing left in your roster to add.</div>`;
+    if (Object.keys(m.own).length < 3) h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scan ${3 - Object.keys(m.own).length} more Pokémon under ${LEAGUE.cp} CP</span><div class="dt">then the builder can complete a team from your own roster</div></span><span class="go">›</span></div>`;
     if (filled.length) {
       // weak spots of what is in the slots so far
       const holes = ev.holes.slice().sort((a, b) => APP.pokemon[a].rank - APP.pokemon[b].rank);
@@ -1768,7 +1880,7 @@ function saveBuildAsTeam() { const ids = UI.build.slots.filter(Boolean); if (ids
   const name = prompt('Name for this party', ids.map(nm).join(' / ')); if (!name) return; ROSTER.tagged[name] = ids.slice(); saveRoster(); refresh(); status(`Saved "${name}" under your in-game parties`); }
 
 /* ---------- actions ---------- */
-function refresh() { dirty = true; if (APP && matrixSlug !== LEAGUE.slug) loadMatrix(); renderToday(); renderTeams(); renderRoster(); renderMeta(); paintDrawer(); if (onView() === 'matchups') renderMatchups(); if (onView() === 'battles') renderBattles(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
+function refresh() { dirty = true; if (APP && matrixSlug !== LEAGUE.slug) loadMatrix(); setTimeout(msCheck, 0); renderToday(); renderTeams(); renderRoster(); renderMeta(); paintDrawer(); if (onView() === 'matchups') renderMatchups(); if (onView() === 'battles') renderBattles(); if (onView() === 'pro') renderPro(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
 function markDirty() { dirty = true; }
 function toggleAdd() { UI.adding = !UI.adding; renderRoster(); if (UI.adding) $('addid').focus(); }
 function add() { const id = $('addid').value.trim().toLowerCase(), kind = $('addkind').value;
@@ -1821,7 +1933,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, hideStart, showStart, paintMilestones, msCheck, nextHint, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

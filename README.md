@@ -77,6 +77,17 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   A status screen with the same IVs at a higher level, or of its evolution, moves the card to the new CP/HP/level and
   keeps a history line; an appraisal or attacks screen attaches to it. A screenshot whose IVs do not match, or of
   another species, becomes a separate card and the log says why.
+- **Getting started and milestones**: a checklist on Today ticks itself off as you import a status screen, an
+  appraisal, the attacks, reach three Pokémon under the cap, set your level, save a party, log a battle and sign
+  in; each step opens the place to do it. Milestones (scans, exact IVs, attack sets, battles, parties, imports)
+  live under the trainer profile with a bar to the next tier; each new tier shows one toast named by its payoff
+  ("Roster knows 5 Pokémon · Today can build a team"). A device that already has data records them silently.
+- **PokeScan Pro**: every AI feature sits behind the Pro plan (`#/pro`, also under You in the menu). The server
+  decides the plan per account: the passcode-mode owner and the ids in `PRO_USER_IDS` are Pro, otherwise a plan row
+  in the database (`plans` table, written by the payment integration) with an optional expiry; `/api/me` returns
+  `plan`, `features` and the checkout link (`PRO_CHECKOUT_URL` with the user id appended as `client_reference_id`,
+  price text from `PRO_PRICE`). Free accounts see a locked AI-review card that opens the Pro page; `/api/coach`
+  answers 403 `upgrade_required` for them.
 - **No chat**: the AI never asks or answers questions; it only writes the structured review above, automatically.
   Pokémon names in a review are tappable and fill an open builder slot, or open the Pokémon page.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,

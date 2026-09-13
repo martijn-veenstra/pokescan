@@ -9,6 +9,14 @@ CREATE TABLE IF NOT EXISTS state (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, kind)
 );
+CREATE TABLE IF NOT EXISTS plans (
+  user_id    text        PRIMARY KEY,
+  plan       text        NOT NULL,
+  source     text,
+  ref        text,
+  until      timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS history (
   id         bigserial   PRIMARY KEY,
   user_id    text        NOT NULL,
@@ -49,6 +57,18 @@ export async function openDb(url) {
       return r.rows[0].updated_at.toISOString();
     },
     async clear(user) { await pool.query('DELETE FROM state WHERE user_id=$1', [user]); await pool.query('DELETE FROM history WHERE user_id=$1', [user]); },
+    async getPlan(user) {
+      const r = await pool.query('SELECT plan, source, ref, until, updated_at FROM plans WHERE user_id=$1', [user]);
+      return r.rows[0] ? { plan: r.rows[0].plan, source: r.rows[0].source, ref: r.rows[0].ref, until: r.rows[0].until ? r.rows[0].until.toISOString() : null } : null;
+    },
+    async setPlan(user, { plan, source = null, ref = null, until = null }) {
+      await pool.query(`INSERT INTO plans (user_id, plan, source, ref, until, updated_at) VALUES ($1,$2,$3,$4,$5,now())
+                        ON CONFLICT (user_id) DO UPDATE SET plan=EXCLUDED.plan, source=EXCLUDED.source, ref=EXCLUDED.ref, until=EXCLUDED.until, updated_at=now()`, [user, plan, source, ref, until]);
+    },
+    async findPlanByRef(ref) {                   // Stripe subscription or customer id → user
+      const r = await pool.query('SELECT user_id FROM plans WHERE ref=$1 LIMIT 1', [ref]);
+      return r.rows[0] ? r.rows[0].user_id : null;
+    },
     async migrateUser(from, to) {                // move one user's rows to another id, kind by kind, only the kinds the target lacks; returns the moved kinds
       if (!from || !to || from === to) return [];
       const r = await pool.query(
@@ -66,7 +86,7 @@ export async function openDb(url) {
 }
 
 function memoryDb() {
-  const m = new Map();
+  const m = new Map(), plans = new Map();
   const key = (u, k) => u + ' ' + k;
   return {
     kind: 'memory',
@@ -79,6 +99,9 @@ function memoryDb() {
     },
     async put(user, kind, data) { const updatedAt = new Date().toISOString(); m.set(key(user, kind), { data, updatedAt }); return updatedAt; },
     async clear(user) { for (const k of [...m.keys()]) if (k.startsWith(user + ' ')) m.delete(k); },
+    async getPlan(user) { return plans.get(user) || null; },
+    async setPlan(user, { plan, source = null, ref = null, until = null }) { plans.set(user, { plan, source, ref, until }); },
+    async findPlanByRef(ref) { for (const [u, p] of plans) if (p.ref === ref) return u; return null; },
     async migrateUser(from, to) {
       if (!from || !to || from === to) return [];
       const kinds = [];
