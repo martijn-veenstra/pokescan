@@ -136,15 +136,23 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (looks.length >= VISION_PER_HOUR) return reply.code(429).send({ error: 'rate_limited', message: `at most ${VISION_PER_HOUR} screenshots per hour` });
     const mine = (looksBy.get(req.userId) || []).filter(t => t >= now - 3600e3);
     if (authMode === 'clerk' && mine.length >= VISION_PER_USER_HOUR) return reply.code(429).send({ error: 'rate_limited', message: `at most ${VISION_PER_USER_HOUR} screenshots per hour per account` });
-    const body = req.body || {};
-    if (typeof body.image !== 'string' || body.image.length < 100) return reply.code(400).send({ error: 'missing_image' });
-    if (body.image.length > 6 * 1024 * 1024) return reply.code(413).send({ error: 'image_too_large', message: 'send the screenshot downscaled to at most 1568 px' });
-    const mediaType = ['image/jpeg', 'image/png', 'image/webp'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
+    const body = req.body || {}, okType = t => ['image/jpeg', 'image/png', 'image/webp'].includes(t) ? t : 'image/jpeg';
+    // one screenshot, or up to 16 frames sampled from a recording (each small: the client downsizes to 768 px)
+    let images = null;
+    if (Array.isArray(body.images)) {
+      images = body.images.filter(f => f && typeof f.image === 'string' && f.image.length >= 100).slice(0, 16).map(f => ({ image: f.image, mediaType: okType(f.mediaType), t: Number.isFinite(f.t) ? f.t : null }));
+      if (images.length < 2) return reply.code(400).send({ error: 'missing_image' });
+      if (images.reduce((a, f) => a + f.image.length, 0) > 7 * 1024 * 1024) return reply.code(413).send({ error: 'image_too_large', message: 'send fewer or smaller frames' });
+    } else {
+      if (typeof body.image !== 'string' || body.image.length < 100) return reply.code(400).send({ error: 'missing_image' });
+      if (body.image.length > 6 * 1024 * 1024) return reply.code(413).send({ error: 'image_too_large', message: 'send the screenshot downscaled to at most 1568 px' });
+    }
+    const mediaType = okType(body.mediaType);
     mine.push(now); looksBy.set(req.userId, mine); looks.push(now);
     for (const [id, j] of jobs) if (now - j.t > 3600e3) jobs.delete(id);
     const id = randomUUID(), job = { status: 'running', t: now, userId: req.userId };
     jobs.set(id, job);
-    vision({ image: body.image, mediaType, hint: typeof body.hint === 'string' ? body.hint : '' }).then(out => {
+    vision({ image: body.image, mediaType, images, hint: typeof body.hint === 'string' ? body.hint : '' }).then(out => {
       if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to read this screenshot' });
       else Object.assign(job, { status: 'done', data: out.data, model: out.model, usage: out.usage });
     }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the screenshot could not be read' }); });

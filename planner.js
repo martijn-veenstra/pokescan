@@ -1388,9 +1388,9 @@ function paintMilestones() {
 
 /* ---------- PokeScan Pro: the plan that unlocks every AI feature ---------- */
 const PRO_NOW = [['AI review of every team', 'Builder and saved parties get a verdict, strengths, weak spots and one swap, written from your roster and your battle log.'],
-                 ['Share anything: battle results and Rocket taunts', 'Import or share the end-of-battle screen and the battle is logged with both teams and their lead; share a Team GO Rocket taunt and you learn which Shadow you will meet and whether your roster wants it.']];
+                 ['Film study', 'Record a GO Battle League match and import the recording: the battle is logged with both teams, their lead and the result, plus up to three timestamped notes on the decisions that decided it.'],
+                 ['Rocket taunts', 'Share a Team GO Rocket taunt and you learn which Shadow you will meet and whether your roster wants it.']];
 const PRO_NEXT = [['Share anything: storage grid and raid lobby', 'The same share fills the roster from your storage screenshots and picks counters from your own Pokémon for a raid lobby.'],
-                  ['Film study', 'Share a screen recording of a GO Battle League match and get a per-decision review: the switch, the shield, the energy you sat on.'],
                   ['Replay what-ifs', 'Your logged battles re-run with a different lead or swap, so you see what would have won.'],
                   ['Storage cleanup', 'From a storage screenshot: duplicates, dead ranks, and what to keep for Ultra League.'],
                   ['Season Wrapped', 'One shareable card at season end: your record, the team that carried, your nemesis.']];

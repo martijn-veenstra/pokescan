@@ -363,3 +363,4 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 #shared{display:grid;gap:8px;margin:8px 0}#shared:empty{display:none}
 .team.card.share{position:relative}.team.card.share .x{position:absolute;right:12px;top:10px;color:var(--dim);cursor:pointer;font-size:14px}
 .team.card.share .chips{margin-top:4px}.team.card.share .chip.dim{opacity:.6}
+.team.card.share .fn{display:flex;gap:8px;font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4}.team.card.share .fn .ts{flex:none;font-variant-numeric:tabular-nums;color:var(--green);font-weight:600;min-width:34px}

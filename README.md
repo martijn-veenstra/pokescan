@@ -96,7 +96,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Share anything** (Pro): a screenshot the on-device reader cannot place (not a status, appraisal, attacks or profile
   screen) goes to the server's vision endpoint (`POST /api/vision`, a downscaled JPEG, polled via `/api/jobs/:id`,
   `VISION_PER_USER_HOUR` default 20 under `VISION_PER_HOUR` 100). The model says what it is; the app routes it.
-  An **end-of-battle screen** becomes a battle-log entry with both teams, their lead and the result; the Battles page
+  A **battle recording** (Pokémon GO shows no results screen, so record the match) is sampled by the video scanner: a
+  dozen small frames spread over the match plus the last four seconds go to the model in one call when the recording
+  holds no status screens; the answer is the battle record plus up to three timestamped film-study notes on the
+  decisions that decided it. An **end-of-battle screenshot** becomes a battle-log entry with both teams, their lead and the result; the Battles page
   gains "What you face", the species you actually meet with your record against each, and the AI review gets that
   list. A **Team GO Rocket taunt** is matched to Leek Duck's lineups: which Shadow you will meet and whether your
   roster wants it (evolves into a wanted Pokémon, ranks in your league, or skip). Results sit as cards at the top of

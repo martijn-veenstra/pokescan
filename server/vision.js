@@ -26,8 +26,17 @@ the facts listed below. Answer with ONE JSON object and nothing else, no markdow
     "quote": the taunt text as written | null,
     "pokemon": [names visible, if any]
   },
-  "summary": one short sentence about what the screenshot shows
+  "summary": one short sentence about what the screenshot shows,
+  "notes": []                       // only for a recording (several frames): see below
 }
+
+When you receive SEVERAL frames, they are sampled in time order from a screen recording of one GO Battle League match; each
+frame is labelled with its time in seconds. Then kind is "battle_end" when it is a battle: fill "battle" from the whole
+recording (teams in order of appearance, the result from the final frames, faint counts) and add up to 3 "notes", each
+{"t": seconds, "text": one sentence} about a decision that decided the match: a charged move thrown into a shield, a switch
+that lost the lead, energy left unused when a Pokémon fainted, a shield not used. Be concrete, name the Pokémon and the move
+when readable, never invent what the frames do not show. If the recording is not a battle, classify the most informative
+frame as above.
 
 Names: use the species name as the game shows it, with the form when visible ("Ninetales (Shadow)", "Stunfisk (Galarian)",
 "Mega Beedrill"). If a name is unreadable use null, never guess. Left-to-right order on the results screen is the order the
@@ -36,18 +45,22 @@ Pokémon were used; the player's own team is on the left or top, the opponent's 
 export function makeVision(apiKey) {
   if (!apiKey) return null;
   const client = new Anthropic({ apiKey });
-  return async function vision({ image, mediaType, hint }) {
+  return async function vision({ image, mediaType, images, hint }) {
+    const frames = images && images.length ? images : [{ image, mediaType }];
+    const content = [];
+    frames.forEach((f, i) => {
+      if (frames.length > 1) content.push({ type: 'text', text: `Frame ${i + 1} of ${frames.length}${f.t != null ? ` at ${f.t}s` : ''}:` });
+      content.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType || 'image/jpeg', data: f.image } });
+    });
+    content.push({ type: 'text', text: (hint ? `Text the on-device reader saw (may be partial): ${hint.slice(0, 600)}\n\n` : '') + (frames.length > 1 ? 'These frames come from one screen recording. Classify and extract; add the notes when it is a battle.' : 'Classify and extract.') });
     const msg = await client.beta.messages.create({
       model: 'claude-opus-5',
-      max_tokens: 800,
+      max_tokens: frames.length > 1 ? 1200 : 800,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: 'low' },
+      output_config: { effort: frames.length > 1 ? 'medium' : 'low' },
       system: SYSTEM,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: mediaType, data: image } },
-        { type: 'text', text: hint ? `Text the on-device reader saw (may be partial): ${hint.slice(0, 600)}\n\nClassify and extract.` : 'Classify and extract.' },
-      ] }],
+      messages: [{ role: 'user', content }],
     });
     if (msg.stop_reason === 'refusal') return { refused: true };
     const text = msg.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();

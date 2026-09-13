@@ -148,8 +148,8 @@ console.log(`all API tests passed (storage: ${app.db.kind})`);
 
 // ---- accounts mode: a fake token verifier stands in for Clerk ----
 const users = { 'tok-alice': { sub: 'user_alice' }, 'tok-bob': { sub: 'user_bob' } };
-const seenHints = [];
-const fakeVision = async ({ image, mediaType, hint }) => { seenHints.push(hint); await new Promise(r => setTimeout(r, 60)); return { data: { kind: 'battle_end', confidence: 0.9, battle: { result: 'loss', myTeam: ['Azumarill', 'Medicham', 'Altaria'], oppTeam: ['Tinkaton', 'Cresselia', 'Clodsire'], myLead: 'Azumarill', oppLead: 'Tinkaton', myFainted: 3, oppFainted: 1, ratingAfter: null, ratingDelta: null }, rocket: null, summary: 'GO Battle League loss' }, model: 'fake', usage: { in: 1, out: 1 } }; };
+const seenHints = [], seenFrames = [];
+const fakeVision = async ({ image, mediaType, images, hint }) => { seenHints.push(hint); if (images) seenFrames.push(images.map(f => f.t)); await new Promise(r => setTimeout(r, 60)); return { data: { kind: 'battle_end', confidence: 0.9, battle: { result: 'loss', myTeam: ['Azumarill', 'Medicham', 'Altaria'], oppTeam: ['Tinkaton', 'Cresselia', 'Clodsire'], myLead: 'Azumarill', oppLead: 'Tinkaton', myFainted: 3, oppFainted: 1, ratingAfter: null, ratingDelta: null }, rocket: null, summary: 'GO Battle League loss' }, model: 'fake', usage: { in: 1, out: 1 } }; };
 const app2 = await buildServer({ passcode: '', logger: false, coach: fakeCoach, vision: fakeVision, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '', proUserIds: ['user_alice'], proCheckoutUrl: 'https://pay.example/pro', stripeWebhookSecret: 'whsec_test' });
 const A = { authorization: 'Bearer tok-alice', 'content-type': 'application/json' }, B = { authorization: 'Bearer tok-bob', 'content-type': 'application/json' };
 r = await app2.inject({ method: 'GET', url: '/api/health' });
@@ -185,6 +185,13 @@ await app2.db.setPlan('user_bob', { plan: 'pro', source: 'paid', ref: 'sub_1', u
   assert.equal(out.status, 'done'); assert.equal(out.data.kind, 'battle_end'); assert.deepEqual(out.data.battle.oppTeam, ['Tinkaton', 'Cresselia', 'Clodsire']);
   assert.ok(seenHints.includes('VICTORY'), 'the on-device text reaches the model as a hint');
   r = await app2.inject({ method: 'GET', url: '/api/jobs/' + vj, headers: B }); assert.equal(r.statusCode, 404, 'jobs are private');
+  // a recording: several frames in one call
+  r = await app2.inject({ method: 'POST', url: '/api/vision', headers: A, payload: { images: [{ image: img, mediaType: 'image/jpeg', t: 3 }] } });
+  assert.equal(r.statusCode, 400, 'a recording needs at least two frames');
+  r = await app2.inject({ method: 'POST', url: '/api/vision', headers: A, payload: { images: [{ image: img, mediaType: 'image/jpeg', t: 3 }, { image: img, mediaType: 'image/jpeg', t: 90 }, { image: img, t: 178 }] } });
+  assert.equal(r.statusCode, 202);
+  let fo; for (let i = 0; i < 40 && !(fo && fo.status === 'done'); i++) { await new Promise(x => setTimeout(x, 50)); fo = (await app2.inject({ method: 'GET', url: '/api/jobs/' + r.json().jobId, headers: A })).json(); }
+  assert.equal(fo.status, 'done'); assert.deepEqual(seenFrames[seenFrames.length - 1], [3, 90, 178], 'frames reach the model in order with their times');
   r = await app2.inject({ method: 'GET', url: '/api/health' }); assert.equal(r.json().vision, true);
   await app2.db.setPlan('user_bob', { plan: 'pro', source: 'paid', ref: 'sub_1', until: null });
 }

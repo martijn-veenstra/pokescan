@@ -72,6 +72,26 @@ test('Pro: an end-of-battle screenshot logs the battle with the opponents; a Roc
   expect(errors).toEqual([]);
 });
 
+test('Pro: a battle recording is read from sampled frames and gets film-study notes', async ({ page }) => {
+  const film = { kind: 'battle_end', confidence: 0.8, battle: { result: 'win', myTeam: ['Azumarill', 'Medicham', 'Altaria'], oppTeam: ['Skarmory', 'Lickitung', 'Sableye'], myLead: 'Azumarill', oppLead: 'Skarmory', myFainted: 2, oppFainted: 3, ratingAfter: null, ratingDelta: null }, rocket: null, summary: 'GO Battle League win',
+    notes: [{ t: 42, text: 'Ice Beam thrown into Skarmory\'s shield; a Play Rough bait first would have kept the shield count even.' }, { t: 131, text: 'Medicham fainted with a full Ice Punch of energy unused.' }] };
+  const { posts, errors } = await setup(page, 'pro', [film]);
+  // the video scanner hands over its sampled frames; here we build three small frames in the page and call the same entry point
+  const ok = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 90; c.height = 160; const g = c.getContext('2d'); g.fillStyle = '#123'; g.fillRect(0, 0, 90, 160);
+    const snap = t => ({ t, image: c.toDataURL('image/jpeg', 0.7).split(',')[1], mediaType: 'image/jpeg' });
+    return Share.fromFrames({ name: 'battle.mp4', lastModified: Date.now() }, [snap(5), snap(60), snap(120), snap(178)], 180);
+  });
+  expect(ok).toBe(true);
+  expect(posts.length).toBe(1); expect(posts[0].images.length).toBe(4); expect(posts[0].images[3].t).toBe(178); expect(posts[0].hint).toContain('screen recording');
+  const card = page.locator('#shared .team.card.share').first();
+  await expect(card).toContainText('Win'); await expect(card).toContainText('Skarmory');
+  await expect(card).toContainText('Film study'); await expect(card).toContainText('0:42'); await expect(card).toContainText('Ice Beam thrown into');
+  const b = await page.evaluate(() => Planner.BATTLES[Planner.BATTLES.length - 1]);
+  expect(b.result).toBe('W'); expect(b.opp).toEqual(['skarmory', 'lickitung', 'sableye']); expect(b.team).toBe('Core');
+  expect(errors).toEqual([]);
+});
+
 test('free plan: the screenshot stays on the device and a Pro teaser appears instead', async ({ page }) => {
   const { posts, errors } = await setup(page, 'free', []);
   await share(page, 'battle.png'); await done(page);

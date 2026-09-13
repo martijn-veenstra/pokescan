@@ -11,6 +11,7 @@ const SHARES = JSON.parse(localStorage.getItem('shares') || '[]');
 const save = () => localStorage.setItem('shares', JSON.stringify(SHARES.slice(0, 10)));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const nm = id => (window.Planner && Planner.nameOf) ? Planner.nameOf(id) : id;
+const fmtT = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 async function shrink(cv, max) {               // JPEG at most `max` px on the long side: ~1,500 image tokens instead of 6,000
   const s = Math.min(1, max / Math.max(cv.width, cv.height));
@@ -57,6 +58,23 @@ async function fromScan(file, cv) {
     gain('note', `Claude could not read it: ${e.message || e}`);
     return true;
   }
+}
+/* entry point from the video scanner: a recording with no status screens. `snaps` are small JPEG frames {t, image, mediaType}. */
+async function fromFrames(file, snaps, dur) {
+  if (!window.Sync || !Sync.available() || !Sync.signedIn()) return false;
+  if (Sync.visionOffered && Sync.visionOffered()) { gain('note', 'no status screens · PokeScan Pro reads a battle recording: result, both teams and the decisions that decided it'); pushCard({kind: 'teaser', t: Date.now(), name: file.name}); render(); return true; }
+  if (!Sync.visionAvailable || !Sync.visionAvailable()) return false;
+  status(`${file.name}: Claude is watching the recording (${snaps.length} frames)…`);
+  try {
+    const data = await ask({images: snaps.map(s => ({image: s.image, mediaType: s.mediaType, t: s.t})), hint: `screen recording, ${Math.round(dur)} s`});
+    const card = route(data, file);
+    if (card.kind === 'battle_end') { card.notes = (data.notes || []).filter(n => n && n.text).slice(0, 3); card.film = true; card.line += card.notes.length ? ` · ${card.notes.length} film note${card.notes.length === 1 ? '' : 's'}` : ''; }
+    gain('note', `read by Claude: ${card.line}`);
+    pushCard(card); render();
+    if (typeof toast === 'function') toast(card.toast || card.line, card.go ? `Planner.nav(${JSON.stringify(card.go)})` : null);
+    if (window.Planner) Planner.msCheck && Planner.msCheck();
+    return true;
+  } catch (e) { gain('note', `Claude could not read the recording: ${e.message || e}`); return true; }
 }
 function pushCard(card) { card.id = card.id || Date.now().toString(36); SHARES.unshift(card); SHARES.splice(10); save(); }
 function dismiss(id) { const i = SHARES.findIndex(c => c.id === id); if (i >= 0) { SHARES.splice(i, 1); save(); render(); } }
@@ -116,6 +134,7 @@ function render() {
       return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${c.result === 'W' ? '✓ Win' : c.result === 'L' ? '✕ Loss' : c.result === 'D' ? 'Draw' : 'Battle'} <small>read by Claude · ${esc(when)}</small></span></div>
         <div class="dt">Their team${c.opp && c.opp[0] ? ', lead first' : ''}</div><div class="chips">${side(c.opp || [], c.opp && c.opp[0] && c.opp[0].name)}</div>
         <div class="dt" style="margin-top:6px">Your team${c.party ? ` · ${esc(c.party)}` : ''}</div><div class="chips">${side(c.my || [])}</div>
+        ${c.notes && c.notes.length ? `<div class="dt" style="margin-top:8px;color:var(--ink);font-weight:600">Film study</div>${c.notes.map(n => `<div class="fn"><span class="ts">${n.t != null ? fmtT(n.t) : ''}</span><span>${esc(n.text)}</span></div>`).join('')}` : ''}
         <div class="dt" style="margin-top:6px"><a href="#" onclick="Planner.nav('#/battles');return false">Battle log</a>${c.opp && c.opp[0] && c.opp[0].id ? ` · <a href="#" onclick="Planner.openMon('${c.opp[0].id}');return false">how to beat ${esc(c.opp[0].name)}</a>` : ''}</div></div>`;
     }
     if (c.kind === 'rocket') {
@@ -136,6 +155,6 @@ async function drainInbox() {
   if (files.length && typeof importFiles === 'function') { if (window.Planner) Planner.nav('#/scans'); await importFiles(files); }
   return files.length;
 }
-window.Share = {fromScan, render, dismiss, drainInbox, list: () => SHARES, route, ask};
+window.Share = {fromScan, fromFrames, render, dismiss, drainInbox, list: () => SHARES, route, ask};
 window.addEventListener('load', () => setTimeout(render, 0));
 })();
