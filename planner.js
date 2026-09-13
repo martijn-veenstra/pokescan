@@ -636,6 +636,15 @@ function teamInner(m, ids, name) {
   return h;
 }
 function saveTeam(ids) { const name = prompt('Name for this party', ids.map(nm).join(' / ')); if (!name) return; ROSTER.tagged[name] = ids.slice(); saveRoster(); if (UI.team) UI.team.name = name; refresh(); status(`Saved "${name}" under your in-game parties`); }
+function buildNameInput(v) { UI.buildName = v; }
+function saveBuildNamed() {                    // the builder's inline name field
+  const ids = UI.build.slots.filter(Boolean); if (ids.length !== 3) return;
+  const name = ((($('buildname') || {}).value) || UI.buildName || '').trim();
+  if (!name) { const el = $('buildname'); if (el) { el.focus(); el.placeholder = 'give it a name first'; } return; }
+  if (ROSTER.tagged[name] && teamKey(ROSTER.tagged[name]) !== teamKey(ids) && !confirm(`Replace the party "${name}"?`)) return;
+  ROSTER.tagged[name] = ids.slice(); UI.buildName = ''; saveRoster(); refresh();
+  if (typeof toast === 'function') toast(`★ ${name} saved · Today and the battle log know it now`, `Planner.openTeam(${JSON.stringify(ids)},${JSON.stringify(name)})`);
+}
 function renameTeam(old) { const name = prompt('New name', old); if (!name || name === old || !ROSTER.tagged[old]) return; ROSTER.tagged[name] = ROSTER.tagged[old]; delete ROSTER.tagged[old]; if (UI.team) UI.team.name = name; saveRoster(); refresh(); }
 function deleteTeam(name) { if (!ROSTER.tagged[name] || !confirm(`Delete the party "${name}"? Your Pokémon stay in the roster.`)) return; delete ROSTER.tagged[name]; saveRoster(); refresh(); closeTeam(); }
 
@@ -1710,6 +1719,11 @@ function renderBuilder(m, L) {
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
   // per-slot move choice
   if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`)}</div>`).join('');
+  if (filled.length === 3) {                     // name it and keep it: the saved party shows up under Saved teams, Today and the battle log
+    const saved = partyFor(filled);
+    h += saved ? `<div class="team row" onclick="Planner.openTeam(${attr(filled)},${attr(saved)})"><span class="tx"><span class="nm">★ Saved as ${esc(saved)}</span><div class="dt">open the team page · record, review, how to get the missing pieces</div></span><span class="go">›</span></div>`
+               : `<div class="add" style="margin:8px 0 0"><input id="buildname" placeholder="name this team, e.g. Core" value="${esc(UI.buildName || '')}" oninput="Planner.buildNameInput(this.value)" onkeydown="if(event.key==='Enter')Planner.saveBuildNamed()"><button onclick="Planner.saveBuildNamed()">Save team</button></div>`;
+  }
   if (filled.length === 3) {
     const ev = L.evaluate(filled), d = L.describe(filled, ev), bm = APP.benchmark || {best: 721, median: 521};
     const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
@@ -1975,7 +1989,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, hideStart, showStart, paintMilestones, msCheck, nextHint, idByName, partyFor, addBattle, rocketVerdict, proTeaser, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
