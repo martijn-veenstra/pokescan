@@ -340,3 +340,7 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 #syncbox .imp .add button{background:var(--green);border:none;border-radius:9px;padding:7px 13px;font-weight:700;color:#062018}
 #syncbox .mini{background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--dim);font-size:11px;padding:1px 7px;cursor:pointer;vertical-align:middle}
 #syncbox #uid{font-size:11px;color:var(--dim);word-break:break-all}
+/* folded lists: the hidden rest sits in a display:contents span so chips and rows flow as if inline; the toggle opens it in place */
+.xm{display:contents}.xm[hidden]{display:none}
+.xmore{cursor:pointer;user-select:none}.xmore.inl{color:var(--green);text-decoration:underline dotted}.chip.xmore{border-style:dashed;color:var(--dim)}div.xmore{font-size:12px;margin:6px 0 0}
+.chip .xmore{color:var(--dim);margin-left:2px}

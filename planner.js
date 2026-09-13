@@ -288,7 +288,27 @@ function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) 
 
 /* ---------- rendering: Today ---------- */
 const chip = (t, cls) => `<span class="chip ${cls || ''}">${esc(t)}</span>`;
-const few = (list, n) => list.length <= (n || 3) ? list.join(', ') : `${list.slice(0, n || 3).join(', ')} and ${list.length - (n || 3)} more`;
+/* fold(): show the first n rendered items, keep the rest behind a "+N more" toggle that opens (and closes) in place.
+   chip: true renders the toggle as a chip so it sits in a .chips row; otherwise it is a dim line under the list. */
+function fold(items, n, opts) {
+  opts = opts || {};
+  const sep = opts.sep || '';
+  if (items.length <= n) return items.join(sep);
+  const rest = items.length - n, label = opts.label ? opts.label(rest) : opts.inline ? `and ${rest} more` : `+${rest} more`;
+  const tog = opts.chip ? `<span class="chip xmore" data-more="${esc(label)}" onclick="Planner.showMore(this, event)">${esc(label)}</span>`
+            : opts.inline ? `<span class="xmore inl" data-more="${esc(label)}" onclick="Planner.showMore(this, event)">${esc(label)}</span>`
+                          : `<div class="xmore dim" data-more="${esc(label)}" onclick="Planner.showMore(this, event)">▸ ${esc(label)}</div>`;
+  return items.slice(0, n).join(sep) + `<span class="xm" hidden>${sep + items.slice(n).join(sep)}</span>${opts.inline ? ' ' : sep}${tog}`;
+}
+function showMore(el, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const h = el.previousElementSibling; if (!h || !h.classList.contains('xm')) return;
+  h.hidden = !h.hidden;
+  const block = !el.classList.contains('chip') && !el.classList.contains('inl');
+  el.textContent = h.hidden ? (block ? '▸ ' : '') + el.dataset.more : block ? '▾ show fewer' : 'fewer';
+}
+const fewText = (list, n) => fold(list.map(esc), n || 3, {inline: true, sep: ', '});   // "A, B, C and 4 more" inside a sentence, the rest opens on tap
+const fewChips = (list, cls, n) => fold(list.map(x => chip(x, cls)), n || 3, {chip: true, sep: ' '});
 const attr = v => esc(JSON.stringify(v === undefined ? null : v));   // a JS literal inside an HTML attribute
 function teamRow(m, ids, name, extra) {         // one compact line per team; tap opens the team page
   const {L} = m, ev = L.evaluate(ids), missing = ids.filter(id => ownership(m, id) !== 'owned');
@@ -366,7 +386,7 @@ function renderTodayInner(el) {
     <div class="sec" style="margin:0 0 10px">Run this team <small>best of ${rep.todayAll.length >= 12 ? '12+' : rep.todayAll.length} buildable · tap for details</small></div>
     <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role"><span class="rl">${r.role}</span><span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
     <div class="scorebar"><span class="big">${best.teamScore.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
-    <div class="dim" style="font-size:12px;margin-top:8px">${best.unansweredMeta.length ? `No answer to ${chip(few(best.unansweredMeta), 'warn')}. ` : 'Covers every meta Pokémon. '}${shared.length ? `${shared.length} meta Pokémon beat two of three.` : ''}</div>
+    <div class="dim" style="font-size:12px;margin-top:8px">${best.unansweredMeta.length ? `No answer to ${fewChips(best.unansweredMeta, 'warn')}. ` : 'Covers every meta Pokémon. '}${shared.length ? `${shared.length} meta Pokémon beat two of three.` : ''}</div>
   </div>`;
   // next moves: what the Pokémon you actually run still need; everything else is an idea behind "more"
   const all = nextMoves(m), open = all.filter(x => !x.done && !x.snoozed), snoozed = all.filter(x => x.snoozed);
@@ -398,7 +418,7 @@ function metaFit(m, id) {
   const {L} = m, teams = APP.metaTeams || [], bm = APP.benchmark || {best: 721};
   const inTeams = teams.map((t, i) => ({t, i})).filter(x => x.t.members.includes(id));
   let h = `<div class="sec">In meta teams <small>${inTeams.length ? `${inTeams.length} of the ${teams.length} derived meta teams` : `none of the ${teams.length} derived meta teams`}</small></div>`;
-  if (inTeams.length) return h + inTeams.slice(0, 3).map(x => teamRow(m, x.t.members, null, `meta #${x.i + 1}`)).join('') + (inTeams.length > 3 ? `<div class="note">… and ${inTeams.length - 3} more under Meta › Meta teams.</div>` : '');
+  if (inTeams.length) return h + fold(inTeams.map(x => teamRow(m, x.t.members, null, `meta #${x.i + 1}`)), 3, {label: n => `${n} more meta teams`});
   // best trios with two partners from the top 40 of the meta
   const pool = APP.meta.slice(0, 40).filter(p => p !== id && PVP.baseSpecies(p) !== PVP.baseSpecies(id));
   const best = [];
@@ -586,7 +606,7 @@ function teamInner(m, ids, name) {
     <div class="sec" style="margin:0 0 10px">${esc(saved || name || ids.map(nm).join(' / '))} <small>${isBest ? 'best from your roster' : saved ? 'your in-game party' : metaRank ? `meta team #${metaRank}` : name ? 'shared team' : 'team'}</small></div>
     <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${r.role}</span><span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
-    <div class="dim" style="font-size:12px;margin-top:8px">${d.unansweredMeta.length ? `No answer to ${chip(few(d.unansweredMeta), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `${d.sharedWeaknesses.length} meta Pokémon beat two of three: ${esc(few(d.sharedWeaknesses))}.` : ''}</div>
+    <div class="dim" style="font-size:12px;margin-top:8px">${d.unansweredMeta.length ? `No answer to ${fewChips(d.unansweredMeta, 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `${d.sharedWeaknesses.length} meta Pokémon beat two of three: ${fewText(d.sharedWeaknesses)}.` : ''}</div>
     <div style="font-size:13px;margin-top:8px">${esc(needLine(m, ids))}</div>
   </div>`;
   // members
@@ -606,7 +626,7 @@ function teamInner(m, ids, name) {
   h += `<div class="sec">Weak spots <small>meta Pokémon that beat two or all three${tl ? ` · <b>${tl.count} of ${tl.pool}</b> simulated opponents beat all three` : ''}</small></div>`;
   if (tl && tl.count) h += `<div class="team" style="cursor:default"><div class="chips">${tl.threats.map(t => `<span class="chip warn" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${esc(nm(t.id))} <span style="opacity:.7">${t.ratings.map(r => Math.round(r)).join('/')}</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">PvPoke-simulated (1-1 shields): every member rates under 500 against these. <a href="#" onclick="Planner.nav('#/matchups');return false">Open Matchups</a> to see them per shield scenario.</div></div>`;
   if (!th.length) h += `<div class="note">None: every meta Pokémon loses to at least two of your three.</div>`;
-  else h += `<div class="team" style="cursor:default">` + th.slice(0, 8).map(r => `<div class="thr"><b style="cursor:pointer" onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? 'beats all three, nobody answers it' : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`).join('') + (th.length > 8 ? `<div class="thr">… ${th.length - 8} more in the coverage grid</div>` : '') + '</div>';
+  else h += `<div class="team" style="cursor:default">` + fold(th.map(r => `<div class="thr"><b style="cursor:pointer" onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? 'beats all three, nobody answers it' : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`), 8, {label: n => `${n} more threats`}) + '</div>';
   // search strings
   h += `<div class="sec">Search in Pokémon GO <small>find them in your storage</small></div>` + searchBlock(ids);
   // swaps
@@ -831,7 +851,7 @@ function cardExtras(r) {
       else if (t.st === 'xl') out.status = chipS(t.txt, 'warn');
       const parties = Object.entries(ROSTER.tagged).filter(([, ids]) => ids.includes(id)).map(([n]) => n);
       const inBest = m.rep.today[0] && m.rep.today[0].members.some(x => x.speciesId === id);
-      if (parties.length) out.chips.push(chipS(`in ${esc(parties.slice(0, 2).join(', '))}${parties.length > 2 ? ` +${parties.length - 2}` : ''}`, 'gl'));
+      if (parties.length) out.chips.push(chipS(`in ${esc(parties.slice(0, 2).join(', '))}${parties.length > 2 ? `<span class="xm" hidden>, ${esc(parties.slice(2).join(', '))}</span> <span class="xmore" data-more="+${parties.length - 2}" onclick="Planner.showMore(this, event)">+${parties.length - 2}</span>` : ''}`, 'gl'));
       else if (inBest) out.chips.push(chipS('in your best team', 'gl'));
       if (cls === 'gold' && t.txt.startsWith('scan')) out.movesSaid = true;
     }
@@ -1294,7 +1314,7 @@ function changesFor(m) {
 function changesCard(m) {
   const ch = changesFor(m); if (!ch.length) return '';
   return `<div class="team card"><div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 4px"><span>Meta changed for your Pokémon <small>PvPoke data of ${esc(ch[0].date)}</small></span>${ctxMenu([['Dismiss these', `Planner.dismissChanges(${attr(ch.map(x => x.k))})`]])}</div>` +
-    ch.slice(0, 6).map(x => `<div class="dt" style="margin:5px 0;cursor:pointer" onclick="Planner.openMon('${x.id}')">${x.txt}</div>`).join('') + (ch.length > 6 ? `<div class="dim" style="font-size:12px">… and ${ch.length - 6} more</div>` : '') + `</div>`;
+    fold(ch.map(x => `<div class="dt" style="margin:5px 0;cursor:pointer" onclick="Planner.openMon('${x.id}')">${x.txt}</div>`), 6) + `</div>`;
 }
 function dismissChanges(keys) { for (const k of keys) ROSTER.seen[k] = Date.now(); saveRoster(); renderToday(); }
 
@@ -1505,8 +1525,8 @@ function monInner(m, id, noHead) {
   const wins = rated.filter(x => x.r >= 500).sort((p, q) => q.r - p.r), losses = rated.filter(x => x.r < 400).sort((p, q) => APP.pokemon[p.o].rank - APP.pokemon[q.o].rank);
   const mchip = x => `<span class="chip ${x.r >= 500 ? 'meta1' : 'warn'}" style="cursor:pointer" onclick="Planner.openMon('${x.o}')">${esc(nm(x.o))} <span style="opacity:.7">#${APP.pokemon[x.o].rank}</span></span>`;
   h += `<div class="sec">Against the meta <small>${wins.length} wins · ${rated.length - wins.length - losses.length} even · ${losses.length} losses of ${rated.length}</small></div>`;
-  h += `<div class="team" style="cursor:default"><div class="nm" style="font-size:13px">Loses to <span class="dim">most dangerous first</span></div><div class="chips">${losses.slice(0, 10).map(mchip).join('') || '<span class="dim">nothing in the meta beats it clearly</span>'}</div>
-    <div class="nm" style="font-size:13px;margin-top:10px">Beats</div><div class="chips">${wins.slice(0, 10).map(mchip).join('') || '<span class="dim">no clear wins</span>'}</div>
+  h += `<div class="team" style="cursor:default"><div class="nm" style="font-size:13px">Loses to <span class="dim">most dangerous first</span></div><div class="chips">${fold(losses.map(mchip), 10, {chip: true}) || '<span class="dim">nothing in the meta beats it clearly</span>'}</div>
+    <div class="nm" style="font-size:13px;margin-top:10px">Beats</div><div class="chips">${fold(wins.map(mchip), 10, {chip: true}) || '<span class="dim">no clear wins</span>'}</div>
     <div class="note" style="margin:8px 0 0">Ratings: PvPoke's published matchups where available, type effectiveness and rank otherwise. Tap a name for its page.</div></div>`;
   if (!o) h += howToGet(m, id);                // how to get it: catch, evolve (with candy and safe CP), Team GO Rocket for shadows
   return h;
@@ -1623,14 +1643,14 @@ function renderBuilder(m, L) {
       // weak spots of what is in the slots so far
       const holes = ev.holes.slice().sort((a, b) => APP.pokemon[a].rank - APP.pokemon[b].rank);
       h += `<div class="sec">Weak spots so far <small>${holes.length ? `${holes.length} of ${L.meta.length} meta Pokémon unanswered` : 'every meta Pokémon is answered'}</small></div>`;
-      if (holes.length) h += `<div class="team" style="cursor:default"><div class="chips">${holes.slice(0, 12).map(o => `<span class="chip warn" onclick="Planner.openMon('${o}')" style="cursor:pointer">${esc(nm(o))} <span style="opacity:.7">#${APP.pokemon[o].rank}</span></span>`).join('')}${holes.length > 12 ? `<span class="chip">+${holes.length - 12} more</span>` : ''}</div></div>`;
+      if (holes.length) h += `<div class="team" style="cursor:default"><div class="chips">${fold(holes.map(o => `<span class="chip warn" onclick="Planner.openMon('${o}')" style="cursor:pointer">${esc(nm(o))} <span style="opacity:.7">#${APP.pokemon[o].rank}</span></span>`), 12, {chip: true})}</div></div>`;
       // suggestions: what to add next, from your roster or from the meta
       const pool = UI.buildPool === 'meta' ? APP.meta.slice(0, 60).filter(distinct) : mine;
       const sug = pool.map(p => { const e2 = L.evaluate(filled.concat(p)); const fixes = ev.holes.filter(o => !e2.holes.includes(o)); return {p, score: e2.score, fixes, left: e2.holes.length}; })
         .sort((a, b) => b.score - a.score).slice(0, 6);
       h += `<div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>Add next <small>${filled.length === 2 ? 'completes the team' : 'best partner'}</small></span><span class="tabs sub seg"><button class="${UI.buildPool !== 'meta' ? 'on' : ''}" onclick="Planner.buildPool('roster')">Your roster</button><button class="${UI.buildPool === 'meta' ? 'on' : ''}" onclick="Planner.buildPool('meta')">Meta</button></span></div>`;
       if (!sug.length) h += `<div class="note">${UI.buildPool === 'meta' ? 'No meta Pokémon left to add.' : 'Nothing in your roster fits; switch to Meta to see what to catch.'}</div>`;
-      else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `answers <span class="good">${esc(few(x.fixes.map(nm)))}</span>` : 'answers nothing new'}${x.left ? ` · ${x.left} still unanswered` : ' · covers the whole meta'}</div></span><span class="go">+</span></div>`).join('');
+      else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `answers <span class="good">${fewText(x.fixes.map(nm))}</span>` : 'answers nothing new'}${x.left ? ` · ${x.left} still unanswered` : ' · covers the whole meta'}</div></span><span class="go">+</span></div>`).join('');
       h += `<div class="note">Score = the team so far plus this Pokémon, on the same scale as Today. "Answers" lists the meta Pokémon that would no longer go unanswered.</div>`;
       h += builderCoachCard(m, L, filled);
     }
@@ -1750,7 +1770,7 @@ function bossSection(m) {
   h += `<div class="add" style="margin:4px 0 6px"><input id="bossq" placeholder="search any Pokémon…" value="${esc(UI.bossQ || '')}" oninput="Planner.bossSearch(this.value)">${boss ? `<button onclick="Planner.pickBoss(null)" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
   if (q) { const hits = Object.keys(APP.pokemon).concat(Object.keys(APP.unranked)).filter(k => nm(k).toLowerCase().includes(q)).slice(0, 8);
     h += hits.length ? `<div class="tchips">${hits.map(k => `<span class="chip" onclick="Planner.pickBoss('${k}')">${esc(nm(k))}</span>`).join('')}</div>` : `<div class="note">No Pokémon named like that in this league's data.</div>`; }
-  else if (live.length) h += `<div class="tchips">${live.filter(r => /5-Star|Mega|3-Star/.test(r.tier)).slice(0, 12).map(r => `<span class="chip ${UI.boss === 'raid:' + r.name ? 'ok' : ''}" onclick="Planner.pickBoss(${attr('raid:' + r.name)})" title="${esc(r.tier)}">${esc(r.name)} <span style="opacity:.7">${esc(r.tier.replace(' Raids', '').replace('-Star', '★'))}</span></span>`).join('')}</div>`;
+  else if (live.length) h += `<div class="tchips">${fold(live.filter(r => /5-Star|Mega|3-Star/.test(r.tier)).map(r => `<span class="chip ${UI.boss === 'raid:' + r.name ? 'ok' : ''}" onclick="Planner.pickBoss(${attr('raid:' + r.name)})" title="${esc(r.tier)}">${esc(r.name)} <span style="opacity:.7">${esc(r.tier.replace(' Raids', '').replace('-Star', '★'))}</span></span>`), 12, {chip: true})}</div>`;
   else h += `<div class="note">Type a boss name. The current raid bosses appear here when the schedule has loaded.</div>`;
   if (!boss) return h;
   const weak = bossWeak(boss.types), mine = myRaidAttackers(boss.types, 8), maxEr = mine.length ? mine[0].er : 1;
@@ -1863,7 +1883,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
