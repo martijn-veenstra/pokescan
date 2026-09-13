@@ -93,6 +93,16 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`, and put its
   signing secret in `STRIPE_WEBHOOK_SECRET`. The server verifies the signature itself (no Stripe SDK), writes the
   plan row on a paid checkout and clears it when the subscription ends.
+- **Share anything** (Pro): a screenshot the on-device reader cannot place (not a status, appraisal, attacks or profile
+  screen) goes to the server's vision endpoint (`POST /api/vision`, a downscaled JPEG, polled via `/api/jobs/:id`,
+  `VISION_PER_USER_HOUR` default 20 under `VISION_PER_HOUR` 100). The model says what it is; the app routes it.
+  An **end-of-battle screen** becomes a battle-log entry with both teams, their lead and the result; the Battles page
+  gains "What you face", the species you actually meet with your record against each, and the AI review gets that
+  list. A **Team GO Rocket taunt** is matched to Leek Duck's lineups: which Shadow you will meet and whether your
+  roster wants it (evolves into a wanted Pokémon, ranks in your league, or skip). Results sit as cards at the top of
+  Scans; the import log says "read by Claude" for those files and everything else stays on the device. On Android and
+  desktop the app is a Web Share Target (`share_target` in the manifest, files land in a cache and are imported on
+  `#/inbox`); on iPhone use Import scans. Free accounts see a Pro teaser instead and nothing leaves the phone.
 - **No chat**: the AI never asks or answers questions; it only writes the structured review above, automatically.
   Pokémon names in a review are tappable and fill an open builder slot, or open the Pokémon page.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,

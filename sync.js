@@ -239,7 +239,8 @@ async function init() {
   }
 }
 window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
-               health: () => health, me: () => me, plan, isPro, coachAvailable: () => !!(health && health.coach && signedIn() && isPro()),
+               health: () => health, me: () => me, plan, isPro, headers: hdr, coachAvailable: () => !!(health && health.coach && signedIn() && isPro()),
+               visionAvailable: () => !!(health && health.vision && signedIn() && isPro()), visionOffered: () => !!(health && health.vision && signedIn() && !isPro()),
                coachOffered: () => !!(health && health.coach && signedIn() && !isPro())};   // the server has the AI, this account has not unlocked it yet
 window.addEventListener('load', () => setTimeout(init, 300));
 window.addEventListener('online', () => { if (signedIn()) flush(); });

@@ -8,6 +8,7 @@ import { timingSafeEqual, createHash, createHmac, randomUUID } from 'node:crypto
 import { readFileSync } from 'node:fs';
 import { openDb } from './db.js';
 import { makeCoach } from './coach.js';
+import { makeVision } from './vision.js';
 import { makeSources } from './sources.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,13 +16,14 @@ const PORT = Number(process.env.PORT) || 8080;
 const PASSCODE = process.env.PASSCODE || '';
 const KINDS = new Set(['scans', 'roster', 'appr', 'battles']);
 const COACH_PER_USER_HOUR = Number(process.env.COACH_PER_USER_HOUR) || 10;
+const VISION_PER_HOUR = Number(process.env.VISION_PER_HOUR) || 100, VISION_PER_USER_HOUR = Number(process.env.VISION_PER_USER_HOUR) || 20;
 const MAX_BYTES = 8 * 1024 * 1024;
 const COACH_PER_HOUR = Number(process.env.COACH_PER_HOUR) || 30;
 const VERSION = (() => { try { return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return 'dev'; } })();
 
 /* Accounts: with CLERK_SECRET_KEY set, every /api call carries a Clerk session token and the user id is its subject; each user
    has their own state and coach budget. Without it the old single-user PASSCODE mode stays (local dev, tests). */
-export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true, coach = makeCoach(process.env.ANTHROPIC_API_KEY), sourcesFetch = fetch,
+export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode = PASSCODE, logger = true, coach = makeCoach(process.env.ANTHROPIC_API_KEY), vision = makeVision(process.env.ANTHROPIC_API_KEY), sourcesFetch = fetch,
                                     clerkSecretKey = process.env.CLERK_SECRET_KEY || '', clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || '', appOrigin = process.env.APP_ORIGIN || '',
                                     verifyToken = null, ownerMigrateFrom = process.env.OWNER_USER_ID || '',
                                     proUserIds = (process.env.PRO_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
@@ -76,7 +78,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     let dbOk = false;
     try { dbOk = await db.ping(); } catch { dbOk = false; }
     return { ok: true, db: dbOk, storage: db.kind, sync: authMode !== 'none', auth: authMode, ...(authMode === 'clerk' && clerkPublishableKey ? { clerkPublishableKey } : {}),
-             ...(authMode === 'clerk' && passcode ? { passcodeData: true } : {}), coach: !!coach, sources: true, version: VERSION };
+             ...(authMode === 'clerk' && passcode ? { passcodeData: true } : {}), coach: !!coach, vision: !!vision, sources: true, version: VERSION };
   });
   // One-time import of the passcode era's rows into a signed-in account: the passcode proves ownership of that data.
   // Only kinds the account does not have yet move over, so it never overwrites what the account already synced.
@@ -123,6 +125,35 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
       else Object.assign(job, { status: 'done', text: out.text, model: out.model, usage: out.usage });
     }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the coach did not answer' }); });
     return reply.code(202).send({ jobId: id, status: 'running' });
+  });
+  // Share anything: a screenshot the on-device reader could not place goes to the model, which says what it is and what it shows.
+  // Pro only; its own hourly budget, separate from reviews. Same job pattern, polled through /api/jobs/:id.
+  const looks = [], looksBy = new Map();
+  app.post('/api/vision', { preHandler: [auth, requirePro] }, async (req, reply) => {
+    if (!vision) return reply.code(503).send({ error: 'vision_not_configured', message: 'Set ANTHROPIC_API_KEY on the server to read screenshots.' });
+    const now = Date.now();
+    while (looks.length && looks[0] < now - 3600e3) looks.shift();
+    if (looks.length >= VISION_PER_HOUR) return reply.code(429).send({ error: 'rate_limited', message: `at most ${VISION_PER_HOUR} screenshots per hour` });
+    const mine = (looksBy.get(req.userId) || []).filter(t => t >= now - 3600e3);
+    if (authMode === 'clerk' && mine.length >= VISION_PER_USER_HOUR) return reply.code(429).send({ error: 'rate_limited', message: `at most ${VISION_PER_USER_HOUR} screenshots per hour per account` });
+    const body = req.body || {};
+    if (typeof body.image !== 'string' || body.image.length < 100) return reply.code(400).send({ error: 'missing_image' });
+    if (body.image.length > 6 * 1024 * 1024) return reply.code(413).send({ error: 'image_too_large', message: 'send the screenshot downscaled to at most 1568 px' });
+    const mediaType = ['image/jpeg', 'image/png', 'image/webp'].includes(body.mediaType) ? body.mediaType : 'image/jpeg';
+    mine.push(now); looksBy.set(req.userId, mine); looks.push(now);
+    for (const [id, j] of jobs) if (now - j.t > 3600e3) jobs.delete(id);
+    const id = randomUUID(), job = { status: 'running', t: now, userId: req.userId };
+    jobs.set(id, job);
+    vision({ image: body.image, mediaType, hint: typeof body.hint === 'string' ? body.hint : '' }).then(out => {
+      if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to read this screenshot' });
+      else Object.assign(job, { status: 'done', data: out.data, model: out.model, usage: out.usage });
+    }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the screenshot could not be read' }); });
+    return reply.code(202).send({ jobId: id, status: 'running' });
+  });
+  app.get('/api/jobs/:id', { preHandler: auth }, async (req, reply) => {
+    const job = jobs.get(req.params.id);
+    if (!job || job.userId !== req.userId) return reply.code(404).send({ error: 'unknown_job' });
+    return { status: job.status, text: job.text, data: job.data, model: job.model, usage: job.usage, error: job.error };
   });
   app.get('/api/coach/:id', { preHandler: auth }, async (req, reply) => {
     const job = jobs.get(req.params.id);

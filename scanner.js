@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.60';
+const APP_VERSION='9.61';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -719,8 +719,9 @@ function migrateScans(){                          // v9.22 and earlier filled a 
 }
 try{ render(); }catch(e){ showErr('render failed: '+e.message); }
 
-$('file').addEventListener('change', async e=>{
-  const files=[...e.target.files]; e.target.value='';
+$('file').addEventListener('change', async e=>{ const files=[...e.target.files]; e.target.value=''; await importFiles(files); });
+async function importFiles(files){                 // the import pipeline: also fed by files shared to the app (Share.drainInbox)
+  if(!files||!files.length) return;
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
   $('prog').style.display='block'; progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
@@ -746,7 +747,7 @@ $('file').addEventListener('change', async e=>{
   { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
   setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
-});
+}
 $('trainer').value=localStorage.getItem('trainer')||'40';
 $('bb').checked=localStorage.getItem('bb')==='1';
 renderLog();
@@ -767,8 +768,9 @@ function del(i){ results.splice(i,1); save(); render(); }
 
 function status(s){ $('stat').textContent=s; }
 let TOAST_T=null;
-function toast(text, onclick){                      // one short line above the bottom bar, on any page; tap runs onclick
+function toast(text, onclick, soft){                // one short line above the bottom bar, on any page; tap runs onclick. soft: wait for a visible toast to finish
   const t=$('toast'); if(!t) return;
+  if(soft && t.classList.contains('on')){ setTimeout(()=>toast(text,onclick),4200); return; }
   t.textContent=text; t.onclick=()=>{ t.classList.remove('on'); if(onclick) try{ (0,eval)(onclick); }catch{} };
   t.classList.add('on'); clearTimeout(TOAST_T); TOAST_T=setTimeout(()=>t.classList.remove('on'),3800);
 }
@@ -790,7 +792,9 @@ async function scanImage(file,trainer,batchKey){
       key=await withTimeout(readMovesScreen(ctx,W,H,batchKey), 60000, 'reading the screenshot took too long');
       if(key===null){
         const prof=await readProfile(ctx,W,H);
-        if(prof) applyProfile(prof, file.name); else { gain('note','no status screen, appraisal, attacks or profile recognised'); status(`${file.name}: no Pokémon status screen found`); }
+        if(prof) applyProfile(prof, file.name);
+        else if(window.Share && await Share.fromScan(file, cv)) { /* Share anything took it: battle result, Rocket taunt, … */ }
+        else { gain('note','no status screen, appraisal, attacks or profile recognised'); status(`${file.name}: no Pokémon status screen found`); }
       }
     }
   }

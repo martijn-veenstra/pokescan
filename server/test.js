@@ -148,7 +148,9 @@ console.log(`all API tests passed (storage: ${app.db.kind})`);
 
 // ---- accounts mode: a fake token verifier stands in for Clerk ----
 const users = { 'tok-alice': { sub: 'user_alice' }, 'tok-bob': { sub: 'user_bob' } };
-const app2 = await buildServer({ passcode: '', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '', proUserIds: ['user_alice'], proCheckoutUrl: 'https://pay.example/pro', stripeWebhookSecret: 'whsec_test' });
+const seenHints = [];
+const fakeVision = async ({ image, mediaType, hint }) => { seenHints.push(hint); await new Promise(r => setTimeout(r, 60)); return { data: { kind: 'battle_end', confidence: 0.9, battle: { result: 'loss', myTeam: ['Azumarill', 'Medicham', 'Altaria'], oppTeam: ['Tinkaton', 'Cresselia', 'Clodsire'], myLead: 'Azumarill', oppLead: 'Tinkaton', myFainted: 3, oppFainted: 1, ratingAfter: null, ratingDelta: null }, rocket: null, summary: 'GO Battle League loss' }, model: 'fake', usage: { in: 1, out: 1 } }; };
+const app2 = await buildServer({ passcode: '', logger: false, coach: fakeCoach, vision: fakeVision, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '', proUserIds: ['user_alice'], proCheckoutUrl: 'https://pay.example/pro', stripeWebhookSecret: 'whsec_test' });
 const A = { authorization: 'Bearer tok-alice', 'content-type': 'application/json' }, B = { authorization: 'Bearer tok-bob', 'content-type': 'application/json' };
 r = await app2.inject({ method: 'GET', url: '/api/health' });
 assert.equal(r.json().auth, 'clerk'); assert.equal(r.json().sync, true); assert.equal(r.json().clerkPublishableKey, 'pk_test_x');
@@ -169,6 +171,23 @@ r = await app2.inject({ method: 'GET', url: '/api/me', headers: B });
 assert.equal(r.json().plan, 'free', 'an expired plan row is free again');
 assert.equal(await app2.db.findPlanByRef('sub_1'), 'user_bob');
 await app2.db.setPlan('user_bob', { plan: 'pro', source: 'paid', ref: 'sub_1', until: null });
+// share anything: the vision endpoint is Pro-only, takes a base64 image and answers through a job
+{
+  const img = Buffer.alloc(400, 1).toString('base64');
+  await app2.db.setPlan('user_bob', { plan: 'free' });
+  r = await app2.inject({ method: 'POST', url: '/api/vision', headers: B, payload: { image: img, mediaType: 'image/png' } });
+  assert.equal(r.statusCode, 403, 'vision is a Pro feature');
+  r = await app2.inject({ method: 'POST', url: '/api/vision', headers: A, payload: { mediaType: 'image/png' } });
+  assert.equal(r.statusCode, 400, 'needs an image');
+  r = await app2.inject({ method: 'POST', url: '/api/vision', headers: A, payload: { image: img, mediaType: 'image/png', hint: 'VICTORY' } });
+  assert.equal(r.statusCode, 202); const vj = r.json().jobId;
+  let out; for (let i = 0; i < 40 && !(out && out.status === 'done'); i++) { await new Promise(x => setTimeout(x, 50)); out = (await app2.inject({ method: 'GET', url: '/api/jobs/' + vj, headers: A })).json(); }
+  assert.equal(out.status, 'done'); assert.equal(out.data.kind, 'battle_end'); assert.deepEqual(out.data.battle.oppTeam, ['Tinkaton', 'Cresselia', 'Clodsire']);
+  assert.ok(seenHints.includes('VICTORY'), 'the on-device text reaches the model as a hint');
+  r = await app2.inject({ method: 'GET', url: '/api/jobs/' + vj, headers: B }); assert.equal(r.statusCode, 404, 'jobs are private');
+  r = await app2.inject({ method: 'GET', url: '/api/health' }); assert.equal(r.json().vision, true);
+  await app2.db.setPlan('user_bob', { plan: 'pro', source: 'paid', ref: 'sub_1', until: null });
+}
 // the payment webhook: signed events flip the plan, unsigned ones are refused
 {
   const { createHmac: hmac } = await import('node:crypto');

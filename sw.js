@@ -1,6 +1,6 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v9.60';
-const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'scanner.js', 'planner.js', 'auth.js', 'sync.js', 'sources.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'pokescan-v9.61';
+const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'scanner.js', 'planner.js', 'auth.js', 'sync.js', 'share.js', 'sources.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 const DATA = ['data/app-great.json', 'data/cups.json', 'data/matrix-great.json', 'data/pve.json'];
 
 self.addEventListener('install', e => {
@@ -11,6 +11,17 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  if (e.request.method === 'POST' && url.origin === location.origin && url.pathname.endsWith('/share')) {
+    // Web Share Target: keep the shared files in a cache and open the app, which picks them up on #/inbox
+    e.respondWith((async () => {
+      try {
+        const fd = await e.request.formData(), c = await caches.open('share-inbox'), files = fd.getAll('media');
+        let i = 0; for (const f of files) { if (f && f.size) await c.put(new Request(`/share-inbox/${Date.now()}-${i++}`), new Response(f, {headers: {'content-type': f.type || 'application/octet-stream', 'x-name': encodeURIComponent(f.name || 'shared')}})); }
+      } catch {}
+      return Response.redirect('./#/inbox', 303);
+    })());
+    return;
+  }
   if (url.origin !== location.origin || e.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
   const path = url.pathname.replace(/^.*\//, '') || './';
   if (url.pathname.includes('/vendor/')) {

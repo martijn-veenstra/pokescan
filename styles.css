@@ -359,3 +359,7 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 #toast{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--card);border:1px solid var(--green);border-left-width:4px;color:var(--ink);border-radius:12px;padding:10px 14px;font-size:13.5px;max-width:min(92vw,420px);box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:30;transition:opacity .25s,transform .25s}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}
 @media (prefers-reduced-motion:reduce){#toast,.team.card.start .bar i,.ms .bar i{transition:none}}
+/* shared screenshot cards (Share anything) */
+#shared{display:grid;gap:8px;margin:8px 0}#shared:empty{display:none}
+.team.card.share{position:relative}.team.card.share .x{position:absolute;right:12px;top:10px;color:var(--dim);cursor:pointer;font-size:14px}
+.team.card.share .chips{margin-top:4px}.team.card.share .chip.dim{opacity:.6}

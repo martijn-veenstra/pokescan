@@ -1041,6 +1041,7 @@ function route() {
     if (cur !== 'team') leave();
     UI.team = {ids, name: seg[2] || null}; showView('team'); window.scrollTo(0, 0); return;
   }
+  if (p === 'inbox') { if (window.Share) Share.drainInbox(); nav('#/scans'); return; }   // files shared to the app (Web Share Target)
   if (p === 'mon' || p === 'scan' || p === 'team') { nav('#/' + (localStorage.getItem('tab') || 'today')); return; }
   const page = PAGES.includes(p) ? p : 'today';
   if (['builder', 'meta', 'rank', 'raids'].includes(page)) UI.metaPanel = {builder: 'build', meta: 'teams', rank: 'rank', raids: 'raids'}[page];
@@ -1095,13 +1096,15 @@ const rec = o => `${o.w}-${o.l}`;
 const teamKey = ids => ids.slice().sort().join('+');
 function battleStats(league) {
   const all = BATTLES.filter(b => !league || b.league === league), fights = all.filter(b => b.result || b.set);
-  const byTeam = {}, byLead = {}, byMember = {};
+  const byTeam = {}, byLead = {}, byMember = {}, byOpp = {};
   for (const b of fights) {
     if (b.ids) { const k = teamKey(b.ids); (byTeam[k] = byTeam[k] || {ids: b.ids, name: b.team, list: []}).list.push(b); for (const id of b.ids) (byMember[id] = byMember[id] || []).push(b); }
     if (b.lead && b.result) (byLead[b.lead] = byLead[b.lead] || []).push(b);
+    for (const o of b.opp || []) if (b.result) (byOpp[o] = byOpp[o] || []).push(b);
   }
   const ratings = all.filter(b => b.rating).sort((a, b) => a.t - b.t);
   return {all, fights, total: wl(fights), ratings, now: ratings.length ? ratings[ratings.length - 1] : null,
+    faced: Object.entries(byOpp).map(([id, list]) => Object.assign({id, n: list.length}, wl(list))).sort((a, b) => b.n - a.n),   // what you actually meet, from shared result screens
     teams: Object.values(byTeam).map(t => Object.assign(t, wl(t.list))).sort((a, b) => (b.w + b.l) - (a.w + a.l)),
     leads: Object.entries(byLead).map(([id, list]) => Object.assign({id}, wl(list))).sort((a, b) => (a.w / (a.w + a.l)) - (b.w / (b.w + b.l)) || (b.w + b.l) - (a.w + a.l)),
     members: Object.entries(byMember).map(([id, list]) => Object.assign({id}, wl(list))).sort((a, b) => (b.w + b.l) - (a.w + a.l))};
@@ -1118,6 +1121,7 @@ function battleSummaryText(ids) {
   const out = {};
   if (r) out.thisTeam = `${rec(r)} in GO Battle League${r.worst.length ? '; loses to leads: ' + r.worst.map(x => `${nm(x.id)} ${rec(x)}`).join(', ') : ''}`;
   out.overall = `${rec(st.total)} over ${st.fights.length} logged battles/sets`;
+  if (st.faced.length) out.facedMost = st.faced.slice(0, 8).map(x => `${nm(x.id)} ×${x.n} (${rec(x)})`);
   if (st.teams.length) out.teams = st.teams.slice(0, 4).map(t => `${t.name || t.ids.map(nm).join(' / ')}: ${rec(t)}`);
   if (st.leads.length) out.worstLeads = st.leads.filter(x => x.w + x.l >= 2).slice(0, 5).map(x => `${nm(x.id)}: ${rec(x)}`);
   if (st.now) { const weekAgo = st.ratings.filter(b => b.t < Date.now() - WEEK).pop(); out.rating = `${st.now.rating} now${weekAgo ? `, ${weekAgo.rating} a week ago` : ''}`; }
@@ -1159,6 +1163,11 @@ function battlesInner() {
   }
   // stats
   if (st.fights.length) {
+    if (st.faced.length) {                    // opponents read from shared result screens: the ladder you actually play on
+      const top = st.faced.slice(0, 12), n = st.fights.filter(b => b.opp && b.opp.length).length;
+      h += `<div class="sec">What you face <small>${n} battle${n === 1 ? '' : 's'} with opponents read</small></div><div class="team" style="cursor:default"><div class="chips">${fold(top.map(x => `<span class="chip ${x.l > x.w ? 'warn' : x.w > x.l ? 'ok' : ''}" onclick="Planner.openMon('${x.id}')" style="cursor:pointer">${esc(nm(x.id))} <span style="opacity:.7">×${x.n} · ${rec(x)}</span></span>`), 8, {chip: true})}</div>
+        <div class="dt" style="margin-top:6px">Red: you lose to it more than you beat it. Share the end-of-battle screen after each match to keep this current.</div></div>`;
+    }
     h += `<div class="sec">Results <small>${rec(st.total)} · ${st.fights.length} logged</small></div>`;
     h += `<div class="team card" style="cursor:default">${kv([
       ['Teams', st.teams.slice(0, 5).map(t => `<div style="cursor:pointer" onclick="Planner.openTeam(${attr(t.ids)},${attr(t.name || null)})"><b>${rec(t)}</b> ${esc(t.name || t.ids.map(nm).join(' / '))}</div>`).join('') || '—'],
@@ -1168,7 +1177,7 @@ function battlesInner() {
   }
   // recent
   const recentB = st.all.slice().reverse().slice(0, 12);
-  if (recentB.length) h += `<div class="sec">Recent</div>` + recentB.map(b => `<div class="team row" style="cursor:default"><span class="sc" style="color:${b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)'}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span><span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.src === 'ocr' ? ' · from screenshot' : ''}</div></span>${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`).join('');
+  if (recentB.length) h += `<div class="sec">Recent</div>` + recentB.map(b => `<div class="team row" style="cursor:default"><span class="sc" style="color:${b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)'}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span><span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : ''}</div></span>${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`).join('');
   h += `<div class="note">Everything here is yours: the log lives on this device and follows your account when sync is on. Team pages and the AI review use these records next to the meta numbers.</div>`;
   return h;
 }
@@ -1275,6 +1284,37 @@ async function loadCups() {
 function setLeague(slug) { drawer(false); if (typeof window.setLeague === 'function') window.setLeague(slug); }
 
 /* ---------- side drawer ---------- */
+/* ---------- Share anything helpers: names the model read → ids, Rocket verdicts, battle entries ---------- */
+let NAMEIDX = null;
+function idByName(name) {                      // "Ninetales (Shadow)", "Shadow Ninetales", "Galarian Stunfisk" → the app's id, or null
+  if (!APP || !name) return null;
+  if (!NAMEIDX) {
+    NAMEIDX = new Map();
+    const put = (k, id) => { const key = k.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); if (key && (!NAMEIDX.has(key) || (APP.pokemon[NAMEIDX.get(key)] || {rank: 9e9}).rank > (APP.pokemon[id] || {rank: 9e9}).rank)) NAMEIDX.set(key, id); };
+    for (const [id, e] of Object.entries(APP.pokemon)) { put(e.name, id); const m = /^(.+?) \((Shadow|Galarian|Alolan|Hisuian|Paldean)\)$/.exec(e.name); if (m) { put(`${m[2]} ${m[1]}`, id); if (m[2] === 'Shadow') put(`${m[1]} shadow`, id); } }
+    for (const [id, e] of Object.entries(APP.unranked || {})) put(e.name, id);
+  }
+  const k = String(name).toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  if (NAMEIDX.has(k)) return NAMEIDX.get(k);
+  const noForm = k.replace(/\b(shadow|purified)\b/g, '').replace(/\s+/g, ' ').trim();   // a Shadow the app does not rank as shadow → the normal form
+  return NAMEIDX.get(noForm) || null;
+}
+const partyFor = ids => { if (!ids || ids.length !== 3) return null; const k = teamKey(ids); return Object.keys(ROSTER.tagged).find(n => ROSTER.tagged[n].length === 3 && teamKey(ROSTER.tagged[n]) === k) || null; };
+function addBattle(entry) {                    // a battle read from a shared screenshot (Share) or another source
+  BATTLES.push(Object.assign({id: newId(), t: Date.now(), league: LEAGUE.slug, src: 'share'}, entry));
+  saveBattles(); if (onView() === 'battles') renderBattles(); refresh();
+}
+function rocketVerdict(name) {                 // what a Shadow of this species means for the player's roster
+  const base = idByName(name), shadow = base && APP.pokemon[base + '_shadow'] ? base + '_shadow' : (base && /_shadow$/.test(base) ? base : null);
+  const id = shadow || base, e = id && APP.pokemon[id], rank = e ? e.rank : null;
+  const evos = base ? evosOf(base.replace(/_shadow$/, '')) : [];
+  const wantedIds = new Set(Object.keys(ROSTER.candidates).concat(Object.keys(ROSTER.pending)));
+  const wantedEvo = evos.find(v => wantedIds.has(v + '_shadow') || wantedIds.has(v)), wanted = !!(wantedEvo || (id && wantedIds.has(id)));
+  const bestEvo = evos.map(v => APP.pokemon[v + '_shadow'] || APP.pokemon[v]).filter(Boolean).sort((a, b) => a.rank - b.rank)[0];
+  const text = wanted ? (wantedEvo ? `evolves into your wanted ${nm(wantedIds.has(wantedEvo + '_shadow') ? wantedEvo + '_shadow' : wantedEvo)}` : 'on your list') : rank ? `#${rank}` : bestEvo ? `→ ${bestEvo.name} #${bestEvo.rank}` : 'no rank';
+  return {name, id, rank: rank || (bestEvo ? bestEvo.rank : null), wanted, text};
+}
+
 /* ---------- Getting started: a checklist on Today whose steps tick themselves off; each step opens the place to do it ---------- */
 const ONBOARD = Object.assign({dismissed: false, doneAt: null}, JSON.parse(localStorage.getItem('onboard') || '{}'));
 const saveOnboard = () => localStorage.setItem('onboard', JSON.stringify(ONBOARD));
@@ -1312,9 +1352,9 @@ const saveMS = () => localStorage.setItem('milestones', JSON.stringify(MS));
 const MS_TRACKS = [
   {k: 'scans', label: n => `Roster knows ${n} Pokémon`, tiers: [1, 5, 15, 30, 60], payoff: {1: 'the first card is in', 5: 'Today can build a team', 15: 'the builder has real choices', 30: 'raid counters come from your own Pokémon', 60: 'the whole collection is in'}, count: () => liveScans().length},
   {k: 'appr', label: n => `${n} exact-IV Pokémon`, tiers: [1, 5, 15], payoff: {1: 'ranks are exact, not a range', 5: 'power-up advice you can trust', 15: 'every core piece pinned down'}, count: () => results.filter(r => r.appraisal).length},
-  {k: 'moves', label: n => `${n} attack sets read`, tiers: [1, 5, 15], payoff: {1: 'team scores use your real moves', 5: 'the builder knows what you actually run', 15: 'no more guessing at second moves'}, count: () => results.filter(r => r.moves && r.moves.length).length},
-  {k: 'battles', label: n => `${n} battles logged`, tiers: [1, 10, 50], payoff: {1: 'your record starts', 10: 'team pages show your real record', 50: 'the trouble leads are statistically real'}, count: () => BATTLES.length},
-  {k: 'parties', label: n => `${n} parties saved`, tiers: [1, 3], payoff: {1: 'Today checks your actual team', 3: 'Today rotates advice across your parties'}, count: () => Object.values(ROSTER.tagged).filter(v => v.length === 3).length},
+  {k: 'moves', label: n => `${n} attack set${n === 1 ? '' : 's'} read`, tiers: [1, 5, 15], payoff: {1: 'team scores use your real moves', 5: 'the builder knows what you actually run', 15: 'no more guessing at second moves'}, count: () => results.filter(r => r.moves && r.moves.length).length},
+  {k: 'battles', label: n => `${n} battle${n === 1 ? '' : 's'} logged`, tiers: [1, 10, 50], payoff: {1: 'your record starts', 10: 'team pages show your real record', 50: 'the trouble leads are statistically real'}, count: () => BATTLES.length},
+  {k: 'parties', label: n => `${n} part${n === 1 ? 'y' : 'ies'} saved`, tiers: [1, 3], payoff: {1: 'Today checks your actual team', 3: 'Today rotates advice across your parties'}, count: () => Object.values(ROSTER.tagged).filter(v => v.length === 3).length},
   {k: 'imports', label: n => `${n} screenshots imported`, tiers: [5, 25, 100], payoff: {5: 'you have the hang of it', 25: 'a serious collection', 100: 'archivist'}, count: () => (typeof SCANLOG !== 'undefined' ? SCANLOG : []).filter(e => e.ok && e.kind !== 'cleanup').length},
 ];
 function msCheck() {                           // record newly reached tiers; toast the biggest one. The first run only records, so an old device never gets a burst.
@@ -1327,7 +1367,7 @@ function msCheck() {                           // record newly reached tiers; to
     }
   }
   const first = !MS.seeded; MS.seeded = true; saveMS();
-  if (best && !first && typeof toast === 'function') toast(`★ ${best.t.label(best.tier)} · ${best.t.payoff[best.tier]}`, 'toggleProfile()');
+  if (best && !first && typeof toast === 'function') toast(`★ ${best.t.label(best.tier)} · ${best.t.payoff[best.tier]}`, 'toggleProfile()', true);
   if ($('mstones')) paintMilestones();
 }
 function nextHint(k) {                          // "3 more scans and Today builds a team": the nearest unreached tier of one track
@@ -1347,8 +1387,9 @@ function paintMilestones() {
 }
 
 /* ---------- PokeScan Pro: the plan that unlocks every AI feature ---------- */
-const PRO_NOW = [['AI review of every team', 'Builder and saved parties get a verdict, strengths, weak spots and one swap, written from your roster and your battle log.']];
-const PRO_NEXT = [['Share anything', 'Share any Pokémon GO screenshot to PokeScan: a raid lobby shows your counters, a Rocket taunt says which Shadow you will meet, a storage grid fills the roster.'],
+const PRO_NOW = [['AI review of every team', 'Builder and saved parties get a verdict, strengths, weak spots and one swap, written from your roster and your battle log.'],
+                 ['Share anything: battle results and Rocket taunts', 'Import or share the end-of-battle screen and the battle is logged with both teams and their lead; share a Team GO Rocket taunt and you learn which Shadow you will meet and whether your roster wants it.']];
+const PRO_NEXT = [['Share anything: storage grid and raid lobby', 'The same share fills the roster from your storage screenshots and picks counters from your own Pokémon for a raid lobby.'],
                   ['Film study', 'Share a screen recording of a GO Battle League match and get a per-decision review: the switch, the shield, the energy you sat on.'],
                   ['Replay what-ifs', 'Your logged battles re-run with a different lead or swap, so you see what would have won.'],
                   ['Storage cleanup', 'From a storage screenshot: duplicates, dead ranks, and what to keep for Ultra League.'],
@@ -1934,7 +1975,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, hideStart, showStart, paintMilestones, msCheck, nextHint, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, hideStart, showStart, paintMilestones, msCheck, nextHint, idByName, partyFor, addBattle, rocketVerdict, proTeaser, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
