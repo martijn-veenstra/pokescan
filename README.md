@@ -8,7 +8,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   still need: power-ups, Fast / Charged TM, unlocking the second charged move, pending party members to
   catch or evolve. Everything else (bench power-ups, catches for a hypothetical team, what to park) sits
   behind "N more ideas", so dust goes to the team first. Then your saved parties as one line each, where
-  to get wanted Pokémon, and the coach.
+  to get wanted Pokémon.
 - **Saved teams** (menu): the recommended team, your in-game parties (add one by name and three species, or save
   one from the builder), a second team with no overlap, and more buildable trios, one line each with score
   and weak-spot counts. Every team opens its own page: roles with the moves used for scoring, members with
@@ -22,7 +22,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   scans at or under 1500 CP; add others by name or load the roster committed in the repo.
 - **Builder** tab: any three Pokémon, scored live with roles, coverage grid and what you would still need
   to catch; save as a party or add missing members to wanted; best-third suggestions from your roster or
-  the meta; an AI coach conversation with tappable Pokémon names.
+  the meta; the AI review of the complete team, with tappable Pokémon names.
 - **Leagues**: the ≡ menu switches the whole app between Great, Ultra and Little League and the GO Battle League
   cups PvPoke currently features (`data/cups.json`, rebuilt daily by `scripts/build_cups.py`): rankings, meta
   teams, the cap used for readiness and power-up targets, search strings and roster tiles all follow.
@@ -50,8 +50,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   server keeps the previous parse when the page is unreadable) plus the purification trade-off.
 - **Battle log** (menu): log GO Battle League battles in three taps (team, their lead, win or loss), type the rating
   after a set or import the end-of-set / rating screenshot (best effort OCR), and see your rating over time, results
-  per team, per opposing lead ("trouble") and per member. Team pages show the team's real record; the coach and the AI
-  review get the history next to the meta numbers. The log syncs with your account like scans.
+  per team, per opposing lead ("trouble") and per member. Team pages show the team's real record; the AI review gets
+  the history next to the meta numbers. The log syncs with your account like scans.
 - **Raids → Pick a boss**: the bosses in raids right now (Leek Duck) or any Pokémon by name; the page shows its
   weaknesses, ranks **your own scans** against it (real level, IVs and scanned moves; unscanned moves use the best
   possible set and say so) by DPS³ × TDO, and lists the best attackers in the game for its weak types.
@@ -77,8 +77,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   A status screen with the same IVs at a higher level, or of its evolution, moves the card to the new CP/HP/level and
   keeps a history line; an appraisal or attacks screen attaches to it. A screenshot whose IVs do not match, or of
   another species, becomes a separate card and the log says why.
-- **Coach in the builder**: the ✦ button and a conversation thread (follow-up questions carry the earlier advice);
-  Pokémon names in answers are tappable and fill an open builder slot, or open the Pokémon page.
+- **No chat**: the AI never asks or answers questions; it only writes the structured review above, automatically.
+  Pokémon names in a review are tappable and fill an open builder slot, or open the Pokémon page.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,
   appraisals, moves, profile, screens read) or why it failed, with decoder details for videos. Kept on the
   device, last 40 files.
@@ -100,9 +100,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   list sits on each Pokémon page and as a hint on catch suggestions. On the PokeScan server, `GET /api/sources`
   additionally reads the Leek Duck event pages of GO Fest, Raid Day and seasonal events (whose raid bosses and
   spawns ScrapedDuck does not publish) and merges those lists in; the GitHub Pages copy only has the JSON feed.
-- **Coach** (Today, server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, a card
-  sends a compact roster and meta summary to Claude and shows team suggestions, what to build next and
-  what to fear. Answers are cached until the roster changes; the server rate-limits questions.
+- **AI review** (server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, every complete
+  team gets one structured review from Claude, cached per trio and league; the server rate-limits reviews.
 
 Files: `index.html` (scanner and shell), `planner.js` (Today, coverage, roster and Pokémon pages), `sources.js` (raid/egg/research/event schedule), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
 (PWA), `data/app-great.json` (bundled PvPoke data), `vendor/tesseract/` (bundled text recognition, so scanning works offline and without a CDN). `.github/workflows/update-data.yml` regenerates all
@@ -261,5 +260,5 @@ Deploy: `Dockerfile` + `railway.json`. `.github/workflows/deploy-railway.yml` ru
 `railway up` on every push to main. It needs the repository secret `RAILWAY_TOKEN` (a Railway project
 token) and optionally the variable `RAILWAY_SERVICE` (default `pokescan`). On the Railway service set
 `DATABASE_URL` (reference to the Postgres service) and `PASSCODE`. Optionally set `ANTHROPIC_API_KEY`
-to enable the coach (`POST /api/coach`, passcode-protected, at most `COACH_PER_HOUR` questions per hour,
+to enable the AI review (`POST /api/coach` with `mode: 'review'`, auth-protected, at most `COACH_PER_HOUR` reviews per hour,
 default 30; `/api/health` reports `coach: true`).

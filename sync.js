@@ -178,14 +178,14 @@ function renderBox() {
     : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
 }
-async function coach(context, question, onProgress, mode) {   // server-side Claude call; needs sync connected and ANTHROPIC_API_KEY on the server
+async function coach(context, onProgress) {   // server-side Claude review of one team; needs sync connected and ANTHROPIC_API_KEY on the server
   if (!signedIn()) throw new Error(clerkMode() ? 'sign in first (cloud button)' : 'connect sync first (cloud button)');
   let r, j;
-  try { r = await fetch('/api/coach', {method: 'POST', headers: await hdr(), body: JSON.stringify({context, question, mode: mode || 'roster'})}); }
+  try { r = await fetch('/api/coach', {method: 'POST', headers: await hdr(), body: JSON.stringify({context, mode: 'review'})}); }
   catch (e) { throw new Error('could not reach the server (' + (e.message || e) + ')'); }
   j = await r.json().catch(() => ({}));
   if (r.status === 401) throw new Error(authErr());
-  if (r.status === 429) throw new Error('the coach is resting: ' + (j.message || 'too many questions this hour'));
+  if (r.status === 429) throw new Error('the reviewer is resting: ' + (j.message || 'too many reviews this hour'));
   if (!r.ok) throw new Error(j.message || j.error || ('server ' + r.status));
   if (j.text) return j.text;
   // the server hands back a job; poll it (a single long request would be cut off by the phone after about a minute)

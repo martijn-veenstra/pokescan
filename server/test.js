@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { buildServer } from './index.js';
 
-const fakeCoach = async ({ context, question, mode }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Run this:** Azumarill / Tinkaton / Quagsire\n\n- question was: ${question}\n- mode: ${mode}\n- context bytes: ${context.length}`, model: 'fake', usage: { in: 1, out: 1 } }; };
+const fakeCoach = async ({ context }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none`, model: 'fake', usage: { in: 1, out: 1 } }; };
 // fake Leek Duck: ScrapedDuck JSON plus one event page in Leek Duck's markup (GO Fest with rotating Mega raids)
 const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="raids">Raids</h2>
 <h3>Mega Raids · Saturday</h3><div class="pkmn-list-flex"><div class="pkmn-list-item"><div class="pkmn-list-img"><img src="x.png"></div><span class="pkmn-name">Mega Altaria</span><img class="shiny-icon" src="s.png"></div>
@@ -73,28 +73,24 @@ r = await app.inject({ method: 'GET', url: '/api/health' });
 assert.equal(r.json().coach, true, 'health reports the coach');
 r = await app.inject({ method: 'POST', url: '/api/coach', payload: { context: {} } });
 assert.equal(r.statusCode, 401, 'coach needs the passcode');
-r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { question: 'x' } });
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { mode: 'review' } });
 assert.equal(r.statusCode, 400, 'coach needs a context');
-r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { owned: ['Azumarill'] }, question: 'which lead?' } });
-assert.equal(r.statusCode, 202, 'coach answers with a job at once');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['a', 'b', 'c'] } }, mode: 'review' } });
+assert.equal(r.statusCode, 202, 'review answers with a job at once');
 const jobId = r.json().jobId; assert.ok(jobId);
 r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId, headers: H });
 assert.equal(r.json().status, 'running');
 await new Promise(res => setTimeout(res, 300));
 r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId, headers: H });
 assert.equal(r.json().status, 'done');
-assert.ok(r.json().text.includes('which lead?'), 'coach answer flows back through the job');
-assert.ok(r.json().text.includes('mode: roster'), 'default coach mode is roster');
-r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['Altaria'] } }, mode: 'builder' } });
-assert.equal(r.statusCode, 202, 'builder mode accepted');
-{ const id = r.json().jobId; let out; for (let i = 0; i < 20 && !out; i++) { await new Promise(res => setTimeout(res, 50)); const g = await app.inject({ method: 'GET', url: '/api/coach/' + id, headers: H }); if (g.json().status === 'done') out = g.json(); }
-  assert.ok(out && out.text.includes('mode: builder'), 'builder mode reaches the coach'); }
-r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {}, mode: 'evil' } });
-assert.equal(r.statusCode, 202, 'unknown modes fall back to roster');
-r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['a', 'b', 'c'] } }, mode: 'review' } });
-assert.equal(r.statusCode, 202, 'review mode accepted');
-{ let out; for (let i = 0; i < 40 && !(out && out.status === 'done'); i++) { await new Promise(x => setTimeout(x, 50)); out = (await app.inject({ method: 'GET', url: '/api/coach/' + r.json().jobId, headers: H })).json(); }
-  assert.ok(out && out.text.includes('mode: review'), 'review mode reaches the coach'); }
+assert.ok(r.json().text.includes('**Verdict**'), 'review flows back through the job');
+assert.ok(r.json().text.includes('context had builder'), 'the context reaches the model');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['a', 'b', 'c'] } } } });
+assert.equal(r.statusCode, 202, 'mode defaults to review');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {}, mode: 'builder' } });
+assert.equal(r.statusCode, 400, 'the conversational modes are gone');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {}, question: 'which lead?', mode: 'roster' } });
+assert.equal(r.statusCode, 400, 'no questions');
 r = await app.inject({ method: 'GET', url: '/api/coach/nope', headers: H });
 assert.equal(r.statusCode, 404);
 r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId });

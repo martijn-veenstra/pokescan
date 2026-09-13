@@ -408,7 +408,6 @@ function renderTodayInner(el) {
   h += parties.map(([name, v]) => teamRow(m, v, name)).join('');
   h += `<div class="team row" onclick="Planner.nav('#/teams')"><span class="tx"><span class="nm">${parties.length ? 'All teams' : 'No parties saved yet'}</span><div class="dt">${parties.length ? 'second team, more from your roster, add a party' : 'add the three Pokémon of a battle party, or save one from the builder'}</div></span><span class="go">›</span></div>`;
   h += wantedCard(m);
-  h += coachCard(m);
   h += `<div class="note">Heuristic, not a simulation: PvPoke's published matchups where available, type effectiveness and ranking score otherwise. Roles are a guess: the member with the fewest hard losses is the swap, the strongest remaining one closes.</div>`;
   el.innerHTML = h;
 }
@@ -661,9 +660,7 @@ function wantedCard(m) {
 }
 if (window.Sources) Sources.onChange(() => { renderToday(); if (UI.mon) renderMon(); });
 
-/* ---------- AI coach (server-side Claude API, only when the server has a key and sync is connected) ---------- */
-const COACH = Object.assign({q: '', text: '', hash: '', t: 0, busy: false, error: '', secs: 0, showCtx: false}, JSON.parse(localStorage.getItem('coach') || '{}'));
-const saveCoach = () => localStorage.setItem('coach', JSON.stringify({q: COACH.q, text: COACH.text, hash: COACH.hash, t: COACH.t}));
+/* ---------- AI review context (server-side Claude API, only when the server has a key and sync is connected) ---------- */
 function coachContext(m) {
   const {L, rep, own, ri} = m;
   const mon = id => { const e = APP.pokemon[id]; const mv = L.movesOf(id); return `${e.name} (#${e.rank}, ${mv.map(mvName).join('/')})`; };
@@ -680,20 +677,6 @@ function coachContext(m) {
     battles: battleSummaryText(null) || undefined,
     scoring: 'Team score = mean best matchup rating vs the meta (PvPoke published matchups, type effectiveness otherwise) minus 12 per unanswered meta Pokémon and 6 per meta Pokémon that beats two members. Meta best is about ' + Math.round((APP.benchmark || {best: 721}).best) + '.',
   };
-}
-function coachHash(o) { const s = JSON.stringify(o); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h); }
-function coachCard(m) {
-  if (!window.Sync || !Sync.available() || !Sync.signedIn()) return '';
-  if (!Sync.coachAvailable()) return `<div class="sec">Coach <small>off on your server</small></div><div class="team coach"><div class="dt">The server reports no coach (<code>coach:false</code> in /api/health). Set <code>ANTHROPIC_API_KEY</code> on the Railway service and deploy the staged variable change; then tap re-check.</div><div class="acts small"><button onclick="Sync.detect().then(()=>Planner.renderToday())">Re-check</button></div></div>`;
-  const fresh = COACH.text && COACH.hash === coachHash(coachContext(m));
-  return `<div class="sec">Coach <small>Claude reads your roster and the meta</small></div>
-    <div class="team coach"><div class="nm">Ask the coach</div><div class="dt">Team ideas from what you own, what to build next and what to fear. Uses the numbers above, nothing from your phone leaves except this roster summary.</div>
-    <div class="add" style="margin-top:8px"><input id="coachq" placeholder="optional question, e.g. which lead for Azumarill teams?" value="${esc(COACH.q)}" style="flex:1;min-width:160px"><button onclick="Planner.askCoach()" ${COACH.busy ? 'disabled' : ''}>${COACH.busy ? `Thinking… ${COACH.secs ? COACH.secs + 's' : ''}` : fresh ? 'Ask again' : 'Ask the coach'}</button></div>
-    ${COACH.busy ? '<div class="note">Claude is reading your roster; this takes 20 to 90 seconds. You can switch tabs, the answer is kept.</div>' : ''}
-    ${COACH.error ? `<div class="note" style="color:#F59A8B">⚠ ${esc(COACH.error)}</div>` : ''}
-    <div class="note" style="cursor:pointer" onclick="Planner.toggleCoachCtx()">${COACH.showCtx ? '▾ hide' : '▸ show'} what is sent to Claude</div>
-    ${COACH.showCtx ? `<div class="note">The server adds a fixed instruction: Great League coach for a casual player, answer under 350 words with 2–3 teams from what you own (lead / swap / closer), what to build next, what to watch out for, only Pokémon from this summary. Then your question and this summary:</div><pre class="ctx">${esc(JSON.stringify(coachContext(m), null, 1))}</pre>` : ''}
-    ${COACH.text ? `<div class="ans">${linkNames(mdLite(COACH.text))}</div><div class="note" style="margin-top:6px">${when(COACH.t)}${fresh ? '' : ' · your roster changed since this answer'}</div>` : ''}</div>`;
 }
 let NAMERX = null;
 function linkNames(html) {                     // wrap Pokémon names in coach answers: tap adds to the builder (when it has an open slot) or opens the page
@@ -715,13 +698,10 @@ function mdLite(t) {                          // minimal markdown: paragraphs, b
     return `<p>${lines.join('<br>')}</p>`;
   }).join('').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^<p>(#+\s*)(.+?)<\/p>/gm, '<p><b>$2</b></p>');
 }
-function toggleCoachCtx() { COACH.showCtx = !COACH.showCtx; renderToday(); }
-
-/* builder coach: the same server call with the slots, their weak spots and the app's candidates attached */
-const BCOACH = Object.assign({thread: [], reviews: {}, busy: false, error: '', secs: 0}, JSON.parse(localStorage.getItem('bcoach') || '{}'));
+/* AI review: the same roster summary with the slots, their weak spots and the app's candidates attached (non-conversational) */
+const BCOACH = Object.assign({reviews: {}}, JSON.parse(localStorage.getItem('bcoach') || '{}'));
 BCOACH.reviews = BCOACH.reviews || {}; BCOACH.reviewBusy = {}; BCOACH.reviewFailed = {};
-if (!Array.isArray(BCOACH.thread)) BCOACH.thread = [];
-const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, b) => b[1].t - a[1].t).slice(0, 30); localStorage.setItem('bcoach', JSON.stringify({thread: BCOACH.thread.slice(-8), reviews: Object.fromEntries(keep)})); };
+const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, b) => b[1].t - a[1].t).slice(0, 30); localStorage.setItem('bcoach', JSON.stringify({reviews: Object.fromEntries(keep)})); };
 
 /* ---------- always-on AI review: every complete team gets one structured review, cached per trio and league ---------- */
 const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
@@ -742,7 +722,7 @@ async function autoReview(ids) {
   const paint = () => { const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); if (v === 'teams') renderTeams(); };
   try {
     const m = M(), L = builderLeague(m), ctx = builderContext(m, L, ids);
-    const text = await Sync.coach(ctx, '', null, 'review');
+    const text = await Sync.coach(ctx);
     BCOACH.reviews[key] = {t: Date.now(), text, slots: ids.slice()}; saveBCoach();
   } catch (e) { BCOACH.reviewFailed[key] = (e && e.message) || 'no answer'; }
   delete BCOACH.reviewBusy[key]; paint();
@@ -760,7 +740,6 @@ function reviewCard(ids, auto) {                // the card; auto = ask Claude b
   const body = order.filter(k => sec[k]).map(k => k === 'Verdict' ? `<div class="verdict">${linkNames(mdLite(sec[k]))}</div>` : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('');
   return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
 }
-function clearBuilderCoach() { BCOACH.thread = []; BCOACH.error = ''; saveBCoach(); renderMeta(); }
 function builderContext(m, L, filled) {
   const ctx = coachContext(m), ev = L.evaluate(filled);
   const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;
@@ -779,40 +758,6 @@ function builderContext(m, L, filled) {
   delete ctx.nextMoves;
   return ctx;
 }
-function builderCoachCard(m, L, filled) {
-  if (!window.Sync || !Sync.available() || !Sync.signedIn() || !Sync.coachAvailable()) return '';
-  const key = filled.slice().sort().join('+');
-  const bubbles = BCOACH.thread.map(x => `<div class="msg me"><div class="b">${esc(x.q || (x.slots && x.slots.length === 3 ? 'Judge this team' : 'Complete this team'))}</div><div class="dt">${esc((x.slots || []).map(nm).join(' / '))}${x.key !== key ? ' · earlier slots' : ''}</div></div>
-    <div class="msg ai"><div class="b ans">${linkNames(mdLite(x.a))}</div><div class="dt">${when(x.t)}</div></div>`).join('');
-  return `<div class="sec" id="bcoach" style="display:flex;justify-content:space-between;align-items:center"><span>AI suggestion <small>${filled.length === 3 ? 'judging this team' : 'completing the team'}</small></span>${BCOACH.thread.length ? `<a href="#" class="dim" style="font-size:12px" onclick="Planner.clearBuilderCoach();return false">clear</a>` : ''}</div>
-    <div class="team coach chat">${bubbles || '<div class="dt">The ✦ button sends Claude the slots, their weak spots, the candidates above and your roster summary. Tap a Pokémon name in the answer to add it to the builder.</div>'}
-    ${BCOACH.busy ? '<div class="msg ai"><div class="b dim">Thinking… 20 to 90 seconds. You can switch tabs, the answer is kept.</div></div>' : ''}
-    ${BCOACH.error ? `<div class="note" style="color:#F59A8B">⚠ ${esc(BCOACH.error)}</div>` : ''}
-    <div class="add" style="margin-top:8px"><input id="bcoachq" placeholder="${BCOACH.thread.length ? 'follow-up question…' : 'a question, e.g. a lead that beats Azumarill?'}" style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')Planner.askBuilderCoach()"><button onclick="Planner.askBuilderCoach()" ${BCOACH.busy ? 'disabled' : ''}>Send</button></div></div>`;
-}
-async function askBuilderCoach() {
-  const m = M(), L = builderLeague(m), filled = UI.build.slots.filter(Boolean); if (!filled.length) return;
-  const ctx = builderContext(m, L, filled), q = ($('bcoachq') || {value: ''}).value.trim();
-  const last = BCOACH.thread[BCOACH.thread.length - 1];
-  const question = q && last ? `Earlier you advised (for the slots ${(last.slots || []).map(nm).join(' / ')}):\n${last.a.slice(0, 1500)}\n\nFollow-up question: ${q}` : q;
-  BCOACH.busy = true; BCOACH.error = ''; BCOACH.secs = 0; renderMeta();
-  try {
-    const text = await Sync.coach(ctx, question, secs => { BCOACH.secs = secs; const b = document.querySelector('#meta .btn.ai'); if (b) b.textContent = `✦ Thinking… ${secs}s`; }, 'builder');
-    BCOACH.thread.push({q, a: text, t: Date.now(), slots: filled.slice(), key: filled.slice().sort().join('+')}); BCOACH.thread = BCOACH.thread.slice(-8); saveBCoach();
-  } catch (e) { BCOACH.error = e.message || String(e); }
-  BCOACH.busy = false; renderMeta();
-  const el = $('bcoach'); if (el && $('view-meta').classList.contains('on')) el.scrollIntoView({behavior: 'smooth', block: 'start'});
-}
-async function askCoach() {
-  const m = M(), ctx = coachContext(m), q = ($('coachq') || {value: ''}).value.trim();
-  COACH.q = q; COACH.busy = true; COACH.error = ''; COACH.secs = 0; renderToday();
-  try {
-    const text = await Sync.coach(ctx, q, secs => { COACH.secs = secs; const b = document.querySelector('#today .coach button'); if (b) b.textContent = `Thinking… ${secs}s`; });
-    COACH.text = text; COACH.hash = coachHash(ctx); COACH.t = Date.now(); saveCoach();
-  } catch (e) { COACH.error = e.message || String(e); }
-  COACH.busy = false; renderToday();
-}
-
 /* ---------- coverage overlay (B) ---------- */
 function coverage(team) { const m = M(); coverageFor(m.L, team, m); }
 function coverageFor(L, team, m) {
@@ -1610,11 +1555,6 @@ function renderBuilder(m, L) {
   h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">Slot ${i + 1}</span><span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
     : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">Slot ${i + 1}</span><span class="rn dim">+</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
-  if (filled.length) {                         // one tap: the coach completes or judges what is in the slots
-    const can = window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable();
-    h += can ? `<button class="btn ai" onclick="Planner.askBuilderCoach()" ${BCOACH.busy ? 'disabled' : ''}>${BCOACH.busy ? `✦ Thinking… ${BCOACH.secs ? BCOACH.secs + 's' : ''}` : `✦ Generate AI suggestion <span class="sub">${filled.length === 3 ? 'judge this team' : `complete it from ${3 - filled.length === 1 ? 'the open slot' : 'the open slots'}`}</span>`}</button>`
-             : `<button class="btn sec" disabled style="margin:10px 0 0">✦ Generate AI suggestion <span class="sub">${window.Sync && Sync.available() && Sync.signedIn() ? 'the server has no coach key' : 'connect sync (cloud button) to use the coach'}</span></button>`;
-  }
   // per-slot move choice
   if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`)}</div>`).join('');
   if (filled.length === 3) {
@@ -1631,7 +1571,6 @@ function renderBuilder(m, L) {
       ${L.mx ? `<div class="dim" style="font-size:12px;margin-top:6px">${(() => { const tl = L.threatList(filled, 6); return `<b style="color:var(--ink)">${tl.count} of ${tl.pool}</b> simulated opponents beat all three${tl.count ? ': ' + esc(tl.threats.map(t => nm(t.id)).join(', ')) + (tl.count > 6 ? '…' : '') : ''}`; })()}</div>` : ''}
       <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
     h += reviewCard(filled, true);
-    h += builderCoachCard(m, L, filled);
   } else {
     const ev = filled.length ? L.evaluate(filled) : null;
     const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;
@@ -1652,7 +1591,6 @@ function renderBuilder(m, L) {
       if (!sug.length) h += `<div class="note">${UI.buildPool === 'meta' ? 'No meta Pokémon left to add.' : 'Nothing in your roster fits; switch to Meta to see what to catch.'}</div>`;
       else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `answers <span class="good">${fewText(x.fixes.map(nm))}</span>` : 'answers nothing new'}${x.left ? ` · ${x.left} still unanswered` : ' · covers the whole meta'}</div></span><span class="go">+</span></div>`).join('');
       h += `<div class="note">Score = the team so far plus this Pokémon, on the same scale as Today. "Answers" lists the meta Pokémon that would no longer go unanswered.</div>`;
-      h += builderCoachCard(m, L, filled);
     }
   }
   return h;
@@ -1886,6 +1824,6 @@ function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option v
 window.Planner = {nav, route, back, drawer, showMore, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
-                  askCoach, askBuilderCoach, clearBuilderCoach, pickName, toggleCoachCtx, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+                  pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 route(); loadCups(); loadChanges(); loadEvo();
 })();
