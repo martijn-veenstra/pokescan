@@ -1365,7 +1365,8 @@ function renderPro() {
   let h = `<div class="pro-hero"><div class="eyebrow">PokeScan Pro</div><h2>Your Pokémon, judged like a coach would.</h2>
     <p>The free app already scans, ranks and builds. Pro adds the model: it reads your roster and your results and tells you what to change. No chat, nothing to type, it shows up on the pages you already use.</p></div>`;
   if (pro) {
-    h += `<div class="team card pro-on" style="cursor:default"><div class="nm">✦ You are on Pro <span class="dim" style="font-weight:400;font-size:12px">${me && me.planSource === 'comped' ? 'complimentary' : me && me.planSource === 'owner' ? 'this is your own server' : 'thank you'}</span></div><div class="dt">Every AI feature is unlocked on this account. New Pro features land here first.</div></div>`;
+    h += `<div class="team card pro-on" style="cursor:default"><div class="nm">✦ You are on Pro <span class="dim" style="font-weight:400;font-size:12px">${me && me.planSource === 'comped' ? 'complimentary' : me && me.planSource === 'owner' ? 'this is your own server' : 'thank you'}</span></div><div class="dt">Every AI feature is unlocked on this account. New Pro features land here first.</div>
+      ${me && me.planSource === 'stripe' && me.pro && me.pro.manageUrl ? `<div class="dt" style="margin-top:6px"><a href="${esc(me.pro.manageUrl)}" target="_blank" rel="noopener">Manage or cancel your subscription</a></div>` : ''}</div>`;
   } else if (thanks) {
     h += `<div class="team card pro-on" style="cursor:default"><div class="nm">Thank you</div><div class="dt">Activating Pro on your account, this takes a few seconds…</div></div>`;
     if (!PRO_POLL) { let n = 0; PRO_POLL = setInterval(async () => { n++; const m = window.Sync ? await Sync.refreshMe() : null; if ((m && m.plan === 'pro') || n > 40) { clearInterval(PRO_POLL); PRO_POLL = null; if (m && m.plan === 'pro') nav('#/pro'); } }, 3000); }

@@ -86,8 +86,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   decides the plan per account: the passcode-mode owner and the ids in `PRO_USER_IDS` are Pro, otherwise a plan row
   in the database (`plans` table, written by the payment integration) with an optional expiry; `/api/me` returns
   `plan`, `features` and the checkout link (`PRO_CHECKOUT_URL` with the user id appended as `client_reference_id`,
-  price text from `PRO_PRICE`). Free accounts see a locked AI-review card that opens the Pro page; `/api/coach`
-  answers 403 `upgrade_required` for them.
+  price text from `PRO_PRICE`, an optional `PRO_MANAGE_URL` for the customer portal). Free accounts see a locked
+  AI-review card that opens the Pro page; `/api/coach` answers 403 `upgrade_required` for them.
+  Payments run through a Stripe Payment Link: set `PRO_CHECKOUT_URL` to the link (its after-payment redirect is
+  `https://<host>/#/pro/thanks`), add a webhook endpoint `https://<host>/api/stripe/webhook` for
+  `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`, and put its
+  signing secret in `STRIPE_WEBHOOK_SECRET`. The server verifies the signature itself (no Stripe SDK), writes the
+  plan row on a paid checkout and clears it when the subscription ends.
 - **No chat**: the AI never asks or answers questions; it only writes the structured review above, automatically.
   Pokémon names in a review are tappable and fill an open builder slot, or open the Pokémon page.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,

@@ -148,7 +148,7 @@ console.log(`all API tests passed (storage: ${app.db.kind})`);
 
 // ---- accounts mode: a fake token verifier stands in for Clerk ----
 const users = { 'tok-alice': { sub: 'user_alice' }, 'tok-bob': { sub: 'user_bob' } };
-const app2 = await buildServer({ passcode: '', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '', proUserIds: ['user_alice'], proCheckoutUrl: 'https://pay.example/pro' });
+const app2 = await buildServer({ passcode: '', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '', proUserIds: ['user_alice'], proCheckoutUrl: 'https://pay.example/pro', stripeWebhookSecret: 'whsec_test' });
 const A = { authorization: 'Bearer tok-alice', 'content-type': 'application/json' }, B = { authorization: 'Bearer tok-bob', 'content-type': 'application/json' };
 r = await app2.inject({ method: 'GET', url: '/api/health' });
 assert.equal(r.json().auth, 'clerk'); assert.equal(r.json().sync, true); assert.equal(r.json().clerkPublishableKey, 'pk_test_x');
@@ -169,6 +169,27 @@ r = await app2.inject({ method: 'GET', url: '/api/me', headers: B });
 assert.equal(r.json().plan, 'free', 'an expired plan row is free again');
 assert.equal(await app2.db.findPlanByRef('sub_1'), 'user_bob');
 await app2.db.setPlan('user_bob', { plan: 'pro', source: 'paid', ref: 'sub_1', until: null });
+// the payment webhook: signed events flip the plan, unsigned ones are refused
+{
+  const { createHmac: hmac } = await import('node:crypto');
+  const sign = (body, secret = 'whsec_test', t = Math.floor(Date.now() / 1000)) => `t=${t},v1=${hmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
+  const post = (payload, sig) => app2.inject({ method: 'POST', url: '/api/stripe/webhook', headers: { 'content-type': 'application/json', ...(sig ? { 'stripe-signature': sig } : {}) }, payload });
+  const paid = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: 'cs_1', client_reference_id: 'user_dave', customer: 'cus_1', subscription: 'sub_dave', payment_status: 'paid', status: 'complete' } } });
+  r = await post(paid, null); assert.equal(r.statusCode, 400, 'no signature');
+  r = await post(paid, sign(paid, 'whsec_wrong')); assert.equal(r.statusCode, 400, 'wrong secret');
+  r = await post(paid, sign(paid, 'whsec_test', Math.floor(Date.now() / 1000) - 3600)); assert.equal(r.statusCode, 400, 'stale timestamp');
+  r = await post(paid, sign(paid)); assert.equal(r.statusCode, 200);
+  assert.deepEqual(await app2.db.getPlan('user_dave'), { plan: 'pro', source: 'stripe', ref: 'sub_dave', until: null }, 'a paid checkout makes dave pro');
+  const cancelled = JSON.stringify({ type: 'customer.subscription.deleted', data: { object: { id: 'sub_dave', status: 'canceled' } } });
+  r = await post(cancelled, sign(cancelled)); assert.equal(r.statusCode, 200);
+  assert.equal((await app2.db.getPlan('user_dave')).plan, 'free', 'a cancelled subscription drops to free');
+  const renewed = JSON.stringify({ type: 'customer.subscription.updated', data: { object: { id: 'sub_dave', status: 'active', current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400 } } });
+  r = await post(renewed, sign(renewed)); assert.equal(r.statusCode, 200);
+  const p = await app2.db.getPlan('user_dave'); assert.equal(p.plan, 'pro', 'an active subscription is pro again'); assert.ok(p.until && new Date(p.until) > new Date(), 'with an expiry after the paid period');
+  const unknown = JSON.stringify({ type: 'customer.subscription.deleted', data: { object: { id: 'sub_nobody', status: 'canceled' } } });
+  r = await post(unknown, sign(unknown)); assert.equal(r.statusCode, 200, 'unknown subscriptions are ignored');
+  await app2.db.setPlan('user_dave', { plan: 'free' });
+}
 r = await app2.inject({ method: 'PUT', url: '/api/state/scans', headers: A, payload: { data: [{ key: 'a' }] } });
 assert.equal(r.statusCode, 200);
 r = await app2.inject({ method: 'GET', url: '/api/state', headers: B });

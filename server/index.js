@@ -4,7 +4,7 @@ import fastifyStatic from '@fastify/static';
 import { verifyToken as clerkVerifyToken } from '@clerk/backend';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { timingSafeEqual, createHash, randomUUID } from 'node:crypto';
+import { timingSafeEqual, createHash, createHmac, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { openDb } from './db.js';
 import { makeCoach } from './coach.js';
@@ -25,10 +25,12 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
                                     clerkSecretKey = process.env.CLERK_SECRET_KEY || '', clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || '', appOrigin = process.env.APP_ORIGIN || '',
                                     verifyToken = null, ownerMigrateFrom = process.env.OWNER_USER_ID || '',
                                     proUserIds = (process.env.PRO_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
-                                    proCheckoutUrl = process.env.PRO_CHECKOUT_URL || '', proPrice = process.env.PRO_PRICE || '€4.99 / month', now = () => Date.now() } = {}) {
+                                    proCheckoutUrl = process.env.PRO_CHECKOUT_URL || '', proPrice = process.env.PRO_PRICE || '€4.99 / month', proManageUrl = process.env.PRO_MANAGE_URL || '',
+                                    stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '', now = () => Date.now() } = {}) {
   const app = Fastify({ logger, bodyLimit: MAX_BYTES });
   // accept an empty JSON body (POST /api/auth sends none)
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    req.rawBody = body;                              // the payment webhook is signed over the raw bytes
     if (!body) return done(null, {});
     try { done(null, JSON.parse(body)); } catch (e) { e.statusCode = 400; done(e); }
   });
@@ -132,7 +134,33 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     const { plan, source } = await planOf(req.userId);
     // the checkout page gets the user id as a reference so the payment can be tied back to the account
     const checkoutUrl = proCheckoutUrl && authMode === 'clerk' ? `${proCheckoutUrl}${proCheckoutUrl.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(req.userId)}` : null;
-    return { userId: req.userId, auth: authMode, plan, planSource: source, features: await features(req.userId), pro: { price: proPrice, checkoutUrl, coach: !!coach } };
+    return { userId: req.userId, auth: authMode, plan, planSource: source, features: await features(req.userId), pro: { price: proPrice, checkoutUrl, manageUrl: proManageUrl || null, coach: !!coach } };
+  });
+  /* Stripe webhook. The Payment Link carries client_reference_id = the account's user id; a completed checkout writes the plan row,
+     a cancelled or lapsed subscription clears it. Signature per Stripe's scheme: header "t=…,v1=…", HMAC-SHA256 over "t.rawBody". */
+  const stripeSignatureOk = (raw, header) => {
+    if (!stripeWebhookSecret || !header) return false;
+    const parts = Object.fromEntries(String(header).split(',').map(kv => kv.split('=')));
+    if (!parts.t || !parts.v1 || Math.abs(now() / 1000 - Number(parts.t)) > 300) return false;
+    const expect = Buffer.from(createHmac('sha256', stripeWebhookSecret).update(`${parts.t}.${raw}`).digest('hex')), given = Buffer.from(String(parts.v1));
+    return expect.length === given.length && timingSafeEqual(expect, given);
+  };
+  app.post('/api/stripe/webhook', async (req, reply) => {
+    if (!stripeSignatureOk(req.rawBody || '', req.headers['stripe-signature'])) return reply.code(400).send({ error: 'bad_signature' });
+    const ev = req.body || {}, o = (ev.data && ev.data.object) || {};
+    if (ev.type === 'checkout.session.completed' && o.client_reference_id && (o.payment_status === 'paid' || o.status === 'complete')) {
+      await db.setPlan(o.client_reference_id, { plan: 'pro', source: 'stripe', ref: o.subscription || o.customer || o.id, until: null });
+      req.log.info(`pro: ${o.client_reference_id} paid via ${o.subscription || o.customer || o.id}`);
+    } else if (ev.type === 'customer.subscription.updated' || ev.type === 'customer.subscription.deleted') {
+      const user = await db.findPlanByRef(o.id);
+      if (user) {
+        const active = ev.type === 'customer.subscription.updated' && ['active', 'trialing', 'past_due'].includes(o.status);
+        // an active subscription stays Pro until the end of the period it has paid for; anything else drops to free
+        await db.setPlan(user, { plan: active ? 'pro' : 'free', source: 'stripe', ref: o.id, until: active && o.current_period_end ? new Date(o.current_period_end * 1000 + 3 * 86400e3).toISOString() : null });
+        req.log.info(`pro: ${user} subscription ${o.status || 'deleted'} → ${active ? 'pro' : 'free'}`);
+      }
+    }
+    return { received: true };
   });
   app.get('/api/state', { preHandler: auth }, async req => ({ user: req.userId, state: await db.all(req.userId) }));
   app.get('/api/state/:kind', { preHandler: auth }, async (req, reply) => {
