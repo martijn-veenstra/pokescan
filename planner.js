@@ -642,7 +642,8 @@ function saveBuildNamed() {                    // the builder's inline name fiel
   const name = ((($('buildname') || {}).value) || UI.buildName || '').trim();
   if (!name) { const el = $('buildname'); if (el) { el.focus(); el.placeholder = 'give it a name first'; } return; }
   if (ROSTER.tagged[name] && teamKey(ROSTER.tagged[name]) !== teamKey(ids) && !confirm(`Replace the party "${name}"?`)) return;
-  ROSTER.tagged[name] = ids.slice(); UI.buildName = ''; saveRoster(); refresh();
+  ROSTER.tagged[name] = ids.slice(); UI.buildName = ''; saveRoster();
+  UI.build = {slots: [null, null, null], moves: {}}; saveBuild(); refresh();   // the builder is empty again, ready for the next team
   if (typeof toast === 'function') toast(`★ ${name} saved · Today and the battle log know it now`, `Planner.openTeam(${JSON.stringify(ids)},${JSON.stringify(name)})`);
 }
 function renameTeam(old) { const name = prompt('New name', old); if (!name || name === old || !ROSTER.tagged[old]) return; ROSTER.tagged[name] = ROSTER.tagged[old]; delete ROSTER.tagged[old]; if (UI.team) UI.team.name = name; saveRoster(); refresh(); }
@@ -1714,8 +1715,9 @@ function renderMetaInner(el, key) {
 function renderBuilder(m, L) {
   const slots = UI.build.slots, filled = slots.filter(Boolean);
   let h = `<div class="note">Pick any three Pokémon: from the rankings, a meta team, or your roster. Scored with the same heuristic as Today.</div>`;
-  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">Slot ${i + 1}</span><span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
-    : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">Slot ${i + 1}</span><span class="rn dim">+</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
+  const SLOT_NAMES = ['Lead', 'Swap', 'Closer'];   // slot order is the in-game order: lead, safe swap, closer
+  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">${SLOT_NAMES[i]}</span><span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
+    : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">${SLOT_NAMES[i]}</span><span class="rn dim">+</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
   // per-slot move choice
   if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`)}</div>`).join('');

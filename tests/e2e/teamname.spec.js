@@ -6,6 +6,7 @@ test('the builder names and saves a complete team as an in-game party', async ({
   const errors = await openApp(page, '#/builder');
   await page.evaluate(() => Planner.tryTeam(['cramorant', 'quagsire', 'tinkaton']));
   const b = page.locator('#builder');
+  await expect(b.locator('.role.slot .rl').nth(1)).toHaveText('Swap');
   await expect(b.locator('#buildname')).toBeVisible();
   // empty name: nothing saved, the field asks for one
   await b.locator('button:has-text("Save team")').click();
@@ -15,9 +16,13 @@ test('the builder names and saves a complete team as an in-game party', async ({
   await b.locator('#buildname').fill('Rain');
   await b.locator('#buildname').press('Enter');
   expect(await page.evaluate(() => Planner.ROSTER.tagged.Rain)).toEqual(['cramorant', 'quagsire', 'tinkaton']);
-  await expect(b).toContainText('Saved as Rain');
   await expect(page.locator('#toast')).toContainText('Rain saved');
-  await b.locator('.team.row:has-text("Saved as Rain")').click();
+  // the builder is cleared for the next team; the toast opens the saved team
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('build')).slots)).toEqual([null, null, null]);
+  await expect(b.locator('.role.slot.empty')).toHaveCount(3);
+  await expect(b.locator('.role.slot.empty .rl').nth(0)).toHaveText('Lead');
+  await expect(b.locator('.role.slot.empty .rl').nth(2)).toHaveText('Closer');
+  await page.locator('#toast').click();
   await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/team\//);
   await expect(page.locator('#team')).toContainText('Rain');
   await page.evaluate(() => Planner.nav('#/teams'));

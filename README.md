@@ -77,8 +77,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   A status screen with the same IVs at a higher level, or of its evolution, moves the card to the new CP/HP/level and
   keeps a history line; an appraisal or attacks screen attaches to it. A screenshot whose IVs do not match, or of
   another species, becomes a separate card and the log says why.
-- **Name a team in the builder**: with three slots filled a name field and Save team sit under the moves; the party
-  then shows up under Saved teams, on Today and in the battle log, and the row turns into a link to its team page.
+- **Name a team in the builder**: the slots are Lead, Swap and Closer; with all three filled a name field and Save team sit under the moves; the party
+  then shows up under Saved teams, on Today and in the battle log, and the builder is cleared for the next team (the toast opens the saved one).
 - **Getting started and milestones**: a checklist on Today ticks itself off as you import a status screen, an
   appraisal, the attacks, reach three Pokémon under the cap, set your level, save a party, log a battle and sign
   in; each step opens the place to do it. Milestones (scans, exact IVs, attack sets, battles, parties, imports)
