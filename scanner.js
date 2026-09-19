@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.67';
+const APP_VERSION='9.68';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -705,7 +705,7 @@ function renderLog(){
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
-function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='block'; if(st) st.textContent='⚠ '+msg; console.error(msg); }
+function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='block'; if(st) status('⚠ '+msg); console.error(msg); }
 window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
 window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
 const results=JSON.parse(localStorage.getItem('scans')||'[]').filter(r=>r&&typeof r.species==='string'); results.forEach(r=>{ if(!Array.isArray(r.combos)) r.combos=[]; });
@@ -724,7 +724,7 @@ async function importFiles(files){                 // the import pipeline: also 
   if(!files||!files.length) return;
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
-  $('prog').style.display='block'; progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
+  progBox(true); progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
   let ok=0, batchKey=null; const before=results.length;
   UPDATE=window.Planner&&Planner.updateKey?Planner.updateKey():null; if(UPDATE) batchKey=UPDATE;
   if(window.Planner) Planner.beforeImport();
@@ -746,7 +746,7 @@ async function importFiles(files){                 // the import pipeline: also 
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
   { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
-  setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) $('prog').style.display='none'; },2500);
+  setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) progBox(false); else { IMPORTING=false; syncFloat(); } },2500);
 }
 $('trainer').value=localStorage.getItem('trainer')||'40';
 $('bb').checked=localStorage.getItem('bb')==='1';
@@ -766,7 +766,17 @@ $('pfile').addEventListener('change', async e=>{
 });
 function del(i){ results.splice(i,1); save(); render(); }
 
-function status(s){ $('stat').textContent=s; }
+let IMPORTING=false;
+function status(s){ $('stat').textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
+function progBox(on){                            // the progress bar and status line: in the Scans page, and floating above the bottom bar on any other page
+  IMPORTING=on; $('prog').style.display=on?'block':'none'; syncFloat();
+}
+function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
+  const f=$('impfloat'); if(!f) return;
+  const scans=$('view-scans'), onScans=scans&&getComputedStyle(scans).display!=='none';
+  f.hidden=!(IMPORTING&&!onScans);
+}
+window.addEventListener('hashchange', ()=>setTimeout(syncFloat,0));   // after the router has switched the view
 let TOAST_T=null;
 function toast(text, onclick, soft){                // one short line above the bottom bar, on any page; tap runs onclick. soft: wait for a visible toast to finish
   const t=$('toast'); if(!t) return;
@@ -774,7 +784,7 @@ function toast(text, onclick, soft){                // one short line above the 
   t.textContent=text; t.onclick=()=>{ t.classList.remove('on'); if(onclick) try{ (0,eval)(onclick); }catch{} };
   t.classList.add('on'); clearTimeout(TOAST_T); TOAST_T=setTimeout(()=>t.classList.remove('on'),3800);
 }
-function progress(p){ $('fill').style.width=(p*100).toFixed(1)+'%'; }
+function progress(p){ const w=(p*100).toFixed(1)+'%'; $('fill').style.width=w; const f=$('ffill'); if(f) f.style.width=w; }
 
 async function scanImage(file,trainer,batchKey){
   status('Scanning '+file.name);

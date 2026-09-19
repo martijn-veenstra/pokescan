@@ -370,3 +370,7 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .notown b{display:block;color:#F59A8B;font-size:13px;margin-bottom:2px}.notown .dt{display:block;font-size:12px;color:var(--dim);line-height:1.4}
 .notown .btn{margin:0;align-self:flex-start;color:var(--ink)}
 .rq{display:contents}.rq[hidden]{display:none}
+/* import loader on any page but Scans (an update or add-a-scan started from a Pokémon page) */
+#impfloat{position:fixed;left:14px;right:14px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:29;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#impfloat .bar{background:#0E1626}#fstat{font-size:12.5px;color:var(--dim);margin-top:6px}
+#impfloat:not([hidden])+#toast{bottom:calc(140px + env(safe-area-inset-bottom))}   /* a toast during an import sits above the loader */

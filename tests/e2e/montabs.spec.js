@@ -51,6 +51,16 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   await mon.locator('button:has-text("Update with a new scan")').click();
   expect(await page.evaluate(() => Planner.updateKey())).toMatch(/^AZUMARILL\|/);
   expect(await page.evaluate(() => location.hash)).toBe('#/mon/azumarill');
+  // while that import runs the Pokémon page shows the same loader as Scans, floating above the bottom bar
+  await page.evaluate(() => { progBox(true); progress(0.4); status('Scanning IMG_1.png'); });
+  await expect(page.locator('#impfloat')).toBeVisible();
+  await expect(page.locator('#fstat')).toHaveText('Scanning IMG_1.png');
+  expect(await page.evaluate(() => document.getElementById('ffill').style.width)).toBe('40%');
+  await page.evaluate(() => Planner.nav('#/scans'));
+  await expect(page.locator('#impfloat')).toBeHidden();        // on Scans the page's own bar shows, not the floating one
+  await expect(page.locator('#prog')).toBeVisible();
+  await page.evaluate(() => { progBox(false); Planner.openMon('azumarill'); });
+  await expect(page.locator('#impfloat')).toBeHidden();
   // the raids page lists your copy and opens the species page, not the scan page
   await page.evaluate(() => { Planner.pickBoss('tinkaton'); Planner.nav('#/raids'); });
   await expect(page.locator('#raids')).toContainText('Azumarill');

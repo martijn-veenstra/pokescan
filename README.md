@@ -44,6 +44,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and the level arc), duplicates are folded after every import and at start-up, and a power-up archives the old card
   in favour of the new one.
 - **Update this Pokémon** (⋮ on a scan page or on your copy's Pokémon page): the next import belongs to that card.
+  An import started from a Pokémon page shows the same progress bar and status line as Scans, floating above the bottom bar.
 - **How to get** (Pokémon page): concrete routes instead of a bare schedule lookup: catch it (Leek Duck raids, eggs,
   research, events), evolve a pre-evolution (candy cost from the game master in `data/evo.json`, the safe catch CP so it
   stays league-legal, the pre-evolution's own sources, your own copies that would fit), and for Shadow Pokémon the Team
