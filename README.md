@@ -77,6 +77,14 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   A status screen with the same IVs at a higher level, or of its evolution, moves the card to the new CP/HP/level and
   keeps a history line; an appraisal or attacks screen attaches to it. A screenshot whose IVs do not match, or of
   another species, becomes a separate card and the log says why.
+- **Pokémon page** (`#/mon/<id>`, every tap on a Pokémon name lands here, owned or not): the head shows name, types,
+  weaknesses, meta rank and, for a copy you own, its CP arc, IV and status tiles plus **⟳ Update with a new scan**,
+  which hands the next import to that card (power-up, evolution, appraisal, attacks screen) and returns to the page.
+  Below it two tabs: **PvP** (moves with PvPoke's usage and move counts, roster status and search string, fit with your
+  roster, meta teams, loses to / beats, how to get it) and **PvE · raids** (its rank per attacking type and overall from
+  `data/pve.json`, the fast + charged pairs by raid damage with your set graded, your highest-CP copy, and what it is
+  weak to as a raid boss with a link that ranks your own attackers against it). Scan pages (`#/scan/<key>`) are only
+  reached from the Scans list and from "your copy" links.
 - **Name a team in the builder**: the slots are Lead, Swap and Closer; with all three filled a name field and Save team sit under the moves; the party
   then shows up under Saved teams, on Today and in the battle log, and the builder is cleared for the next team (the toast opens the saved one).
 - **Getting started and milestones**: a checklist on Today ticks itself off as you import a status screen, an

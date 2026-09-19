@@ -232,12 +232,21 @@ function onNewScan(s) {                        // called by the scanner after a 
   }
   saveRoster(); dirty = true;
 }
-function updateScan(key) {                     // "Update this Pokémon": the next import belongs to this card (power-up, evolution, appraisal, attacks)
+function updateScan(key, from) {               // "Update this Pokémon": the next import belongs to this card (power-up, evolution, appraisal, attacks)
   const r = results.find(x => x.key === key); if (!r) return;
-  UI.updateKey = key; status(`Updating ${nice(r.species)} ${r.cp} CP: pick its new screenshots`);
-  nav('#/scans'); $('file').click();
+  UI.updateKey = key; UI.updateFrom = from === 'mon' ? UI.mon : null; status(`Updating ${nice(r.species)} ${r.cp} CP: pick its new screenshots`);
+  if (from !== 'mon') nav('#/scans');
+  $('file').click();
 }
-function updateDone(card) { const k = UI.updateKey; UI.updateKey = null; if (card) { UI.scan = card.key; openScan(card.key); } else if (k && results.some(x => x.key === k)) openScan(k); }
+function updateDone(card) {
+  const k = UI.updateKey, from = UI.updateFrom; UI.updateKey = null; UI.updateFrom = null;
+  if (from) {                                    // came from a Pokémon page: go back to it (the species may have changed on an evolution)
+    const sid = card ? scanId(card) : null, id = sid && sid.id && APP.pokemon[sid.id] ? sid.id : from;
+    if (typeof toast === 'function' && card) toast(`⟳ ${nm(id)} updated: ${card.cp} CP`);
+    openMon(id); return;
+  }
+  if (card) { UI.scan = card.key; openScan(card.key); } else if (k && results.some(x => x.key === k)) openScan(k);
+}
 function onUpdated(target, old) {              // called by the scanner after updateCard()
   dirty = true; if (UI.scan && !results.some(x => x.key === UI.scan)) UI.scan = target.key;
   const sid = scanId(target), id = sid && sid.id;
@@ -1598,7 +1607,12 @@ function monInner(m, id, noHead) {
   } else if (!noHead && o && o.manual) h += `<div class="note" style="margin:0">Added by hand, no scan: import a screenshot of this Pokémon for its IVs, level and moves.</div>`;
   else if (!noHead && a) h += `<div class="note" style="margin:0">Evolves from your <b>${esc(a.from)}</b>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.</div>`;
   else if (!noHead && !o && sc) h += `<div class="note" style="margin:0">Catch a <b>${esc(nm(pre))}</b> ≤ <b>${sc.safe}</b> CP: it evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs).</div>`;
+  if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0"><button class="btn sec" style="margin:0" onclick="Planner.updateScan(${attr(o.scan.key)},'mon')">⟳ Update with a new scan</button></div><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this copy is updated, no second card.</div>`;
   h += `</div>`;
+  // the two faces of a Pokémon: what it does in GO Battle League, what it does in raids
+  const tab = UI.monTab === 'pve' ? 'pve' : 'pvp';
+  h += `<div class="tabs sub seg montabs" style="margin:10px 0 6px"><button class="${tab === 'pvp' ? 'on' : ''}" onclick="Planner.monTab('pvp')">PvP</button><button class="${tab === 'pve' ? 'on' : ''}" onclick="Planner.monTab('pve')">PvE · raids</button></div>`;
+  if (tab === 'pve') return h + pveTab(m, id, known, o);
   if (!noHead) {
     // moves card
     const cur = (known || []).filter(Boolean), secondOpen = !known || cur.length < 3;
@@ -1830,6 +1844,40 @@ function raidUsage(id, cur) {                  // collapsible table under the Pv
     (UI.raidUse ? `<div class="use raid">${rows.slice(0, 10).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('')}<div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, best pair = 100%, like Poké Genie's Moveset Rating. Which type you need depends on the boss: see Meta › Raids.</div></div>` : '');
 }
 function toggleRaidUse() { UI.raidUse = !UI.raidUse; renderMon(); }
+function monTab(k) { UI.monTab = k; renderMon(); const el = document.querySelector('#mon .montabs'); if (el) el.scrollIntoView({block: 'nearest'}); }
+function raidRowsHTML(rows, mine, n) {           // the ranked fast + charged pairs, shared by the moves card and the PvE tab
+  return rows.slice(0, n).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('');
+}
+const pveMv = id => (PVE && PVE.moves[id] ? PVE.moves[id].n : mvName(id));   // game-master move ids (FAIRY_WIND_FAST) → names
+function pveTab(m, id, known, o) {             // generic raid-side page for any Pokémon: attacker moves, the types it is best against, its counters, your copy
+  const e = APP.pokemon[id]; let h = '';
+  if (!PVE) { loadPve(); return h + `<div class="note">${pveError ? 'Raid data not available: ' + esc(pveError) : 'Loading the raid data…'}</div>`; }
+  const cur = (known || []).filter(Boolean), rows = raidCombos(id), mine = x => x.f === cur[0] && cur.slice(1).includes(x.c);
+  const best = rows[0], yours = rows.filter(mine), yb = yours.length ? yours.reduce((a, b) => b.pct > a.pct ? b : a) : null;
+  // best as an attacker: where this Pokémon sits in the per-type rankings (shadow and mega forms count as their own rows)
+  const species = id.split('_')[0].toUpperCase(), shadow = /_shadow$/.test(id), mega = /_mega/.test(id);
+  const roles = [];
+  for (const [t, list] of Object.entries(PVE.types)) { const i = list.findIndex(r => r.species === species && !!r.shadow === shadow && !!r.mega === mega); if (i >= 0) roles.push({t, rank: i + 1, r: list[i]}); }
+  roles.sort((a, b) => a.rank - b.rank);
+  const overall = PVE.overall.findIndex(r => r.species === species && !!r.shadow === shadow && !!r.mega === mega);
+  h += `<div class="sec">As a raid attacker <small>${overall >= 0 ? `#${overall + 1} overall` : roles.length ? 'ranked by type' : 'not among the ranked attackers'}</small></div>`;
+  if (roles.length) h += `<div class="team" style="cursor:default"><div class="chips">${roles.slice(0, 6).map(x => `<span class="chip t-${x.t}" style="cursor:pointer" onclick="Planner.pveType('${x.t}')">${x.t} <span style="opacity:.8">#${x.rank}</span></span>`).join('')}</div>
+    <div class="dt" style="margin-top:6px">${esc(pveMv(roles[0].r.fast))} + ${esc(pveMv(roles[0].r.charged))}: ${roles[0].r.dps} DPS · ${roles[0].r.tdo} TDO at L40 15/15/15${roles[0].r.legacy && roles[0].r.legacy.length ? ` · needs ${roles[0].r.legacy.map(pveMv).map(esc).join(', ')} (Elite TM or event)` : ''}. Tap a type for the full list.</div></div>`;
+  else h += `<div class="note">Outside the top attackers of every type. Fine for PvP, keep it out of raids.</div>`;
+  // moves by damage
+  h += `<div class="sec">Raid moves <small>${best ? 'best pair = 100%' : 'no rated pairs'}${yb ? ` · yours ${yb.pct}% grade ${raidGrade(yb.pct)}` : cur.length ? ' · your set is not rated' : ''}</small></div>`;
+  if (rows.length) h += `<div class="team card" style="cursor:default"><div class="use raid" style="margin:0">${raidRowsHTML(rows, mine, 8)}</div><div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, like Poké Genie's Moveset Rating. <em class="y">✓</em> on your copy.</div></div>`;
+  // your copy, for raids: the highest-CP scan of the species, any league
+  const mineScan = pveOwned(e);
+  if (mineScan) { const lv = mineScan.level || (mineScan.combos && mineScan.combos.length ? bestOf2(mineScan)[0] : null);
+    h += `<div class="sec">Your copy <small>highest CP you scanned</small></div><div class="team row" onclick="Planner.openScan(${attr(mineScan.key)})"><span class="tx"><span class="nm">${esc(e.name)} ${mineScan.cp} CP${lv ? ` · L${lv}` : ''}</span><div class="dt">${yb ? `${esc(mvName(yb.f))} + ${esc(mvName(yb.c))} · ${yb.pct}% grade ${raidGrade(yb.pct)}` : 'moves not scanned: screenshot the attacks to grade it'}${lv && lv < 40 ? ' · power up for raids, the CP cap does not apply' : ''}</div></span><span class="go">›</span></div>`; }
+  else if (!o) h += `<div class="note">Not in your storage yet. ${roles.length ? 'Worth building as a raid attacker; ' : ''}the PvP tab says how to get it.</div>`;
+  // as a raid boss
+  const weak = bossWeak(e.types);
+  h += `<div class="sec">When it is the boss <small>weak to</small></div><div class="team row" onclick="Planner.pickBoss('${id}')"><span class="tx"><span class="chips" style="margin:0">${weak.slice(0, 6).map(x => chip(`${x.t} ×${x.e.toFixed(x.e % 1 ? 2 : 0)}`, 't-' + x.t)).join('')}</span><div class="dt" style="margin-top:6px">Rank your own attackers against it ›</div></span></div>`;
+  return h;
+}
+function pveType(t) { UI.pveType = t; nav('#/raids'); }
 function pveOwned(e) {                          // your scanned copies of this species (any CP): a mega or shadow counts through its base species
   const mine = results.filter(r => r.species === e.species && !r.superseded && r.cp);
   if (!mine.length) return null;
@@ -1886,7 +1934,7 @@ function bossSection(m) {
     <div class="dt" style="margin-bottom:6px">Weak to</div><div class="chips">${weak.length ? weak.map(w => `<span class="chip t-${w.t}">${w.t}${w.e > 2 ? ' ×2.56' : ''}</span>`).join('') : '<span class="dim">nothing known</span>'}</div></div>`;
   h += `<div class="sec">Your best attackers <small>${mine.length ? 'from your scans, at their own level and IVs' : 'none of your scans can be rated'}</small></div>`;
   if (!mine.length) h += `<div class="note">Scan the Pokémon you would bring: the attackers list below shows what to aim for.</div>`;
-  else h += mine.map((x, i) => `<div class="rank pve" onclick="Planner.openScan(${attr(x.key)})" style="cursor:pointer"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn"><b>${esc(nm(x.id))}</b> <span class="dim">L${x.level} · ${x.cp} CP</span>${x.movesKnown ? '' : ' <span class="chip">best possible moves</span>'}</div><div class="dt">${esc(mvName(x.f))} · ${esc(mvName(x.c))}</div>
+  else h += mine.map((x, i) => `<div class="rank pve" onclick="Planner.openMon('${x.id}')" style="cursor:pointer"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn"><b>${esc(nm(x.id))}</b> <span class="dim">L${x.level} · ${x.cp} CP</span>${x.movesKnown ? '' : ' <span class="chip">best possible moves</span>'}</div><div class="dt">${esc(mvName(x.f))} · ${esc(mvName(x.c))}</div>
       <div class="pvb"><span class="lb">DPS</span><span class="bar"><i style="width:${Math.round(x.dps / mine[0].dps * 100)}%"></i></span><span class="v">${x.dps.toFixed(1)}</span><span class="lb">TDO</span><span class="bar"><i class="t" style="width:${Math.round(x.tdo / Math.max(...mine.map(y => y.tdo)) * 100)}%"></i></span><span class="v">${Math.round(x.tdo)}</span></div></div></div>`).join('');
   const bestGlobal = weak.length ? [].concat(...weak.map(w => (PVE.types[w.t] || []).slice(0, 8).map(r => Object.assign({}, r, {vs: w.t})))).sort((a, b) => b.er - a.er).filter((r, i, a) => a.findIndex(x => x.id === r.id) === i).slice(0, 6) : [];
   if (bestGlobal.length) h += `<div class="sec">Best in the game against it <small>same model, level 40</small></div><div class="team" style="cursor:default"><div class="chips">${bestGlobal.map(r => `<span class="chip ${pveOwned(r) ? 'ok' : ''}">${esc(r.name)} <span style="opacity:.7">${r.dps.toFixed(0)} dps</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">Green = you own the species. Your own list above uses your copies' real level, IVs and (when scanned) moves; the boss is the tier-5 stand-in of the model.</div></div>`;
@@ -1991,7 +2039,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
