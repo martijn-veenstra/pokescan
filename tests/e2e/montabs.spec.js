@@ -55,7 +55,12 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   await page.evaluate(() => { progBox(true); progress(0.4); status('Scanning IMG_1.png'); });
   await expect(page.locator('#impfloat')).toBeVisible();
   await expect(page.locator('#fstat')).toHaveText('Scanning IMG_1.png');
-  expect(await page.evaluate(() => document.getElementById('ffill').style.width)).toBe('40%');
+  await expect(page.locator('#impfloat .pball')).toHaveClass(/on/);         // the Pokéball shakes while reading
+  expect(await page.evaluate(() => document.querySelector('#impfloat .pball').dataset.pct)).toBe('40');
+  await page.evaluate(() => { progress(1); pballState('done'); });
+  await expect(page.locator('#impfloat .pball')).toHaveClass(/done/);       // caught: stars, green button
+  expect(await page.evaluate(() => document.querySelector('#impfloat .pball').dataset.pct)).toBe('100');
+  await page.evaluate(() => pballState('on'));
   await page.evaluate(() => Planner.nav('#/scans'));
   await expect(page.locator('#impfloat')).toBeHidden();        // on Scans the page's own bar shows, not the floating one
   await expect(page.locator('#prog')).toBeVisible();

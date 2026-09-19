@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.68';
+const APP_VERSION='9.69';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -705,7 +705,7 @@ function renderLog(){
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
-function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='block'; if(st) status('⚠ '+msg); console.error(msg); }
+function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='flex'; if(st) status('⚠ '+msg); pballState('err'); console.error(msg); }
 window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
 window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
 const results=JSON.parse(localStorage.getItem('scans')||'[]').filter(r=>r&&typeof r.species==='string'); results.forEach(r=>{ if(!Array.isArray(r.combos)) r.combos=[]; });
@@ -745,6 +745,7 @@ async function importFiles(files){                 // the import pipeline: also 
   const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
   { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
+  progress(1); pballState(ok?'done':'err');       // the ball stops shaking: caught (stars) or not
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
   setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) progBox(false); else { IMPORTING=false; syncFloat(); } },2500);
 }
@@ -768,9 +769,21 @@ function del(i){ results.splice(i,1); save(); render(); }
 
 let IMPORTING=false;
 function status(s){ $('stat').textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
-function progBox(on){                            // the progress bar and status line: in the Scans page, and floating above the bottom bar on any other page
-  IMPORTING=on; $('prog').style.display=on?'block':'none'; syncFloat();
+function progBox(on){                            // the Pokéball loader and status line: in the Scans page, and floating above the bottom bar on any other page
+  IMPORTING=on; $('prog').style.display=on?'flex':'none'; pballState(on?'on':''); syncFloat();
 }
+/* the loader: a Pokéball that shakes like a catch while files are read, a ring around it that fills with progress, a
+   button that pulses; on completion the ball stills, the button turns green and three stars burst. Pure SVG + CSS. */
+const PB_R=30, PB_C=2*Math.PI*PB_R;
+function pballSVG(){
+  const star='M0-6 L1.6-1.6 6 0 1.6 1.6 0 6 -1.6 1.6 -6 0 -1.6-1.6Z';
+  return `<svg viewBox="0 0 64 64"><circle class="track" cx="32" cy="32" r="${PB_R}"/><circle class="ring" cx="32" cy="32" r="${PB_R}" style="stroke-dasharray:${PB_C.toFixed(2)};stroke-dashoffset:${PB_C.toFixed(2)}"/>
+  <g class="ball"><path class="top" d="M8 32 A24 24 0 0 1 56 32 Z"/><path class="bot" d="M8 32 A24 24 0 0 0 56 32 Z"/><rect class="band" x="8" y="29.5" width="48" height="5"/>
+  <circle class="rim" cx="32" cy="32" r="8.5"/><circle class="btn" cx="32" cy="32" r="5.5"/><circle class="dot" cx="32" cy="32" r="2.2"/><path class="shine" d="M15 24 A19 19 0 0 1 32 13"/></g>
+  <g class="stars"><path class="star s1" d="${star}" transform="translate(11 9)"/><path class="star s2" d="${star}" transform="translate(53 7)"/><path class="star s3" d="${star}" transform="translate(58 44)"/></g></svg>`;
+}
+document.querySelectorAll('.pball').forEach(el=>{ el.innerHTML=pballSVG(); });
+function pballState(st){ document.querySelectorAll('.pball').forEach(el=>{ el.classList.remove('on','done','err'); if(st) el.classList.add(st); }); }
 function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
   const f=$('impfloat'); if(!f) return;
   const scans=$('view-scans'), onScans=scans&&getComputedStyle(scans).display!=='none';
@@ -784,7 +797,10 @@ function toast(text, onclick, soft){                // one short line above the 
   t.textContent=text; t.onclick=()=>{ t.classList.remove('on'); if(onclick) try{ (0,eval)(onclick); }catch{} };
   t.classList.add('on'); clearTimeout(TOAST_T); TOAST_T=setTimeout(()=>t.classList.remove('on'),3800);
 }
-function progress(p){ const w=(p*100).toFixed(1)+'%'; $('fill').style.width=w; const f=$('ffill'); if(f) f.style.width=w; }
+function progress(p){                            // fill the ring around the ball
+  p=Math.max(0,Math.min(1,p||0)); const off=(PB_C*(1-p)).toFixed(2);
+  document.querySelectorAll('.pball').forEach(el=>{ el.dataset.pct=Math.round(p*100); const r=el.querySelector('.ring'); if(r) r.style.strokeDashoffset=off; });
+}
 
 async function scanImage(file,trainer,batchKey){
   status('Scanning '+file.name);

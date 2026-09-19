@@ -33,13 +33,13 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
 #panel{display:none;background:var(--card);border:1px solid var(--line);
  border-radius:16px;padding:4px 14px 12px;margin:8px 0}
 #panel.open{display:block!important}
-#prog{display:none;margin:12px 0}
+#prog{display:none;align-items:center;gap:12px;margin:12px 0}
 #implog{margin:6px 0 4px}#implog .hd{font-size:12px;color:var(--dim);cursor:pointer;display:flex;justify-content:space-between}#implog .hd a{color:var(--dim)}
 .il{display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:12px;color:var(--dim);padding:6px 0;border-top:1px solid var(--line);line-height:1.45}
 .il .t{font-variant-numeric:tabular-nums}.il .r.ok{color:#7FE3B6}.il .r.err{color:#F59A8B}.il .f{color:var(--ink)}.il .d{font-family:ui-monospace,monospace;font-size:11px;word-break:break-word}
 .bar{height:6px;background:var(--card);border-radius:3px;overflow:hidden}
 .bar>div{height:100%;background:linear-gradient(90deg,#3BC489,#2BA8A0);width:0%;transition:width .3s}
-#stat{font-size:12.5px;color:var(--dim);margin-top:6px}
+#stat{font-size:12.5px;color:var(--dim);flex:1;min-width:0}
 #count{color:var(--dim);font-size:13px}
 
 .mon{background:var(--card);border:1px solid var(--line);border-radius:18px;
@@ -371,6 +371,26 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .notown .btn{margin:0;align-self:flex-start;color:var(--ink)}
 .rq{display:contents}.rq[hidden]{display:none}
 /* import loader on any page but Scans (an update or add-a-scan started from a Pokémon page) */
-#impfloat{position:fixed;left:14px;right:14px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:29;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-#impfloat .bar{background:#0E1626}#fstat{font-size:12.5px;color:var(--dim);margin-top:6px}
+#impfloat{position:fixed;left:14px;right:14px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:29;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#impfloat[hidden]{display:none}#fstat{font-size:12.5px;color:var(--dim);flex:1;min-width:0}#impfloat .pball{width:48px;height:48px}
 #impfloat:not([hidden])+#toast{bottom:calc(140px + env(safe-area-inset-bottom))}   /* a toast during an import sits above the loader */
+
+/* ---------- the Pokéball loader ---------- */
+.pball{width:60px;height:60px;flex:none}.pball svg{width:100%;height:100%;overflow:visible;display:block}
+.pball .track{fill:none;stroke:var(--line);stroke-width:3}
+.pball .ring{fill:none;stroke:#48D597;stroke-width:3;stroke-linecap:round;transform:rotate(-90deg);transform-origin:32px 32px;transition:stroke-dashoffset .35s ease}
+.pball .ball{transform-origin:32px 54px}
+.pball .top{fill:#F0654F}.pball .bot{fill:#EAF1F7}.pball .band{fill:#141C2B}.pball .rim{fill:#141C2B}.pball .btn{fill:#F5F8FB}.pball .dot{fill:#141C2B;opacity:0}
+.pball .shine{fill:none;stroke:rgba(255,255,255,.55);stroke-width:2.5;stroke-linecap:round}
+.pball .star{fill:#F5B84C;opacity:0;transform-box:fill-box;transform-origin:center}
+.pball.on .ball{animation:pbshake 1.6s cubic-bezier(.36,.07,.19,.97) infinite}
+.pball.on .btn{animation:pbpulse 1.6s ease-in-out infinite}
+.pball.done .btn{fill:#48D597}.pball.done .ball{animation:pbcaught .6s ease-out}
+.pball.done .s1{animation:pbstar .9s ease-out .1s forwards}.pball.done .s2{animation:pbstar .9s ease-out .25s forwards}.pball.done .s3{animation:pbstar .9s ease-out .4s forwards}
+.pball.err .btn{fill:#F0654F}.pball.err .ring{stroke:#F0654F}.pball.err .ball{animation:pbdrop .5s ease-out forwards}
+@keyframes pbshake{0%,55%,100%{transform:rotate(0)}10%{transform:rotate(-16deg)}22%{transform:rotate(14deg)}33%{transform:rotate(-9deg)}43%{transform:rotate(5deg)}}
+@keyframes pbpulse{0%,100%{fill:#F5F8FB}50%{fill:#F0654F}}
+@keyframes pbcaught{0%{transform:scale(1)}40%{transform:scale(1.14)}70%{transform:scale(.96)}100%{transform:scale(1)}}
+@keyframes pbstar{0%{opacity:0;transform:scale(.2)}35%{opacity:1;transform:scale(1.3) translateY(-3px)}100%{opacity:0;transform:scale(.8) translateY(-10px)}}
+@keyframes pbdrop{0%{transform:rotate(0)}100%{transform:rotate(-24deg) translateY(2px)}}
+@media (prefers-reduced-motion:reduce){.pball .ball,.pball .btn,.pball .star{animation:none!important}.pball.done .s1,.pball.done .s2,.pball.done .s3{opacity:1}}
