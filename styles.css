@@ -364,3 +364,9 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .team.card.share{position:relative}.team.card.share .x{position:absolute;right:12px;top:10px;color:var(--dim);cursor:pointer;font-size:14px}
 .team.card.share .chips{margin-top:4px}.team.card.share .chip.dim{opacity:.6}
 .team.card.share .fn{display:flex;gap:8px;font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4}.team.card.share .fn .ts{flex:none;font-variant-numeric:tabular-nums;color:var(--green);font-weight:600;min-width:34px}
+
+/* species page of a Pokémon you do not own: say so, and offer the scan that adds it */
+.notown{display:flex;flex-direction:column;gap:8px;margin:6px 0 0;padding:10px 12px;border:1px dashed rgba(240,101,79,.5);border-radius:12px;background:rgba(240,101,79,.06)}
+.notown b{display:block;color:#F59A8B;font-size:13px;margin-bottom:2px}.notown .dt{display:block;font-size:12px;color:var(--dim);line-height:1.4}
+.notown .btn{margin:0;align-self:flex-start;color:var(--ink)}
+.rq{display:contents}.rq[hidden]{display:none}

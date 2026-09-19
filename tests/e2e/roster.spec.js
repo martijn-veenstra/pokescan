@@ -14,12 +14,16 @@ test('a scanned pre-evolution that PvPoke does not rank shows on the roster unde
   await expect(board.locator('.mon.ghost')).toHaveCount(0);
   await expect(board).toContainText(/evolve → Wigglytuff #\d+/);
   // searching by either name finds it
+  // (the search hides and shows the cards already on the page instead of re-rendering them, so the box keeps focus)
   await page.fill('#rosterq', 'Jig');
-  await expect(board.locator('.mon .name:has-text("Jigglypuff")')).toHaveCount(1);
+  await expect(board.locator('.mon .name:has-text("Jigglypuff")')).toBeVisible();
   await page.fill('#rosterq', 'wiggly');
-  await expect(board.locator('.mon .name:has-text("Jigglypuff")')).toHaveCount(1);
+  await expect(board.locator('.mon .name:has-text("Jigglypuff")')).toBeVisible();
   await page.fill('#rosterq', 'azumarill');
+  await expect(board.locator('.mon .name:has-text("Jigglypuff")')).toBeHidden();
+  await expect(board.locator('#rosternone')).toBeVisible();
   await expect(board).toContainText('Nothing in your roster matches.');
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.id)).toBe('rosterq');
   // tapping a roster card opens the roster's Pokémon page (CP slider, teams, rankings), not the scan page
   await page.fill('#rosterq', '');
   await board.locator('.mon .name:has-text("Jigglypuff")').click();

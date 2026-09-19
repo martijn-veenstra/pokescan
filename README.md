@@ -26,7 +26,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Leagues**: the ≡ menu switches the whole app between Great, Ultra and Little League and the GO Battle League
   cups PvPoke currently features (`data/cups.json`, rebuilt daily by `scripts/build_cups.py`): rankings, meta
   teams, the cap used for readiness and power-up targets, search strings and roster tiles all follow.
-- **≡ menu** (top left): saved teams, the derived meta teams (each opens a team page), PvPoke's full
+- **≡ menu** (top left): saved teams, the derived meta teams (each opens a team page; listed by the score with your own
+  moves, the meta # is the order with PvPoke's movesets, and no Pokémon sits in more than a quarter of them), PvPoke's full
   rankings with search and type filter, **Raids** (the best PvE attackers per type: DPS, TDO, Elite TM
   moves, megas and shadows toggle, computed by `scripts/build_pve_data.py` from the PokeMiners game
   master, with your scanned copies marked), scans, trainer profile, sync and help. Every page has a
@@ -80,6 +81,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Pokémon page** (`#/mon/<id>`, every tap on a Pokémon name lands here, owned or not): the head shows name, types,
   weaknesses, meta rank and, for a copy you own, its CP arc, IV and status tiles plus **⟳ Update with a new scan**,
   which hands the next import to that card (power-up, evolution, appraisal, attacks screen) and returns to the page.
+  A Pokémon you do not own says so plainly: a **not owned** chip in the head and a dashed *Not in your roster yet* box
+  with **＋ Add a scan of this Pokémon** (also in the ⋮ menu). It opens the importer straight from the page; when the
+  import finishes you are back on the page with a one-line verdict (added with its CP, a pre-evolution landed instead,
+  a different Pokémon was read, or nothing was read).
   Below it two tabs: **PvP** (moves with PvPoke's usage and move counts, roster status and search string, fit with your
   roster, meta teams, loses to / beats, how to get it) and **PvE · raids** (its rank per attacking type and overall from
   `data/pve.json`, the fast + charged pairs by raid damage with your set graded, your highest-CP copy, and what it is
@@ -204,7 +209,7 @@ group is scored against the whole meta group. Pairings use PvPoke's published si
 matchup/counter ratings where available, and a type-effectiveness + ranking-score estimate otherwise.
 
 ```sh
-python3 scripts/generate_pvpoke_team_comps.py                 # top 25 teams per league
+python3 scripts/generate_pvpoke_team_comps.py                 # top 25 teams per league, no species in more than 6 of them (--cap)
 python3 scripts/generate_pvpoke_team_comps.py --top 50 --pool 30 --leagues great
 ```
 
