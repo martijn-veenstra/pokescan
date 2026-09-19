@@ -1,6 +1,6 @@
 {
- "generatedAt": "2026-09-13T10:49:07Z",
- "gamemasterTimestamp": "2026-09-10 22:49:06",
+ "generatedAt": "2026-09-17T10:40:28Z",
+ "gamemasterTimestamp": "2026-09-16 18:53:38",
  "leagues": [
   {
    "slug": "great",
@@ -68,6 +68,19 @@
     "The following Pokemon are not allowed: Gardevoir, Zorua, Zoroark."
    ],
    "file": "data/app-willpower-1500.json"
+  },
+  {
+   "slug": "retro-1500",
+   "title": "Retro Cup",
+   "short": "Retro",
+   "cp": 1500,
+   "cup": "retro",
+   "kind": "cup",
+   "rules": [
+    "Pokemon must be at or below 1,500 CP to enter.",
+    "Dark-, Steel-, and Fairy-type Pokémon are not eligible."
+   ],
+   "file": "data/app-retro-1500.json"
   },
   {
    "slug": "laic2027-1500",
