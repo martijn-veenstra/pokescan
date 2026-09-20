@@ -1133,7 +1133,7 @@ function route() {
   const seg = (location.hash || '').replace(/^#\/?/, '').split('/').map(x => { try { return decodeURIComponent(x); } catch { return x; } });
   const p = seg[0] || localStorage.getItem('tab') || 'today', cur = onView();
   const leave = () => { if (cur && cur !== 'mon' && cur !== 'team') { UI.monFrom = cur; } if (cur && cur !== 'team') UI.teamFrom = cur === 'mon' ? (UI.monFrom || 'teams') : cur; };
-  if (p === 'mon' && seg[1]) { if (cur !== 'mon') leave(); UI.mon = seg[1]; UI.scan = null; showView('mon'); window.scrollTo(0, 0); return; }
+  if (p === 'mon' && seg[1]) { if (cur !== 'mon') leave(); if (UI.mon !== seg[1]) UI.ivOpen = false; UI.mon = seg[1]; UI.scan = null; showView('mon'); window.scrollTo(0, 0); return; }
   if (p === 'scan' && seg[1]) {
     const key = seg.slice(1).join('/'), r = results.find(x => x.key === key);
     if (!r) { nav('#/scans'); return; }
@@ -1657,6 +1657,43 @@ function deleteScan(key) {
   results.splice(i, 1); save(); render(); refresh(); UI.scan = null; UI.mon = null;
   nav('#/scans');
 }
+/* ---------- Best IVs for the league: the ranked spreads of this species at the cap, behind a tap ---------- */
+const IV_FLOORS = [[0, 'any IVs', 'wild catches'], [10, '10+', 'raids, eggs, research'], [12, '12+', 'lucky trades']];
+UI.ivFloor = parseInt(localStorage.getItem('ivfloor') || '0') || 0;
+function ivToggle() { UI.ivOpen = !UI.ivOpen; renderMon(); }
+function ivFloor(f) { UI.ivFloor = f; localStorage.setItem('ivfloor', String(f)); renderMon(); }
+function ivMore(td) {                           // the table's own fold: table rows cannot live inside fold()'s spans
+  const tbody = td.closest('tbody'), rows = tbody.querySelectorAll('tr.more'), open = rows[0] && !rows[0].hidden;
+  rows.forEach(r => { r.hidden = open; }); td.textContent = open ? `▸ show ${rows.length} more spreads` : '▾ show fewer';
+}
+function myIvs(id) {                            // your copies of this species (and of its pre-evolutions, as this species): IVs and rank
+  const b = baseFor(id); if (!b) return [];
+  const out = [];
+  for (const pre of family(id)) for (const r of ownedCopies(pre)) {
+    const best = bestOf2(r), ivs = [best[1], best[2], best[3]], rk = pvpRank(b, ivs[0], ivs[1], ivs[2], LEAGUE.cp);
+    if (rk) out.push({from: pre === id ? null : nm(pre), cp: r.cp, ivs, rk});
+  }
+  return out.sort((a, c) => a.rk.n - c.rk.n);
+}
+function ivCard(id) {
+  const b = baseFor(id); if (!b) return '';
+  const top1 = pvpTop(b, LEAGUE.cp, 0, 1)[0]; if (!top1) return '';
+  const lvTxt = lv => `L${lv}`;
+  let h = `<div class="sec">Best IVs for ${LEAGUE.abbr} <small>${UI.ivOpen ? 'stat product at the cap, best first' : 'tap to open'}</small></div>`;
+  if (!UI.ivOpen) return h + `<div class="team card ivc" onclick="Planner.ivToggle()"><span class="tx"><span class="nm">Rank #1 is <b>${top1.ia}/${top1.id}/${top1.is}</b> · ${top1.cp} CP at ${lvTxt(top1.lv)}</span><div class="dt">Tap for the top spreads, and where raid and lucky-trade IVs land</div></span><span class="go">▸</span></div>`;
+  const floor = UI.ivFloor, rows = pvpTop(b, LEAGUE.cp, floor, 30), mine = myIvs(id), mineKey = new Set(mine.map(x => x.ivs.join('/')));
+  h += `<div class="team card ivc open" style="cursor:default"><div class="tchips mf" style="margin:0 0 6px">${IV_FLOORS.map(([f, l, sub]) => `<span class="chip ${floor === f ? 'sel' : ''}" onclick="Planner.ivFloor(${f})">${l} <span style="opacity:.7">${sub}</span></span>`).join('')}<span class="chip" onclick="Planner.ivToggle()">▴ close</span></div>`;
+  if (floor && rows.length) h += `<div class="dt" style="margin-bottom:6px">Best you can get with ${floor}+ IVs: rank <b>#${rows[0].n}</b>, ${rows[0].pct.toFixed(1)} % of the best spread.</div>`;
+  if (mine.length) h += `<div class="dt" style="margin-bottom:6px">${mine.slice(0, 3).map(x => `Your ${x.from ? esc(x.from) + ' ' : ''}<b>${x.ivs.join('/')}</b> (${x.cp} CP) is <b>#${x.rk.n}</b> · ${x.rk.pct.toFixed(1)} %`).join('<br>')}</div>`;
+  const row = (r, tag) => `<tr class="${mineKey.has(`${r.ia}/${r.id}/${r.is}`) ? 'mine' : ''}"><td>#${r.n}</td><td><b>${r.ia}/${r.id}/${r.is}</b>${tag || ''}</td><td>${lvTxt(r.lv)}</td><td>${r.cp}</td><td>${r.pct.toFixed(1)}</td></tr>`;
+  const trs = rows.map(r => row(r, mineKey.has(`${r.ia}/${r.id}/${r.is}`) ? ' <span class="chip ok mini">yours</span>' : ''));
+  const shownKeys = new Set(rows.map(r => `${r.ia}/${r.id}/${r.is}`));
+  const extra = mine.filter(x => !shownKeys.has(x.ivs.join('/'))).slice(0, 3).map(x => row({ia: x.ivs[0], id: x.ivs[1], is: x.ivs[2], n: x.rk.n, lv: x.rk.lv, cp: x.rk.cp, pct: x.rk.pct}, ' <span class="chip ok mini">yours</span>'));
+  const more = trs.length > 10 ? `${trs.slice(10).map(t => t.replace('<tr class="', '<tr hidden class="more ')).join('')}<tr class="xmore-row"><td colspan="5" onclick="Planner.ivMore(this)">▸ show ${trs.length - 10} more spreads</td></tr>` : '';
+  h += `<table class="ivt"><thead><tr><th>#</th><th>IVs</th><th>Level</th><th>CP</th><th>%</th></tr></thead><tbody>${trs.slice(0, 10).join('')}${more}${extra.length ? `<tr class="sep"><td colspan="5">your other copies</td></tr>${extra.join('')}` : ''}</tbody></table>`;
+  h += `<div class="dt" style="margin-top:6px">Attack / Defence / HP. Level and CP are where the spread caps at ${LEAGUE.cp}; % is its stat product against the best spread. Of 4,096 possible spreads.</div></div>`;
+  return h;
+}
 function monInner(m, id, noHead) {
   const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
   const known = o ? (o.manual ? (ROSTER.moves[id] || null) : knownMoves(o.scan, id)) : (ROSTER.moves[id] || ri.pending[id] || null);
@@ -1720,6 +1757,7 @@ function monInner(m, id, noHead) {
     ];
     rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span><div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under ${LEAGUE.cp} CP; the catch string for a pre-evolution is under How to get</div>`]);
     h += `<div class="sec">In your roster</div><div class="team card" style="cursor:default">${kv(rrows)}</div>`;
+    h += ivCard(id);
   }
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
@@ -2198,7 +2236,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

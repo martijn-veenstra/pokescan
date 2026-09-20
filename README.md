@@ -96,7 +96,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   import finishes you are back on the page with a one-line verdict (added with its CP, a pre-evolution landed instead,
   a different Pokémon was read, or nothing was read).
   Below it two tabs: **PvP** (moves with PvPoke's usage and move counts, roster status and search string, fit with your
-  roster, meta teams, loses to / beats, how to get it) and **PvE · raids** (its rank per attacking type and overall from
+  roster, a **Best IVs** table behind a tap (the ranked spreads at the cap with raid / lucky-trade floors and your own copies
+  marked), meta teams, loses to / beats, how to get it) and **PvE · raids** (its rank per attacking type and overall from
   `data/pve.json`, the fast + charged pairs by raid damage with your set graded, your highest-CP copy, and what it is
   weak to as a raid boss with a link that ranks your own attackers against it). Scan pages (`#/scan/<key>`) are only
   reached from the Scans list and from "your copy" links.

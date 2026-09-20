@@ -216,7 +216,7 @@ div.empty{background:var(--card);border:1px dashed var(--line);border-radius:16p
 #profile h3{font-family:Sora,sans-serif;font-size:13px;margin:14px 0 4px;color:var(--green)}
 .thr{font-size:12.5px;color:var(--dim);margin-top:5px;line-height:1.45}.thr b{color:#F59A8B;font-weight:600}.thr .good,.dt .good{color:var(--green)}
 .thr.av b{color:var(--ink)}.thr.av span:not(.good):not(.dim){color:#F5CE8A}.thr.av.now span:not(.good):not(.dim){color:#7FE3B6}
-.avb{padding:8px 0 4px;border-top:1px solid var(--line);cursor:pointer}.team>.avb:first-of-type,.team.avb{border-top:none;padding-top:4px}
+.avb{padding:8px 0 4px;border-top:1px solid var(--line);cursor:pointer}.team>.avb:first-of-type,.team.avb{border-top:none;padding-top:4px}.team.avb{padding-bottom:12px}
 .avh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}.avh b{font-weight:600}.avh .dim{font-size:12px}
 .avl{display:grid;grid-template-columns:64px 1fr;gap:8px;font-size:12.5px;color:var(--dim);margin-top:3px;line-height:1.45}
 .avl .lb{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}.avl .tx span:not(.good):not(.dim){color:#F5CE8A}.avl.now .tx span:not(.good):not(.dim){color:#7FE3B6}.avl .tx .dim{color:var(--dim)}
@@ -418,3 +418,14 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .team.row .dt .gold{color:var(--gold)}.team.row .dt .bad{color:#F59A8B}
 .mlist.allown .chip.mini{display:none}   /* the 'only teams I can build' filter already says it */
 .avb .rf.need{color:var(--ink)}.avb .rf.need b{color:var(--gold)}.plan .need{color:var(--gold)}
+
+/* ---------- Best IVs table on the Pokémon page ---------- */
+.team.card.ivc{display:flex;align-items:center;gap:10px;cursor:pointer}.team.card.ivc .tx{flex:1;min-width:0}.team.card.ivc .go{color:var(--dim);font-size:16px;flex:none}
+.team.card.ivc.open{display:block}
+.ivt{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.ivt th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:600;text-align:left;padding:4px 6px 4px 0;border-bottom:1px solid var(--line)}
+.ivt td{padding:5px 6px 5px 0;border-bottom:1px solid rgba(43,56,79,.5);white-space:nowrap}.ivt td:first-child{color:var(--dim);width:48px}.ivt td:last-child,.ivt th:last-child{text-align:right;padding-right:0}
+.ivt tr.mine td{background:rgba(72,213,151,.08)}.ivt tr.mine td:first-child{color:var(--green)}
+.ivt tr.sep td{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:8px;border-bottom:none}
+.ivt tr.xmore-row td{color:var(--dim);font-size:12.5px;cursor:pointer;border-bottom:none;padding-top:8px}
+.ivc .dt b{color:var(--ink)}.ivc .dt b.hi{color:var(--green)}

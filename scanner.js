@@ -61,15 +61,20 @@ function pvpTable(b, cap){
   const rows=new Array(4096); let k=0;
   for(let ia=0;ia<16;ia++)for(let id=0;id<16;id++)for(let is=0;is<16;is++){ const sp=statProduct(b,ia,id,is,cap); rows[k++]={ia,id,is,lv:sp.lv,cp:sp.cp,prod:sp.prod}; }
   rows.sort((a,c)=>c.prod-a.prod);
-  const t={max:rows[0].prod, rank:new Map()};
-  rows.forEach((r,i)=>t.rank.set(r.ia*256+r.id*16+r.is,{n:i+1,lv:r.lv,cp:r.cp,pct:100*r.prod/rows[0].prod}));
+  const t={max:rows[0].prod, rank:new Map(), rows};
+  rows.forEach((r,i)=>{ r.n=i+1; r.pct=100*r.prod/rows[0].prod; t.rank.set(r.ia*256+r.id*16+r.is,{n:r.n,lv:r.lv,cp:r.cp,pct:r.pct}); });
   rankCache.set(key,t); return t;
 }
 function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*16+is); }
+function pvpTop(b, cap, floor, n){              // the best spreads at the cap, best first; floor 10 = raids, eggs and research, 12 = lucky trades
+  const rows=pvpTable(b,cap).rows, out=[];
+  for(const r of rows){ if(r.ia>=floor&&r.id>=floor&&r.is>=floor){ out.push(r); if(out.length>=n) break; } }
+  return out;
+}
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.75';
+const APP_VERSION='9.76';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
