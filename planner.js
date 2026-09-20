@@ -617,11 +617,23 @@ function renderTeam() {
   if (!UI.team.ids.every(id => APP.pokemon[id])) { el.innerHTML = '<div class="note">Unknown team.</div>'; return; }
   try { el.innerHTML = teamInner(M(), UI.team.ids, UI.team.name); } catch (e) { el.innerHTML = errorCard('team', e); }
 }
-function reorderTeam(name, ids) {              // a saved party in a new Lead / Swap / Closer order (from the numbers line or the AI review)
-  if (!ROSTER.tagged[name] || ids.length !== 3) return;
+function setLineup(name, ids) {                // store a party's Lead / Swap / Closer order and redraw where we stand, without jumping to the top
   ROSTER.tagged[name] = ids.slice(); saveRoster(); dirty = true;
-  if (typeof toast === 'function') toast(`${name}: now ${ids.map(nm).join(' · ')}`);
-  openTeam(ids, name);
+  if (UI.team && onView() === 'team') {
+    UI.team = {ids: ids.slice(), name};
+    try { history.replaceState(history.state, '', teamHash(ids, name)); } catch {}
+    renderTeam();
+  } else openTeam(ids, name);
+}
+function reorderTeam(name, ids) {              // a saved party in a new order (the numbers line or the AI review)
+  if (!ROSTER.tagged[name] || ids.length !== 3) return;
+  setLineup(name, ids);
+  if (typeof toast === 'function') toast(`${name}: ${ids.map(nm).join(' · ')}`);
+}
+function moveSlot(name, i, j) {                // the ‹ › arrows on a party's hero tiles: one step left or right
+  const cur = ROSTER.tagged[name]; if (!cur || cur.length !== 3 || !cur[i] || !cur[j]) return;
+  const next = cur.slice(); next[i] = cur[j]; next[j] = cur[i];
+  setLineup(name, next);
 }
 function reorderSlots(ids) { UI.build.slots = ids.slice(0, 3); saveBuild(); renderMeta('build'); }
 function orderFromReview(text, ids) {           // the review's "Lead: X · Swap: Y · Closer: Z" line as ids, when it is a permutation of the team
@@ -656,8 +668,8 @@ function teamInner(m, ids, name) {
   let h = `<div class="monhead"><button class="back" onclick="Planner.closeTeam()">‹ ${back}</button><div class="chips" style="margin:0">${saved ? chip('in-game party', 'gl') : ''}${isBest ? chip('recommended', 'ok') : ''}${metaRank ? chip('meta team #' + metaRank, 'meta1') : ''}</div>${menu}</div>`;
   h += `<div class="hero" style="cursor:default">
     <div class="sec" style="margin:0 0 10px">${esc(saved || name || ids.map(nm).join(' / '))} <small>${saved ? 'your in-game party · your order' : isBest ? 'best from your roster' : metaRank ? `meta team #${metaRank}` : name ? 'shared team' : 'team'}</small></div>
-    <div class="roles">${show.map(r => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
-    ${saved ? (differs ? `<div class="ord"><span>The numbers say <b>${rl.map(r => `${r.role} ${esc(nm(r.id))}`).join(' · ')}</b><span class="dim"> · ${rl.filter(r => r.why).map(r => `${esc(nm(r.id))}: ${esc(r.why)}`).join('; ')}</span></span><button class="btn sec mini" onclick="Planner.reorderTeam(${attr(saved)},${attr(rl.map(r => r.id))})">Use this order</button></div>` : `<div class="ord dim">Your order matches the app's numbers.</div>`) : ''}
+    <div class="roles">${show.map((r, i) => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${saved && i > 0 ? `<b class="mvs" onclick="Planner.moveSlot(${attr(saved)},${i},${i - 1});event.stopPropagation()">‹</b>` : ''}${r.role}${saved && i < 2 ? `<b class="mvs" onclick="Planner.moveSlot(${attr(saved)},${i},${i + 1});event.stopPropagation()">›</b>` : ''}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
+    ${saved ? (differs ? `<div class="ord"><div>The numbers say <b>${rl.map(r => `${r.role} ${esc(nm(r.id))}`).join(' · ')}</b></div>${rl.some(r => r.why) ? `<div class="dim">${rl.filter(r => r.why).map(r => `${esc(nm(r.id))}: ${esc(r.why)}`).join(' · ')}</div>` : ''}<button class="btn sec mini" onclick="Planner.reorderTeam(${attr(saved)},${attr(rl.map(r => r.id))})">Use this order</button></div>` : `<div class="ord dim">Your order matches the app's numbers. Tap ‹ › on a tile to change it.</div>`) : ''}
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
     <div class="dim" style="font-size:12px;margin-top:8px">${coverText({holes: d.unansweredMeta}, L)}. What it loses to is below.</div>
     <div style="font-size:13px;margin-top:8px">${esc(needLine(m, ids))}</div>
@@ -2271,7 +2283,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

@@ -49,9 +49,16 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   await page.click('#team .team.card.review .rsec:has-text("Order") button:has-text("Use this order")');
   await expect.poll(() => page.evaluate(() => Planner.ROSTER.tagged['Core'].join())).toBe('medicham,azumarill,altaria');
   await expect(page.locator('#team .hero .role').first()).toContainText('Medicham');
-  await expect(page.locator('#team .hero .role .rl').first()).toHaveText('Lead');
+  await expect(page.locator('#team .hero .role .rl').first()).toContainText('Lead');
   await expect(page.locator('#team .team.card.review .rsec:has-text("Order") button')).toHaveCount(0);
   expect(posts).toHaveLength(2);                    // same trio: the cached review stays
+  // the ‹ › arrows on the hero tiles move a member one place, in the saved order
+  await page.click('#team .hero .role:nth-child(2) .rl .mvs:has-text("‹")');
+  await expect.poll(() => page.evaluate(() => Planner.ROSTER.tagged['Core'].join())).toBe('azumarill,medicham,altaria');
+  await expect(page.locator('#team .hero .role').first()).toContainText('Azumarill');
+  await page.click('#team .hero .role:nth-child(3) .rl .mvs:has-text("‹")');
+  await expect.poll(() => page.evaluate(() => Planner.ROSTER.tagged['Core'].join())).toBe('azumarill,altaria,medicham');
+  expect(posts).toHaveLength(2);
   // Refresh review asks again
   await page.click('#team .team.card.review .ctx .dots');
   await page.click('#team .team.card.review .ctx .menu button:has-text("Refresh review")');
