@@ -5,7 +5,7 @@ test('the matrix drives roles, threat counts and the Matchups page', async ({ pa
   const errors = await openApp(page, '#/builder');
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
   // matrix loaded → simulated threat count in the builder hero
-  await expect(page.locator('#builder .hero')).toContainText(/\d+ of \d+ simulated opponents beat all three/);
+  await expect(page.locator('#builder .hero')).toContainText(/Beaten by \d+ of the common Pokémon|No common Pokémon beats all three of yours/);
   await page.evaluate(() => Planner.nav('#/matchups'));
   await expect(page.locator('#matchups')).toContainText("simulated with PvPoke's engine");
   await expect(page.locator('#matchups .chip.ok')).toContainText('Builder');
@@ -23,7 +23,7 @@ test('the matrix drives roles, threat counts and the Matchups page', async ({ pa
   expect(await page.evaluate(() => JSON.parse(localStorage.mu).recent)).toEqual(['tinkaton']);
   const roles = await page.evaluate(() => { const L = Planner.__L ? Planner.__L() : null; return L; });
   await page.evaluate(() => Planner.openTeam(['azumarill', 'medicham', 'altaria']));
-  await expect(page.locator('#team')).toContainText(/simulated opponents beat all three/);
+  await expect(page.locator('#team')).toContainText(/beat all three/);
   await expect(page.locator('#team .members')).toContainText(/Lead|Swap|Closer/);
   // move counts on a Pokémon page
   await page.evaluate(() => Planner.openMon('medicham'));

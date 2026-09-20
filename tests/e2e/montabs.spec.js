@@ -8,7 +8,7 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   // not owned: no scan section, PvP tab by default with the moves, meta matchups and how to get it
   await expect(mon.locator('.montabs button.on')).toHaveText('PvP');
   await expect(mon).toContainText('Moves');
-  await expect(mon).toContainText('Against the meta');
+  await expect(mon).toContainText('Against the common Pokémon');
   await expect(mon).toContainText('How to get Tinkaton');
   await expect(mon.locator('button:has-text("Update with a new scan")')).toHaveCount(0);
   expect(await page.evaluate(() => location.hash)).toBe('#/mon/tinkaton');
@@ -40,7 +40,7 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   await expect(mon.locator('.use.raid .ur').first()).toBeVisible();
   await expect(mon).toContainText('When it is the boss');
   await expect(mon).toContainText(/fire|ground|poison/);
-  await expect(mon).not.toContainText('Against the meta');
+  await expect(mon).not.toContainText('Against the common Pokémon');
   // the tab sticks across Pokémon; back to PvP
   await page.evaluate(() => Planner.openMon('azumarill'));
   await expect(mon.locator('.montabs button.on')).toContainText('PvE');

@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.73';
+const APP_VERSION='9.74';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -95,7 +95,7 @@ async function loadMeta(){
     applyLeague(APP.league||{slug:'great',cp:1500,title:'Great League'}); rankCache.clear();
     APP.prevo=APP.prevo||{}; APP.unranked=APP.unranked||{}; APP.benchmark=APP.benchmark||{best:720.9,median:521.5};
     META={}; for(const [id,e] of Object.entries(APP.pokemon)) META[id]=[e.rank, e.score, e.moveset];
-    const di=$('datainfo'); if(di) di.textContent=`PvPoke ${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} meta Pokémon`;
+    const di=$('datainfo'); if(di) di.textContent=`PvPoke ${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} most common Pokémon`;
     const dl=$('species'); if(dl) dl.innerHTML=Object.keys(APP.pokemon).map(id=>`<option value="${id}">`).join('');
     try{ migrateScans(); dedupeScans(); }catch(e){ console.warn('migration skipped', e); }
   }catch(e){

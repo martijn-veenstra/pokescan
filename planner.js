@@ -420,12 +420,11 @@ function renderTodayInner(el) {
   }
   const ids = best.members.map(x => x.speciesId), rl = roles(L, ids);
   const pctBar = Math.max(4, Math.min(100, (best.teamScore - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
-  const shared = best.sharedWeaknesses.filter(n => !best.unansweredMeta.includes(n));
   h += `<div class="hero" onclick="Planner.openTeam(${attr(ids)},null)">
     <div class="sec" style="margin:0 0 10px">Run this team <small>best of ${rep.todayAll.length >= 12 ? '12+' : rep.todayAll.length} buildable · tap for details</small></div>
     <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
     <div class="scorebar"><span class="big">${best.teamScore.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
-    <div class="dim" style="font-size:12px;margin-top:8px">${best.unansweredMeta.length ? `No answer to ${fewChips(best.unansweredMeta, 'warn')}. ` : 'Covers every meta Pokémon. '}${shared.length ? `${shared.length} meta Pokémon beat two of three.` : ''}</div>
+    <div class="dim" style="font-size:12px;margin-top:8px">${coverText({holes: best.unansweredMeta}, L)}. Tap for the ones it loses to.</div>
   </div>`;
   // next moves: what the Pokémon you actually run still need; everything else is an idea behind "more"
   const all = nextMoves(m), open = all.filter(x => !x.done && !x.snoozed), snoozed = all.filter(x => x.snoozed);
@@ -584,7 +583,7 @@ function renderTeamsInner(el) {
       if (others.length > 5) h += `<div class="note" style="cursor:pointer" onclick="Planner.toggleTeamsAll()">${UI.teamsAll ? '▾ show fewer' : `▸ show ${others.length - 5} more`}</div>`;
     }
   }
-  h += `<div class="note">Score = mean best matchup rating against the meta, minus 12 per unanswered meta Pokémon and 6 per one that beats two members. Meta best is about ${Math.round((APP.benchmark || {best: 721}).best)}. Tap a team for its roles, weak spots, swaps and what its members still need.</div>`;
+  h += `<div class="note">Each team says how many of the ${m.L.meta.length} most common Pokémon it has a winning answer to. The number on the left is its score: how well it does against all of them, best in the game about ${Math.round((APP.benchmark || {best: 721}).best)}. Tap a team for its roles, what it loses to, swaps and what its members still need.</div>`;
   el.innerHTML = h;
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
@@ -644,11 +643,11 @@ function teamInner(m, ids, name) {
     <div class="sec" style="margin:0 0 10px">${esc(saved || name || ids.map(nm).join(' / '))} <small>${isBest ? 'best from your roster' : saved ? 'your in-game party' : metaRank ? `meta team #${metaRank}` : name ? 'shared team' : 'team'}</small></div>
     <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
-    <div class="dim" style="font-size:12px;margin-top:8px">${d.unansweredMeta.length ? `No answer to ${fewChips(d.unansweredMeta, 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `${d.sharedWeaknesses.length} meta Pokémon beat two of three: ${fewText(d.sharedWeaknesses)}.` : ''}</div>
+    <div class="dim" style="font-size:12px;margin-top:8px">${coverText({holes: d.unansweredMeta}, L)}. What it loses to is below.</div>
     <div style="font-size:13px;margin-top:8px">${esc(needLine(m, ids))}</div>
   </div>`;
   // members
-  h += `<div class="sec">Members <small>role · moves used for scoring · status</small></div><div class="team members" style="cursor:default">` + rl.map(r => {
+  h += `<div class="sec">Members <small>role · moves · status</small></div><div class="team members" style="cursor:default">` + rl.map(r => {
     const mv = L.movesOf(r.id), st = ownership(m, r.id), o = own[r.id];
     const status = st === 'owned' ? (o && !o.manual ? (o.toLevel > 40 && o.toLevel > o.level ? `needs L${o.toLevel}, XL candy` : o.toLevel > o.level ? `${o.cp} CP · power up to L${o.toLevel}` : `${o.cp} CP · ready`) : 'owned, not scanned') : st === 'pending' ? 'pending: you are building it' : st === 'wanted' ? 'on your wanted list' : 'not in your roster';
     return `<div class="mb"><span class="rl">${r.role}</span>${icon(r.id, 'm')}<span class="mn"><b onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span class="dim">#${APP.pokemon[r.id].rank}</span><div class="dt">${mv.map(mvName).map(esc).join(' · ')} · ${esc(status)}</div></span>${ownChip(st) || chip('missing', 'warn')}</div>`;
@@ -661,10 +660,10 @@ function teamInner(m, ids, name) {
   h += todo.length ? todo.map(moveCard).join('') : `<div class="note">Nothing open: the members you own are at the cap and carry the right moves.</div>`;
   // weak spots
   const tl = L.mx ? L.threatList(ids, 10) : null;
-  h += `<div class="sec">Weak spots <small>meta Pokémon that beat two or all three${tl ? ` · <b>${tl.count} of ${tl.pool}</b> simulated opponents beat all three` : ''}</small></div>`;
-  if (tl && tl.count) h += `<div class="team" style="cursor:default"><div class="chips">${tl.threats.map(t => `<span class="chip warn" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${esc(nm(t.id))} <span style="opacity:.7">${t.ratings.map(r => Math.round(r)).join('/')}</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">PvPoke-simulated (1-1 shields): every member rates under 500 against these. <a href="#" onclick="Planner.nav('#/matchups');return false">Open Matchups</a> to see them per shield scenario.</div></div>`;
-  if (!th.length) h += `<div class="note">None: every meta Pokémon loses to at least two of your three.</div>`;
-  else h += `<div class="team" style="cursor:default">` + fold(th.map(r => `<div class="thr"><b style="cursor:pointer" onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? 'beats all three, nobody answers it' : `beats ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`), 8, {label: n => `${n} more threats`}) + '</div>';
+  h += `<div class="sec">What this team loses to <small>they beat two or three of yours${tl ? ` · <b>${tl.count}</b> beat all three` : ''}</small></div>`;
+  if (tl && tl.count) h += `<div class="team" style="cursor:default"><div class="chips">${tl.threats.map(t => `<span class="chip warn" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${esc(nm(t.id))} <span style="opacity:.7">${t.ratings.map(r => Math.round(r)).join('/')}</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">Simulated with one shield each: all three of yours lose to these. <a href="#" onclick="Planner.nav('#/matchups');return false">Open Matchups</a> to see them per shield scenario.</div></div>`;
+  if (!th.length) h += `<div class="note">Nothing common beats two of your three.</div>`;
+  else h += `<div class="team" style="cursor:default">` + fold(th.map(r => `<div class="thr"><b style="cursor:pointer" onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? 'beats all three of yours' : `beats your ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`), 8, {label: n => `${n} more threats`}) + '</div>';
   // search strings
   h += `<div class="sec">Search in Pokémon GO <small>find them in your storage</small></div>` + searchBlock(ids);
   // swaps
@@ -821,7 +820,7 @@ function coverageInner(L, team, m) {
   const grid = `<div class="cov"><div class="cr head"><span>Meta threat</span>${team.map(t => `<span>${esc(nm(t))}</span>`).join('')}</div>` +
     rows.map(o => `<div class="cr ${ev.shared.includes(o) || ev.holes.includes(o) ? 'tint' : ''}"><span>${esc(nm(o))} <span class="dim">#${APP.pokemon[o].rank}</span></span>${team.map(t => `<i class="${cls(L.rating(t, o))} ${L.source(t, o) === 'est' ? 'est' : ''}" title="${Math.round(L.rating(t, o))}"></i>`).join('')}</div>`).join('') +
     `<div class="legend"><span><i class="w"></i>wins</span><span><i class="e"></i>even</span><span><i class="l"></i>loses</span><span><i class="w est"></i>faded = estimated from typing</span><span class="dim">${rows.length} of ${L.meta.length}</span></div></div>`;
-  const readout = `${ev.holes.length ? `<b>${esc(ev.holes.map(nm).join(', '))}</b> ${ev.holes.length > 1 ? 'have' : 'has'} no green cell: nobody on this team beats ${ev.holes.length > 1 ? 'them' : 'it'}. ` : 'Every row has a green cell, so nothing is unanswered. '}${ev.shared.length ? `Tinted rows beat two of your three: if your lead meets one, swap straight to the one green Pokémon.` : ''}`;
+  const readout = `${ev.holes.length ? `<b>${esc(ev.holes.map(nm).join(', '))}</b> ${ev.holes.length > 1 ? 'have' : 'has'} no green cell: none of your three beats ${ev.holes.length > 1 ? 'them' : 'it'}. ` : 'Every row has a green cell: your team beats all of them. '}${ev.shared.length ? `A tinted row beats two of your three: if your lead meets one, swap straight to the green Pokémon.` : ''}`;
   const sw = swaps.slice(0, 4).map(s => `<div class="swap"><span class="dim">Swap ${esc(nm(s.out))} → ${esc(nm(s.in))}${s.pending ? ' (pending)' : ''}</span><span class="${s.delta >= 0 ? 'up' : 'down'}">${s.delta >= 0 ? '+' : ''}${s.delta}${s.fixed.length ? ' · fixes ' + esc(s.fixed.slice(0, 2).join(', ')) : ''}${s.opened.length ? ' · opens ' + esc(s.opened.slice(0, 2).join(', ')) : ''}</span></div>`).join('');
   $('sheet').innerHTML = `<div class="box"><h2><span>${team.map(nm).map(esc).join(' / ')} <span class="sc">${ev.score.toFixed(1)}</span></span><span class="x" onclick="Planner.closeSheet()">✕</span></h2>${grid}<div class="team" style="margin-top:10px"><div class="nm">Read-out</div><div class="dt" style="font-size:13px;color:var(--ink)">${readout}</div></div>${sw ? `<div class="sec">If you swap one member</div><div class="swaps">${sw}</div>` : ''}</div>`;
   $('sheet').classList.add('open');
@@ -1666,10 +1665,10 @@ function monInner(m, id, noHead) {
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
   h += `<div class="sec">With your roster <small>${fit.owned ? `in ${fit.inTeams} of ${fit.of} buildable teams` : 'if you add it'}</small></div>`;
-  if (!fit.owned && fit.delta !== null) h += `<div class="team" style="cursor:default"><span class="sc ${fit.delta > 0 ? '' : 'dim'}">${fit.delta > 0 ? '+' + fit.delta : fit.delta}</span><span class="nm">${fit.delta > 0 ? `Lifts your best team from ${best.teamScore.toFixed(0)} to ${fit.top.teamScore.toFixed(0)}` : `Best team with it scores ${fit.top.teamScore.toFixed(0)}, your current best is ${best.teamScore.toFixed(0)}`}</span><div class="dt">${fit.answers.length ? `Answers ${esc(fit.answers.map(nm).join(', '))}, which your best team ${best.unansweredMeta.length ? 'lacks' : 'struggles with'}.` : 'Does not fix a weak spot of your current best team.'}</div></div>`;
+  if (!fit.owned && fit.delta !== null) h += `<div class="team" style="cursor:default"><span class="sc ${fit.delta > 0 ? '' : 'dim'}">${fit.delta > 0 ? '+' + fit.delta : fit.delta}</span><span class="nm">${fit.delta > 0 ? `Lifts your best team from ${best.teamScore.toFixed(0)} to ${fit.top.teamScore.toFixed(0)}` : `Best team with it scores ${fit.top.teamScore.toFixed(0)}, your current best is ${best.teamScore.toFixed(0)}`}</span><div class="dt">${fit.answers.length ? `It beats ${esc(fit.answers.map(nm).join(', '))}, which your best team loses to.` : 'Does not fix a weak spot of your current best team.'}</div></div>`;
   else if (!fit.owned) h += `<div class="note">Own at least two other Pokémon under the cap to see teams with it.</div>`;
   if (fit.owned && fit.answers.length) { const inBest = best && best.members.some(x => x.speciesId === id);
-    h += `<div class="note">${inBest ? `In your best team it is the one answer to ${esc(fit.answers.map(nm).join(', '))}: keep it for those.` : `Answers ${esc(fit.answers.map(nm).join(', '))}, which your best team struggles with.`}</div>`; }
+    h += `<div class="note">${inBest ? `In your best team it is the only one that beats ${esc(fit.answers.map(nm).join(', '))}: keep it for those.` : `It beats ${esc(fit.answers.map(nm).join(', '))}, which your best team loses to.`}</div>`; }
   if (fit.teams.length) h += fit.teams.map(t => teamRow(m, t.members.map(x => x.speciesId), null)).join('');
   else if (fit.owned) h += `<div class="note">Not in any of the top ${fit.of} teams from what you own.</div>`;
   if (fit.owned && fit.partners.length) h += `<div class="note">Best partners: ${fit.partners.map(p => `<a href="#" onclick="Planner.openMon('${p}');return false">${esc(nm(p))}</a>`).join(', ')}</div>`;
@@ -1678,7 +1677,7 @@ function monInner(m, id, noHead) {
   const rated = L.meta.filter(x => x !== id).map(x => ({o: x, r: L.rating(id, x)}));
   const wins = rated.filter(x => x.r >= 500).sort((p, q) => q.r - p.r), losses = rated.filter(x => x.r < 400).sort((p, q) => APP.pokemon[p.o].rank - APP.pokemon[q.o].rank);
   const mchip = x => `<span class="chip ${x.r >= 500 ? 'meta1' : 'warn'}" style="cursor:pointer" onclick="Planner.openMon('${x.o}')">${esc(nm(x.o))} <span style="opacity:.7">#${APP.pokemon[x.o].rank}</span></span>`;
-  h += `<div class="sec">Against the meta <small>${wins.length} wins · ${rated.length - wins.length - losses.length} even · ${losses.length} losses of ${rated.length}</small></div>`;
+  h += `<div class="sec">Against the common Pokémon <small>${wins.length} wins · ${rated.length - wins.length - losses.length} even · ${losses.length} losses of ${rated.length}</small></div>`;
   h += `<div class="team" style="cursor:default"><div class="nm" style="font-size:13px">Loses to <span class="dim">most dangerous first</span></div><div class="chips">${fold(losses.map(mchip), 10, {chip: true}) || '<span class="dim">nothing in the meta beats it clearly</span>'}</div>
     <div class="nm" style="font-size:13px;margin-top:10px">Beats</div><div class="chips">${fold(wins.map(mchip), 10, {chip: true}) || '<span class="dim">no clear wins</span>'}</div>
     <div class="note" style="margin:8px 0 0">Ratings: PvPoke's published matchups where available, type effectiveness and rank otherwise. Tap a name for its page.</div></div>`;
@@ -1766,7 +1765,7 @@ function renderMetaInner(el, key) {
 }
 function renderBuilder(m, L) {
   const slots = UI.build.slots, filled = slots.filter(Boolean);
-  let h = `<div class="note">Pick any three Pokémon: from the rankings, a meta team, or your roster. Scored with the same heuristic as Today.</div>`;
+  let h = `<div class="note">Pick any three Pokémon: from the rankings, a meta team, or your roster. Scored the same way as Today.</div>`;
   const SLOT_NAMES = ['Lead', 'Swap', 'Closer'];   // slot order is the in-game order: lead, safe swap, closer
   h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">${SLOT_NAMES[i]}</span>${icon(id, 'l')}<span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
     : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">${SLOT_NAMES[i]}</span>${icon(null, 'l ph')}<span class="rn dim" style="font-size:14px">＋ pick</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
@@ -1785,11 +1784,11 @@ function renderBuilder(m, L) {
     const missing = filled.filter(id => !ownership(m, id));
     const bmenu = ctxMenu([['Coverage grid', `Planner.coverageWith(${attr(filled)})`], ['Save as in-game party…', `Planner.saveBuildAsTeam()`], missing.length ? [`Add ${missing.length} missing to wanted`, `Planner.wantMissing()`] : null, ['Copy Pokémon GO search', `Planner.copyText(${attr(teamSearch(filled))})`], ['Clear slots', `Planner.clearSlots()`, true]]);
     h += `<div class="hero" onclick="Planner.coverageWith(${attr(filled)})">
-      <div class="sec" style="margin:0 0 8px;display:flex;justify-content:space-between;align-items:center"><span>This team <small>tap for coverage</small></span>${bmenu}</div>
+      <div class="sec" style="margin:0 0 8px;display:flex;justify-content:space-between;align-items:center"><span>This team <small>tap for the matchup grid</small></span>${bmenu}</div>
       <div class="scorebar" style="margin-top:0"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
       <div class="dim" style="font-size:12px;margin-top:8px">${rl.map(r => `${r.role}: <b style="color:var(--ink)">${esc(nm(r.id))}</b>`).join(' · ')}</div>
-      <div class="dim" style="font-size:12px;margin-top:6px">${d.unansweredMeta.length ? `No answer to ${chip(d.unansweredMeta.join(', '), 'warn')}. ` : 'Covers every meta Pokémon. '}${d.sharedWeaknesses.length ? `Two lose to ${esc(d.sharedWeaknesses.join(', '))}.` : ''}</div>
-      ${L.mx ? `<div class="dim" style="font-size:12px;margin-top:6px">${(() => { const tl = L.threatList(filled, 6); return `<b style="color:var(--ink)">${tl.count} of ${tl.pool}</b> simulated opponents beat all three${tl.count ? ': ' + esc(tl.threats.map(t => nm(t.id)).join(', ')) + (tl.count > 6 ? '…' : '') : ''}`; })()}</div>` : ''}
+      <div class="dim" style="font-size:12px;margin-top:6px">${coverText({holes: d.unansweredMeta}, L)}.</div>
+      ${L.mx ? `<div class="dim" style="font-size:12px;margin-top:6px">${(() => { const tl = L.threatList(filled, 6); return tl.count ? `Beaten by <b style="color:var(--ink)">${tl.count}</b> of the common Pokémon: ${esc(tl.threats.map(t => nm(t.id)).join(', '))}${tl.count > 6 ? '…' : ''}` : 'No common Pokémon beats all three of yours.'; })()}</div>` : ''}
       <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
     h += reviewCard(filled, true);
   } else {
@@ -1803,7 +1802,7 @@ function renderBuilder(m, L) {
     if (filled.length) {
       // weak spots of what is in the slots so far
       const holes = ev.holes.slice().sort((a, b) => APP.pokemon[a].rank - APP.pokemon[b].rank);
-      h += `<div class="sec">Weak spots so far <small>${holes.length ? `${holes.length} of ${L.meta.length} meta Pokémon unanswered` : 'every meta Pokémon is answered'}</small></div>`;
+      h += `<div class="sec">Not covered yet <small>${holes.length ? `you have no winning matchup against these ${holes.length}` : `your picks already beat all ${L.meta.length}`}</small></div>`;
       if (holes.length) h += `<div class="team" style="cursor:default"><div class="chips">${fold(holes.map(o => `<span class="chip warn" onclick="Planner.openMon('${o}')" style="cursor:pointer">${esc(nm(o))} <span style="opacity:.7">#${APP.pokemon[o].rank}</span></span>`), 12, {chip: true})}</div></div>`;
       // suggestions: what to add next, from your roster or from the meta
       const pool = UI.buildPool === 'meta' ? APP.meta.slice(0, 60).filter(distinct) : mine;
@@ -1811,8 +1810,8 @@ function renderBuilder(m, L) {
         .sort((a, b) => b.score - a.score).slice(0, 6);
       h += `<div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>Add next <small>${filled.length === 2 ? 'completes the team' : 'best partner'}</small></span><span class="tabs sub seg"><button class="${UI.buildPool !== 'meta' ? 'on' : ''}" onclick="Planner.buildPool('roster')">Your roster</button><button class="${UI.buildPool === 'meta' ? 'on' : ''}" onclick="Planner.buildPool('meta')">Meta</button></span></div>`;
       if (!sug.length) h += `<div class="note">${UI.buildPool === 'meta' ? 'No meta Pokémon left to add.' : 'Nothing in your roster fits; switch to Meta to see what to catch.'}</div>`;
-      else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `answers <span class="good">${fewText(x.fixes.map(nm))}</span>` : 'answers nothing new'}${x.left ? ` · ${x.left} still unanswered` : ' · covers the whole meta'}</div></span><span class="go">+</span></div>`).join('');
-      h += `<div class="note">Score = the team so far plus this Pokémon, on the same scale as Today. "Answers" lists the meta Pokémon that would no longer go unanswered.</div>`;
+      else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `starts beating <span class="good">${fewText(x.fixes.map(nm))}</span>` : 'beats nothing new'}${x.left ? ` · ${x.left} still not covered` : ` · then you beat all ${L.meta.length}`}</div></span><span class="go">+</span></div>`).join('');
+      h += `<div class="note">The score is your slots with this Pokémon added, on the same scale as Today. The green names are the ones it would start beating for you.</div>`;
     }
   }
   return h;
