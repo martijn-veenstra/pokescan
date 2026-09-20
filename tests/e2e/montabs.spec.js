@@ -69,5 +69,12 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   // the raids page lists your copy and opens the species page, not the scan page
   await page.evaluate(() => { Planner.pickBoss('tinkaton'); Planner.nav('#/raids'); });
   await expect(page.locator('#raids')).toContainText('Azumarill');
+  // the ⋮ menu stays on screen even when the head wraps and the button sits near the left edge
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => Planner.openMon('chesnaught'));
+  await page.locator('#mon .detail .dh .ctx .dots').click();
+  const box = await page.locator('#mon .detail .dh .ctx .menu').boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
   expect(errors).toEqual([]);
 });

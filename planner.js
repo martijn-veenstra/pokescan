@@ -1565,8 +1565,17 @@ function ctxMenu(items) {                      // ⋮ button with a dropdown; it
   if (!rows) return '';
   return `<div class="ctx" onclick="event.stopPropagation()"><button class="dots" aria-label="More" onclick="Planner.toggleMenu(this)">⋮</button><div class="menu" hidden onclick="this.hidden=true">${rows}</div></div>`;
 }
-function toggleMenu(btn) { const menu = btn.nextElementSibling, open = !menu.hidden; document.querySelectorAll('.ctx .menu').forEach(m => m.hidden = true); menu.hidden = open; }
-document.addEventListener('click', () => document.querySelectorAll('.ctx .menu').forEach(m => m.hidden = true));
+function toggleMenu(btn) {
+  const menu = btn.nextElementSibling, open = !menu.hidden;
+  document.querySelectorAll('.ctx .menu').forEach(m => { m.hidden = true; m.style.transform = ''; });
+  menu.hidden = open;
+  if (!menu.hidden) {                          // the menu hangs left of the ⋮; keep it on screen when the button sits near the left edge
+    const r = menu.getBoundingClientRect(), pad = 8;
+    const shift = Math.min(pad - r.left, window.innerWidth - pad - r.right);
+    if (shift > 0) menu.style.transform = `translateX(${Math.round(shift)}px)`;
+  }
+}
+document.addEventListener('click', () => document.querySelectorAll('.ctx .menu').forEach(m => { m.hidden = true; m.style.transform = ''; }));
 function toggleGloss() { UI.gloss = !UI.gloss; renderMon(); }
 function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
@@ -1719,7 +1728,7 @@ function monInner(m, id, noHead) {
     ROSTER.candidates[id] !== undefined && !o ? ['Remove from wanted', `Planner.dropMon('candidates','${id}')`, true] : null,
   ]);
   let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st) || (!o ? chip('not owned', 'warn') : '')}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
-  h += `<div class="detail" style="gap:8px"><div class="dh"><span style="display:flex;align-items:center;gap:10px;min-width:0">${icon(id, 'xl')}<span class="nm" style="font-size:20px">${esc(e.name)}</span></span><span style="display:flex;align-items:center;gap:8px"><span class="dim">meta #${e.rank} · ${e.score}</span>${menu}</span></div>`;
+  h += `<div class="detail" style="gap:8px"><div class="dh"><span style="display:flex;align-items:center;gap:10px;min-width:0">${icon(id, 'xl')}<span class="nm" style="font-size:20px">${esc(e.name)}</span></span><span style="display:flex;align-items:center;gap:8px;margin-left:auto"><span class="dim">meta #${e.rank} · ${e.score}</span>${menu}</span></div>`;
   if (!noHead && o) h += todoList(m, id);
   const weak = weakTo(id);
   h += `<div class="typerow"><span class="chips" style="margin:0">${e.types.map(t => chip(t, 't-' + t)).join('')}</span></div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
