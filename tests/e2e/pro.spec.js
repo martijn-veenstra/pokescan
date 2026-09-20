@@ -3,7 +3,7 @@ import { openApp } from './helpers.js';
 
 const PK = 'pk_test_' + Buffer.from('fake.clerk.accounts.dev$').toString('base64');
 const STUB = `window.Clerk = { user: {id: 'user_bob', primaryEmailAddress: {emailAddress: 'bob@example.com'}}, session: {getToken: async () => 'tok-bob'}, _l: [], load: async function(){}, addListener(f){ this._l.push(f); }, mountSignIn(){}, unmountSignIn(){}, signOut: async function(){} };`;
-const REVIEW = '**Verdict** Fine.\n\n**Strengths**\n- ok\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none';
+const REVIEW = '**Verdict** Fine.\n\n**Strengths**\n- ok\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none\n\n**Order**\nLead: Azumarill · Swap: Medicham · Closer: Altaria';
 
 test('free plan sees the locked review and the Pro page; Pro unlocks the review', async ({ page }) => {
   let plan = 'free'; const coachPosts = [];

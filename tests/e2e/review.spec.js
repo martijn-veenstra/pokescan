@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { openApp } from './helpers.js';
 
-const REVIEW = '**Verdict** A solid safe-swap core around Azumarill.\n\n**Strengths**\n- Medicham leads and pressures shields\n- Azumarill is the safe swap\n\n**Weak spots**\n- Tinkaton beats all three: swap to Medicham and bait\n\n**Swaps**\n- Altaria → Corsola (Galarian) (to catch or build): answers Tinkaton';
+const REVIEW = '**Verdict** A solid safe-swap core around Azumarill.\n\n**Strengths**\n- Medicham leads and pressures shields\n- Azumarill is the safe swap\n\n**Weak spots**\n- Tinkaton beats all three: swap to Medicham and bait\n\n**Swaps**\n- Altaria → Corsola (Galarian) (to catch or build): answers Tinkaton\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria\nMedicham pressures shields early; Azumarill is the safest switch; Altaria closes with shields down.';
 
 test('a complete team in the builder gets one AI review, cached per trio', async ({ page }) => {
   const posts = [];
@@ -17,10 +17,17 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
   await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
-  await expect(page.locator('#builder .team.card.review .rsec')).toHaveCount(3);
+  await expect(page.locator('#builder .team.card.review .rsec')).toHaveCount(4);
   expect(posts).toHaveLength(1);
   expect(posts[0].mode).toBe('review');
   expect(posts[0].context.builder.slots).toHaveLength(3);
+  // the order the player runs and the app's own role numbers travel with the request
+  expect(posts[0].context.builder.lineup.map(x => x.slot)).toEqual(['Lead', 'Swap', 'Closer']);
+  expect(posts[0].context.builder.lineup[0].types.length).toBeGreaterThan(0);
+  expect(posts[0].context.builder.lineupKnown).toBe(true);
+  expect(posts[0].context.builder.appRoles.map(x => x.role).sort()).toEqual(['Closer', 'Lead', 'Swap']);
+  // the builder's own slots differ from the review's order: one tap reorders them
+  await expect(page.locator('#builder .team.card.review .rsec:has-text("Order") button:has-text("Reorder the slots")')).toBeVisible();
   expect(posts[0].context.builder.weakSpots.length).toBeGreaterThan(0);
   // the same trio again: no new call; a different trio: one more
   await page.evaluate(() => Planner.nav('#/today'));
@@ -35,6 +42,16 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   await page.evaluate(() => Planner.openTeam(['azumarill', 'medicham', 'altaria'], 'Core'));
   await expect(page.locator('#team .team.card.review')).toContainText('Strengths');
   expect(posts).toHaveLength(2);
+  // the party page shows the saved order as Lead / Swap / Closer, and the review's Order line can be applied in one tap
+  await expect(page.locator('#team .hero .role').first()).toContainText('Azumarill');
+  await expect(page.locator('#team .hero .sec small')).toContainText('your order');
+  await expect(page.locator('#team .team.card.review .rsec:has-text("Order")')).toContainText('Lead: Medicham · Swap: Azumarill · Closer: Altaria');
+  await page.click('#team .team.card.review .rsec:has-text("Order") button:has-text("Use this order")');
+  await expect.poll(() => page.evaluate(() => Planner.ROSTER.tagged['Core'].join())).toBe('medicham,azumarill,altaria');
+  await expect(page.locator('#team .hero .role').first()).toContainText('Medicham');
+  await expect(page.locator('#team .hero .role .rl').first()).toHaveText('Lead');
+  await expect(page.locator('#team .team.card.review .rsec:has-text("Order") button')).toHaveCount(0);
+  expect(posts).toHaveLength(2);                    // same trio: the cached review stays
   // Refresh review asks again
   await page.click('#team .team.card.review .ctx .dots');
   await page.click('#team .team.card.review .ctx .menu button:has-text("Refresh review")');

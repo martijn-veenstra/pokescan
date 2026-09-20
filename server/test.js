@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { buildServer } from './index.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const fakeCoach = async ({ context }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none`, model: 'fake', usage: { in: 1, out: 1 } }; };
+const fakeCoach = async ({ context }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria`, model: 'fake', usage: { in: 1, out: 1 } }; };
 // fake Leek Duck: ScrapedDuck JSON plus one event page in Leek Duck's markup (GO Fest with rotating Mega raids)
 const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="raids">Raids</h2>
 <h3>Mega Raids · Saturday</h3><div class="pkmn-list-flex"><div class="pkmn-list-item"><div class="pkmn-list-img"><img src="x.png"></div><span class="pkmn-name">Mega Altaria</span><img class="shiny-icon" src="s.png"></div>

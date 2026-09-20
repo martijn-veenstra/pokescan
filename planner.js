@@ -133,8 +133,9 @@ function roles(L, team) {
   const st = team.map(id => { let losses = 0, sum = 0; for (const o of L.meta) { const r = L.rating(id, o); sum += r; if (r < 400) losses++; } return {id, losses, mean: sum / L.meta.length}; });
   st.sort((a, b) => a.losses - b.losses || b.mean - a.mean);
   const swap = st[0], rest = st.slice(1).sort((a, b) => b.mean - a.mean);
-  return [{role: 'Lead', id: rest[1].id}, {role: 'Swap', id: swap.id}, {role: 'Closer', id: rest[0].id}];
+  return [{role: 'Lead', id: rest[1].id, why: `average ${rest[1].mean.toFixed(0)} against the meta`}, {role: 'Swap', id: swap.id, why: `${swap.losses} hard losses, the fewest`}, {role: 'Closer', id: rest[0].id, why: `average ${rest[0].mean.toFixed(0)}, the best of the two left`}];
 }
+const SLOTS = ['Lead', 'Swap', 'Closer'];         // a saved party's array order is the in-game order
 function coverers(L, team, o) { return team.filter(m => L.rating(m, o) >= 500); }
 function nextMoves(m) {
   const {L, rep, own, auto, ri} = m, out = [];
@@ -616,6 +617,18 @@ function renderTeam() {
   if (!UI.team.ids.every(id => APP.pokemon[id])) { el.innerHTML = '<div class="note">Unknown team.</div>'; return; }
   try { el.innerHTML = teamInner(M(), UI.team.ids, UI.team.name); } catch (e) { el.innerHTML = errorCard('team', e); }
 }
+function reorderTeam(name, ids) {              // a saved party in a new Lead / Swap / Closer order (from the numbers line or the AI review)
+  if (!ROSTER.tagged[name] || ids.length !== 3) return;
+  ROSTER.tagged[name] = ids.slice(); saveRoster(); dirty = true;
+  if (typeof toast === 'function') toast(`${name}: now ${ids.map(nm).join(' · ')}`);
+  openTeam(ids, name);
+}
+function reorderSlots(ids) { UI.build.slots = ids.slice(0, 3); saveBuild(); renderMeta('build'); }
+function orderFromReview(text, ids) {           // the review's "Lead: X · Swap: Y · Closer: Z" line as ids, when it is a permutation of the team
+  const mm = (text || '').match(/Lead:\s*(.+?)\s*·\s*Swap:\s*(.+?)\s*·\s*Closer:\s*(.+?)\s*(?:\n|$)/i); if (!mm) return null;
+  const perm = mm.slice(1, 4).map(n => { const raw = n.replace(/\*\*/g, '').trim(); return ids.find(id => nm(id).toLowerCase() === raw.toLowerCase()) || idByName(raw); });
+  return perm.every(id => id && ids.includes(id)) && new Set(perm).size === 3 ? perm : null;
+}
 function savedName(ids, name) {                 // the party this trio is saved as, if any
   const key = ids.slice().sort().join();
   if (name && ROSTER.tagged[name] && ROSTER.tagged[name].slice().sort().join() === key) return name;
@@ -624,6 +637,8 @@ function savedName(ids, name) {                 // the party this trio is saved 
 function teamInner(m, ids, name) {
   const {L, rep, own} = m, ev = L.evaluate(ids), d = L.describe(ids, ev), rl = roles(L, ids), th = threats(L, ids, ev), sw = bestSwaps(L, ids, m, ev);
   const saved = savedName(ids, name), best = rep.today[0];
+  const show = saved ? ids.map((id, i) => ({role: SLOTS[i], id})) : rl;   // your lineup for a party, the app's roles otherwise
+  const differs = saved && rl.some((r, i) => r.id !== ids[i]);
   const isBest = best && best.members.map(x => x.speciesId).slice().sort().join() === ids.slice().sort().join();
   const metaRank = metaTrios().findIndex(t => t.ids.slice().sort().join() === ids.slice().sort().join()) + 1;
   const back = PAGE_LABEL[UI.teamFrom] || 'Teams';
@@ -640,14 +655,15 @@ function teamInner(m, ids, name) {
   ]);
   let h = `<div class="monhead"><button class="back" onclick="Planner.closeTeam()">‹ ${back}</button><div class="chips" style="margin:0">${saved ? chip('in-game party', 'gl') : ''}${isBest ? chip('recommended', 'ok') : ''}${metaRank ? chip('meta team #' + metaRank, 'meta1') : ''}</div>${menu}</div>`;
   h += `<div class="hero" style="cursor:default">
-    <div class="sec" style="margin:0 0 10px">${esc(saved || name || ids.map(nm).join(' / '))} <small>${isBest ? 'best from your roster' : saved ? 'your in-game party' : metaRank ? `meta team #${metaRank}` : name ? 'shared team' : 'team'}</small></div>
-    <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
+    <div class="sec" style="margin:0 0 10px">${esc(saved || name || ids.map(nm).join(' / '))} <small>${saved ? 'your in-game party · your order' : isBest ? 'best from your roster' : metaRank ? `meta team #${metaRank}` : name ? 'shared team' : 'team'}</small></div>
+    <div class="roles">${show.map(r => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
+    ${saved ? (differs ? `<div class="ord"><span>The numbers say <b>${rl.map(r => `${r.role} ${esc(nm(r.id))}`).join(' · ')}</b><span class="dim"> · ${rl.filter(r => r.why).map(r => `${esc(nm(r.id))}: ${esc(r.why)}`).join('; ')}</span></span><button class="btn sec mini" onclick="Planner.reorderTeam(${attr(saved)},${attr(rl.map(r => r.id))})">Use this order</button></div>` : `<div class="ord dim">Your order matches the app's numbers.</div>`) : ''}
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
     <div class="dim" style="font-size:12px;margin-top:8px">${coverText({holes: d.unansweredMeta}, L)}. What it loses to is below.</div>
     <div style="font-size:13px;margin-top:8px">${esc(needLine(m, ids))}</div>
   </div>`;
   // members
-  h += `<div class="sec">Members <small>role · moves · status</small></div><div class="team members" style="cursor:default">` + rl.map(r => {
+  h += `<div class="sec">Members <small>role · moves · status</small></div><div class="team members" style="cursor:default">` + show.map(r => {
     const mv = L.movesOf(r.id), st = ownership(m, r.id), o = own[r.id];
     const status = st === 'owned' ? (o && !o.manual ? (o.toLevel > 40 && o.toLevel > o.level ? `needs L${o.toLevel}, XL candy` : o.toLevel > o.level ? `${o.cp} CP · power up to L${o.toLevel}` : `${o.cp} CP · ready`) : 'owned, not scanned') : st === 'pending' ? 'pending: you are building it' : st === 'wanted' ? 'on your wanted list' : 'not in your roster';
     return `<div class="mb"><span class="rl">${r.role}</span>${icon(r.id, 'm')}<span class="mn"><b onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span class="dim">#${APP.pokemon[r.id].rank}</span><div class="dt">${mv.map(mvName).map(esc).join(' · ')} · ${esc(status)}</div></span>${ownChip(st) || chip('missing', 'warn')}</div>`;
@@ -755,8 +771,8 @@ const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, 
 const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
 const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
 const coachOn = () => !!(window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable());
-function parseReview(text) {                   // the review prompt asks for **Verdict** / **Strengths** / **Weak spots** / **Swaps**
-  const out = {}, re = /\*\*(Verdict|Strengths|Weak spots|Swaps)\*\*:?\s*/gi, parts = text.split(re);
+function parseReview(text) {                   // the review prompt asks for **Verdict** / **Strengths** / **Weak spots** / **Swaps** / **Order**
+  const out = {}, re = /\*\*(Verdict|Strengths|Weak spots|Swaps|Order)\*\*:?\s*/gi, parts = text.split(re);
   if (parts.length < 3) return {Verdict: text.trim()};
   for (let i = 1; i < parts.length; i += 2) out[parts[i][0].toUpperCase() + parts[i].slice(1).toLowerCase()] = (parts[i + 1] || '').trim();
   return out;
@@ -785,8 +801,13 @@ function reviewCard(ids, auto) {                // the card; auto = ask Claude b
   if (busy || (!rv && auto && !failed)) return `<div class="team card" style="cursor:default">${head('thinking, 20 to 90 seconds')}<div class="dt">Claude is judging this team: roles, weak spots and swaps from your roster.</div></div>`;
   if (!rv && failed) return `<div class="team card" style="cursor:default">${head('not available')}<div class="dt">⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a></div></div>`;
   if (!rv) return `<div class="team card" style="cursor:default">${head('')}<div class="dt"><a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Get an AI review</a> of this team: roles, weak spots and swaps from your roster.</div></div>`;
-  const sec = parseReview(rv.text), order = ['Verdict', 'Strengths', 'Weak spots', 'Swaps'];
-  const body = order.filter(k => sec[k]).map(k => k === 'Verdict' ? `<div class="verdict">${linkNames(mdLite(sec[k]))}</div>` : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('');
+  const sec = parseReview(rv.text), order = ['Verdict', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
+  // the Order section's first line is a lineup: one tap applies it to the saved party or the builder slots when it differs
+  const perm = sec.Order ? orderFromReview(sec.Order, ids) : null, party = perm ? savedName(ids, null) : null;
+  let apply = '';
+  if (perm && party && ROSTER.tagged[party].join() !== perm.join()) apply = `<button class="btn sec mini" onclick="Planner.reorderTeam(${attr(party)},${attr(perm)})">Use this order</button>`;
+  else if (perm && !party && onView() === 'builder' && UI.build.slots.join() !== perm.join()) apply = `<button class="btn sec mini" onclick="Planner.reorderSlots(${attr(perm)})">Reorder the slots</button>`;
+  const body = order.filter(k => sec[k]).map(k => k === 'Verdict' ? `<div class="verdict">${linkNames(mdLite(sec[k]))}</div>` : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}${k === 'Order' ? apply : ''}</div>`).join('');
   return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
 }
 function builderContext(m, L, filled) {
@@ -795,8 +816,13 @@ function builderContext(m, L, filled) {
   const cand = pool => pool.map(p => { const e2 = L.evaluate(filled.concat(p)); return {p, score: e2.score, fixes: ev.holes.filter(o => !e2.holes.includes(o))}; }).sort((a, b) => b.score - a.score).slice(0, 6)
     .map(x => `${nm(x.p)} (#${APP.pokemon[x.p].rank}${ownership(m, x.p) ? ', ' + ownership(m, x.p) : ''}) → team ${x.score.toFixed(0)}, answers ${x.fixes.slice(0, 4).map(nm).join(', ') || 'nothing new'}`);
   const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct);
+  const party = filled.length === 3 ? savedName(filled, null) : null, lineupIds = party ? ROSTER.tagged[party] : filled;
   ctx.builder = {
-    slots: filled.map(id => `${nm(id)} (#${APP.pokemon[id].rank}, ${L.movesOf(id).map(mvName).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
+    slots: filled.map(id => `${nm(id)} (#${APP.pokemon[id].rank}, ${APP.pokemon[id].types.join('/')}, ${L.movesOf(id).map(mvName).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
+    lineup: filled.length === 3 ? lineupIds.map((id, i) => ({slot: SLOTS[i], name: nm(id), types: APP.pokemon[id].types})) : undefined,
+    lineupKnown: filled.length === 3 ? !!(party || onView() === 'builder') : undefined,
+    appRoles: filled.length === 3 ? roles(L, filled).map(r => ({role: r.role, name: nm(r.id), why: r.why || ''})) : undefined,
+    partyName: party || undefined,
     openSlots: 3 - filled.length,
     scoreSoFar: ev.score, weakSpots: ev.holes.slice(0, 15).map(o => `${nm(o)} #${APP.pokemon[o].rank}`),
     twoOfThreeLoseTo: filled.length === 3 ? ev.shared.slice(0, 10).map(nm) : undefined,
@@ -2245,7 +2271,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

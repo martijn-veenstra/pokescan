@@ -429,3 +429,9 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .ivt tr.sep td{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:8px;border-bottom:none}
 .ivt tr.xmore-row td{color:var(--dim);font-size:12.5px;cursor:pointer;border-bottom:none;padding-top:8px}
 .ivc .dt b{color:var(--ink)}.ivc .dt b.hi{color:var(--green)}
+
+/* team page: the app's order suggestion under the hero tiles; the review's one-tap reorder */
+.hero .ord{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;font-size:12.5px;line-height:1.45}.hero .ord.dim{color:var(--dim)}
+.hero .ord b{font-weight:600}.hero .ord .dim{font-size:11.5px}
+.btn.sec.mini{margin:0;padding:6px 10px;font-size:12px;flex:none;color:var(--ink);border-radius:9px}
+.review .rsec .btn.mini{display:inline-block;margin-top:6px}

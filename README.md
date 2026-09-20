@@ -76,6 +76,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **AI review**: every complete team in the builder, and every saved party, gets one structured Claude review (verdict,
   strengths, weak spots, swaps from your roster), cached per trio and league so it costs one call; saved-team rows show
   the verdict, ⋮ → Refresh review asks again. Other team pages offer the review on tap.
+  The review also judges the Lead / Swap / Closer order: its **Order** line names the lineup it would run, with the reasons
+  from the members' types and the app's role numbers, and one tap applies it to the saved party or the builder slots. A saved
+  party's page shows your own order in the hero tiles, with the app's suggestion and a **Use this order** button under them.
 - **Shadows**: ⋮ → Mark as Shadow on a scan card maps it to PvPoke's shadow ranking (search strings add `&shadow`);
   the card shows how the other form would rank.
 - **Meta changes**: `scripts/diff_app_data.py` records moveset changes, meta-group entries/exits and rank jumps in
