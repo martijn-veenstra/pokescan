@@ -145,6 +145,8 @@ assert.equal(r.statusCode, 200);
   r = await app.inject({ method: 'GET', url: '/data/app-great.json' });
   assert.equal(r.headers['content-encoding'], undefined, 'plain file without accept-encoding'); assert.ok(JSON.parse(r.body).pokemon);
 }
+r = await app.inject({ method: 'GET', url: '/icons/pokemon/melmetal.webp' });
+assert.equal(r.statusCode, 200); assert.equal(r.headers['content-type'], 'image/webp'); assert.ok(/immutable/.test(r.headers['cache-control']), 'icons are immutable');
 r = await app.inject({ method: 'GET', url: '/some/deep/link' });
 assert.equal(r.statusCode, 200, 'SPA fallback');
 r = await app.inject({ method: 'GET', url: '/api/missing' });

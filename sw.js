@@ -1,13 +1,14 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v9.70';
-const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'scanner.js', 'planner.js', 'auth.js', 'sync.js', 'share.js', 'sources.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'pokescan-v9.71';
+const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'scanner.js', 'planner.js', 'auth.js', 'sync.js', 'share.js', 'sources.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/pokemon/_missing.svg'];
+const ICONS = 'pokescan-icons';                  // Pokémon icons: cache-first, kept across versions (a species' render does not change)
 const DATA = ['data/app-great.json', 'data/cups.json', 'data/matrix-great.json', 'data/pve.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.concat(DATA))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== VERSION + '-vendor').map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== VERSION + '-vendor' && k !== ICONS).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
@@ -24,6 +25,10 @@ self.addEventListener('fetch', e => {
   }
   if (url.origin !== location.origin || e.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
   const path = url.pathname.replace(/^.*\//, '') || './';
+  if (url.pathname.includes('/icons/pokemon/')) {
+    e.respondWith(caches.open(ICONS).then(async c => (await c.match(e.request)) || fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; })));
+    return;
+  }
   if (url.pathname.includes('/vendor/')) {
     // big, immutable recogniser files: cache-first, fetched once
     e.respondWith(caches.open(VERSION + '-vendor').then(async c => (await c.match(e.request)) || fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; })));

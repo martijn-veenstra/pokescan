@@ -23,7 +23,8 @@ def strip(o):
 
 def main():
     files = subprocess.run(["git", "diff", "--name-only", "--", "data"], capture_output=True, text=True, check=True).stdout.split()
-    changed = []
+    changed = subprocess.run(["git", "status", "--porcelain", "--", "icons"], capture_output=True, text=True, check=True).stdout.split("\n")
+    changed = [l[3:] for l in changed if l.strip()]      # new or changed Pokémon icons count as a change
     for f in files:
         old = subprocess.run(["git", "show", f"HEAD:{f}"], capture_output=True, text=True)
         try:

@@ -130,7 +130,7 @@ function render() {
     const x = `<span class="x" onclick="Share.dismiss('${c.id}')">✕</span>`, when = new Date(c.t).toLocaleString('nl-NL', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
     if (c.kind === 'teaser') return window.Planner && Planner.proTeaser ? Planner.proTeaser('Read this screenshot', 'Claude reads battle results and Team GO Rocket taunts from screenshots. That is a Pro feature.').replace('<div class="sec"', x + '<div class="sec"') : '';
     if (c.kind === 'battle_end') {
-      const side = (list, lead) => list.map(p => `<span class="chip ${p.id ? '' : 'dim'} ${lead && p.name === lead ? 'ok' : ''}" ${p.id ? `onclick="Planner.openMon('${p.id}')" style="cursor:pointer"` : ''}>${esc(p.name || '?')}</span>`).join('');
+      const side = (list, lead) => list.map(p => `<span class="chip ${p.id ? '' : 'dim'} ${lead && p.name === lead ? 'ok' : ''}" ${p.id ? `onclick="Planner.openMon('${p.id}')" style="cursor:pointer"` : ''}>${p.id ? Planner.icon(p.id, 'xs') : ''}${esc(p.name || '?')}</span>`).join('');
       return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${c.result === 'W' ? '✓ Win' : c.result === 'L' ? '✕ Loss' : c.result === 'D' ? 'Draw' : 'Battle'} <small>read by Claude · ${esc(when)}</small></span></div>
         <div class="dt">Their team${c.opp && c.opp[0] ? ', lead first' : ''}</div><div class="chips">${side(c.opp || [], c.opp && c.opp[0] && c.opp[0].name)}</div>
         <div class="dt" style="margin-top:6px">Your team${c.party ? ` · ${esc(c.party)}` : ''}</div><div class="chips">${side(c.my || [])}</div>
@@ -140,7 +140,7 @@ function render() {
     if (c.kind === 'rocket') {
       return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${esc(c.who)} <small>read by Claude · ${esc(when)}</small></span></div>
         ${c.quote ? `<div class="dt">“${esc(c.quote)}”</div>` : ''}
-        ${c.names.length ? `<div class="dt" style="margin-top:6px">You will meet Shadow</div><div class="chips">${c.cands.map(k => `<span class="chip ${k.wanted ? 'ok' : k.rank && k.rank <= 100 ? 'gl' : ''}" ${k.id ? `onclick="Planner.openMon('${k.id}')" style="cursor:pointer"` : ''}>${esc(k.name)}${k.text ? ` <span style="opacity:.7">${esc(k.text)}</span>` : ''}</span>`).join('')}</div>` : ''}
+        ${c.names.length ? `<div class="dt" style="margin-top:6px">You will meet Shadow</div><div class="chips">${c.cands.map(k => `<span class="chip ${k.wanted ? 'ok' : k.rank && k.rank <= 100 ? 'gl' : ''}" ${k.id ? `onclick="Planner.openMon('${k.id}')" style="cursor:pointer"` : ''}>${k.id ? Planner.icon(k.id, 'xs') : ''}${esc(k.name)}${k.text ? ` <span style="opacity:.7">${esc(k.text)}</span>` : ''}</span>`).join('')}</div>` : ''}
         <div class="dt" style="margin-top:6px;color:var(--ink)">${esc(c.verdict)}</div>${c.known ? '' : '<div class="dt">Lineups: <a href="https://leekduck.com/rocket-lineups/" target="_blank" rel="noopener">Leek Duck</a></div>'}</div>`;
     }
     return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 4px"><span>Shared screenshot <small>read by Claude · ${esc(when)}</small></span></div><div class="dt">${esc(c.line)}</div></div>`;

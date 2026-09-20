@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.70';
+const APP_VERSION='9.71';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1131,7 +1131,7 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
     ].join('');
   const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
   return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan('${r.key.replace(/'/g,'')}')`}">${lineageBanner(r)}
-    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span>
+    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon((Planner.scanId(r)||{}).id,'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
       <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
     <div class="ivrow">
       <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>

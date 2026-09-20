@@ -158,6 +158,14 @@ data files every Monday and commits them, so the app updates itself.
 
 ## Bundled app data
 
+**Pokémon icons.** Every Pokémon name in cards, rows, hero tiles, builder slots, rankings, raids and page heads carries the
+game's own render, sized to the text it sits next to (16 to 56 px). `scripts/build_icons.py` builds `icons/pokemon/<pvpokeId>.webp`
+(96 px) from the PokeMiners asset dump (https://github.com/PokeMiners/pogo_assets), trying the form names PvPoke's ids imply;
+shadow Pokémon use the normal render with a purple glow drawn by the app, as the game draws its aura. The files are committed; the weekly data workflow adds icons for new species and
+`--check` lists the ids in `data/app-*.json` without one. Missing or unknown ids fall back to a grey Pokéball.
+The service worker keeps the icons in a cache of their own across versions. The renders are Nintendo / The Pokémon
+Company artwork, used as every fan tool does.
+
 `scripts/precompress.mjs` writes Brotli and gzip siblings of the data files, scripts and stylesheet (git-ignored, built into the
 Docker image) that `@fastify/static` serves with `preCompressed`: the 800 KB Great League data file goes over the wire as 110 KB.
 
