@@ -158,6 +158,9 @@ data files every Monday and commits them, so the app updates itself.
 
 ## Bundled app data
 
+`scripts/precompress.mjs` writes Brotli and gzip siblings of the data files, scripts and stylesheet (git-ignored, built into the
+Docker image) that `@fastify/static` serves with `preCompressed`: the 800 KB Great League data file goes over the wire as 110 KB.
+
 `scripts/build_app_data.py` writes `data/app-great.json`: rankings with recommended movesets, published
 matchups/counters, move names and types, the curated meta group, evolutions and second-move cost. The
 page loads this file (offline via the service worker) instead of calling PvPoke live.

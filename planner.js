@@ -2021,7 +2021,15 @@ function saveBuildAsTeam() { const ids = UI.build.slots.filter(Boolean); if (ids
   const name = prompt('Name for this party', ids.map(nm).join(' / ')); if (!name) return; ROSTER.tagged[name] = ids.slice(); saveRoster(); refresh(); status(`Saved "${name}" under your in-game parties`); }
 
 /* ---------- actions ---------- */
-function refresh() { dirty = true; if (APP && matrixSlug !== LEAGUE.slug) loadMatrix(); setTimeout(msCheck, 0); renderToday(); renderTeams(); renderRoster(); renderMeta(); paintDrawer(); if (onView() === 'matchups') renderMatchups(); if (onView() === 'battles') renderBattles(); if (onView() === 'pro') renderPro(); if (UI.mon && $('view-mon').classList.contains('on')) renderMon(); if (UI.team && $('view-team').classList.contains('on')) renderTeam(); }
+function refresh() {                           // roster state changed: recompute the model and redraw the page on screen (showView redraws a page when it is opened)
+  dirty = true; if (APP && matrixSlug !== LEAGUE.slug) loadMatrix(); setTimeout(msCheck, 0);
+  const v = onView();
+  if (v === 'today') renderToday(); else if (v === 'teams') renderTeams(); else if (v === 'roster') renderRoster();
+  else if (v === 'builder' || v === 'meta' || v === 'rank' || v === 'raids') renderMeta();
+  else if (v === 'matchups') renderMatchups(); else if (v === 'battles') renderBattles(); else if (v === 'pro') renderPro();
+  else if (v === 'mon' && UI.mon) renderMon(); else if (v === 'team' && UI.team) renderTeam();
+  paintDrawer();
+}
 function markDirty() { dirty = true; }
 function toggleAdd() { UI.adding = !UI.adding; renderRoster(); if (UI.adding) $('addid').focus(); }
 function add() { const id = $('addid').value.trim().toLowerCase(), kind = $('addkind').value;

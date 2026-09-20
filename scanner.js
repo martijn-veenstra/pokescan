@@ -44,10 +44,11 @@ function solveForm(b, cp, hp, level, dust){
 /* ---------- PvP ranking (stat product under CP cap, max level 51 w/ best buddy) ---------- */
 const rankCache = new Map();
 function maxL(){ return localStorage.getItem('bb')==='1' ? 102 : 100; }   // L50 unless the Best Buddy boost is switched on (Poké Genie's default too)
-function maxLevelUnderCap(b, ia, id, is, cap){
-  for(let l=maxL(); l>=2; l--){ const lv=l/2;
-    if(calcCP(b,ia,id,is,cpmAt(lv))<=cap) return lv; }
-  return 1;
+function maxLevelUnderCap(b, ia, id, is, cap){    // CP grows with level, so binary search the half-levels (this runs 4096 times per species)
+  let lo=2, hi=maxL();
+  if(calcCP(b,ia,id,is,cpmAt(lo/2))>cap) return 1;
+  while(lo<hi){ const mid=(lo+hi+1)>>1; if(calcCP(b,ia,id,is,cpmAt(mid/2))<=cap) lo=mid; else hi=mid-1; }
+  return lo/2;
 }
 function statProduct(b, ia, id, is, cap){
   const lv=maxLevelUnderCap(b,ia,id,is,cap), m=cpmAt(lv);
@@ -57,9 +58,8 @@ function statProduct(b, ia, id, is, cap){
 function pvpTable(b, cap){
   const key=b.slice(0,3).join(',')+'|'+cap+'|'+maxL();
   if(rankCache.has(key)) return rankCache.get(key);
-  const rows=[];
-  for(let ia=0;ia<16;ia++)for(let id=0;id<16;id++)for(let is=0;is<16;is++)
-    rows.push({ia,id,is,...statProduct(b,ia,id,is,cap)});
+  const rows=new Array(4096); let k=0;
+  for(let ia=0;ia<16;ia++)for(let id=0;id<16;id++)for(let is=0;is<16;is++){ const sp=statProduct(b,ia,id,is,cap); rows[k++]={ia,id,is,lv:sp.lv,cp:sp.cp,prod:sp.prod}; }
   rows.sort((a,c)=>c.prod-a.prod);
   const t={max:rows[0].prod, rank:new Map()};
   rows.forEach((r,i)=>t.rank.set(r.ia*256+r.id*16+r.is,{n:i+1,lv:r.lv,cp:r.cp,pct:100*r.prod/rows[0].prod}));
@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.69';
+const APP_VERSION='9.70';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1190,7 +1190,7 @@ function showView(t){                              // switch the visible page; n
   for(const k of PAGES){ const v=$('view-'+k); if(v) v.classList.toggle('on',k===t); }
   for(const k of ['today','builder','roster']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',BAR_FOR[t]===k); }
   if(TOP_PAGES.includes(t)) localStorage.setItem('tab',t);
-  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('meta'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon,matchups:P.renderMatchups,battles:P.renderBattles}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
+  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('teams'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon,matchups:P.renderMatchups,battles:P.renderBattles}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
 }
 function showTab(t){ if(window.Planner&&Planner.nav&&TOP_PAGES.includes(t)) Planner.nav('#/'+t); else showView(t); }
 if(!location.hash) showView(localStorage.getItem('tab')||'today');

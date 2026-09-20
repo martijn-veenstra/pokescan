@@ -1,6 +1,9 @@
 // API tests: run against the in-memory store, or against Postgres when DATABASE_URL is set.
 import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildServer } from './index.js';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const fakeCoach = async ({ context }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none`, model: 'fake', usage: { in: 1, out: 1 } }; };
 // fake Leek Duck: ScrapedDuck JSON plus one event page in Leek Duck's markup (GO Fest with rotating Mega raids)
@@ -131,6 +134,17 @@ r = await app.inject({ method: 'GET', url: '/pvp.js' });
 assert.equal(r.statusCode, 200);
 r = await app.inject({ method: 'GET', url: '/data/app-great.json' });
 assert.equal(r.statusCode, 200);
+{ // precompressed siblings (scripts/precompress.mjs) are served when the client accepts them, the plain file otherwise
+  const { execFileSync } = await import('node:child_process');
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts/precompress.mjs')], { stdio: 'ignore' });
+  r = await app.inject({ method: 'GET', url: '/data/app-great.json', headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(r.statusCode, 200); assert.equal(r.headers['content-encoding'], 'br', 'Brotli sibling served');
+  assert.ok(r.rawPayload.length < 200 * 1024, `brotli body is ${r.rawPayload.length} bytes`);
+  r = await app.inject({ method: 'GET', url: '/planner.js', headers: { 'accept-encoding': 'gzip' } });
+  assert.equal(r.headers['content-encoding'], 'gzip', 'gzip sibling served');
+  r = await app.inject({ method: 'GET', url: '/data/app-great.json' });
+  assert.equal(r.headers['content-encoding'], undefined, 'plain file without accept-encoding'); assert.ok(JSON.parse(r.body).pokemon);
+}
 r = await app.inject({ method: 'GET', url: '/some/deep/link' });
 assert.equal(r.statusCode, 200, 'SPA fallback');
 r = await app.inject({ method: 'GET', url: '/api/missing' });

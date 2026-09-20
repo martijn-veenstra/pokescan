@@ -69,6 +69,8 @@
         if (!this.pub.has(d + '|' + a)) this.pub.set(d + '|' + a, 1000 - r);
       }
       this.cache = new Map();
+      this.rows = new Map();                    // Pokémon id -> Float64Array of its rating against every meta opponent
+      this.trioCache = new Map();               // sorted pool -> scored trios (a roster report asks for the same pool several times)
     }
     has(id) { return !!this.pokemon[id]; }
     isPublished(atk, dfn) { return this.pub.has(atk + '|' + dfn); }
@@ -143,16 +145,22 @@
       return {speciesId: id, name: e.name, rank: e.rank, score: e.score, types: e.types,
               fastMove: ms[0], chargedMoves: ms.slice(1), moveNames: ms.map(m => (this.moves[m] || {n: m}).n)};
     }
-    evaluate(team) {
-      const best = [], holes = [], shared = [];
-      for (const o of this.meta) {
-        const rs = team.map(p => this.rating(p, o));
-        const r = Math.max(...rs);
-        best.push(r);
-        if (r < 500) holes.push(o);
-        if (rs.filter(x => x < 400).length >= 2) shared.push(o);
+    row(p) {                                  // one Pokémon's ratings over the meta, computed once per League
+      let r = this.rows.get(p);
+      if (!r) { r = new Float64Array(this.meta.length); for (let i = 0; i < this.meta.length; i++) r[i] = this.rating(p, this.meta[i]); this.rows.set(p, r); }
+      return r;
+    }
+    evaluate(team) {                          // hot path: thousands of trios per roster report, so no per-opponent allocations
+      const rows = team.map(p => this.row(p)), n = this.meta.length, k = rows.length, holes = [], shared = [];
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        let r = -Infinity, low = 0;
+        for (let j = 0; j < k; j++) { const v = rows[j][i]; if (v > r) r = v; if (v < 400) low++; }
+        sum += r;
+        if (r < 500) holes.push(this.meta[i]);
+        if (low >= 2) shared.push(this.meta[i]);
       }
-      const coverage = best.reduce((a, b) => a + b, 0) / best.length;
+      const coverage = sum / n;
       const total = coverage - 12 * holes.length - 6 * shared.length;
       return {score: round1(total), coverage: round1(coverage), holes, shared};
     }
@@ -163,9 +171,12 @@
               sharedWeaknesses: ev.shared.map(o => this.pokemon[o].name)};
     }
     scoredTrios(pool) {
+      const ids = pool.filter(p => this.has(p)), key = ids.slice().sort().join(',');
+      const hit = this.trioCache.get(key); if (hit) return hit;
       const out = [];
-      for (const t of trios(pool.filter(p => this.has(p)))) out.push([this.evaluate(t), t]);
+      for (const t of trios(ids)) out.push([this.evaluate(t), t]);
       out.sort((a, b) => b[0].score - a[0].score);
+      this.trioCache.set(key, out);
       return out;
     }
     bestTrios(pool, top) {

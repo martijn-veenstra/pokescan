@@ -4,5 +4,6 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY . .
+RUN node scripts/precompress.mjs
 EXPOSE 8080
 CMD ["node", "server/index.js"]
