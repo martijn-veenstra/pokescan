@@ -25,12 +25,14 @@ test('Meta teams: the 40 best trios in PvPoke order, must-have / leave-out / bui
   await page.fill('#metaq', 'Mimikyu (Busted)'); await page.keyboard.press('Enter');
   expect(await page.evaluate(() => [...document.querySelectorAll('#meta .team.row')].every(r => !r.querySelector('.trio img[src$="mimikyu.webp"]')))).toBe(true);
   await expect(page.locator('#meta .note').nth(1)).toContainText(/with Tinkaton, without Mimikyu/);
+  // every row says, in one line, how many common Pokémon the team beats
+  await expect(page.locator('#meta .team.row').first().locator('.dt')).toContainText(/Beats (all )?\d+( of \d+)? common Pokémon|Beats all \d+ of the common Pokémon/);
   // filters survive a reload
   await page.reload(); await page.waitForFunction(() => window.Planner && APP);
   await expect(page.locator('#meta .mf .chip.f')).toHaveCount(2);
   // only teams I can build: with one owned Azumarill there is none
   await page.locator('#meta .mf .chip:has-text("only teams I can build")').click();
-  await expect(page.locator('#meta')).toContainText(/No top-40 trio/);
+  await expect(page.locator('#meta')).toContainText(/No trio from the top 40/);
   await page.locator('#meta a:has-text("Clear the filters")').click();
   await expect(rows).toHaveCount(40);
   // ownership rings: an owned Melmetal shows a green ring in the first row

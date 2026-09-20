@@ -347,16 +347,14 @@ const fewChips = (list, cls, n) => fold(list.map(x => chip(x, cls)), n || 3, {ch
 const attr = v => esc(JSON.stringify(v === undefined ? null : v));   // a JS literal inside an HTML attribute
 function teamRow(m, ids, name, extra, badge) {  // one compact line per team; tap opens the team page. badge: text for the left column instead of the score
   const {L} = m, ev = L.evaluate(ids), owned = ids.every(id => ownership(m, id) === 'owned');
-  const weak = weakText(ev);
+  const weak = coverText(ev, L);
   const members = ids.map(id => esc(nm(id))).join(' / '), rv = reviewFor(ids);
   return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc${badge ? ' rk' : ''}">${badge || ev.score.toFixed(0)}</span>${trio(ids, m)}<span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${owned ? ' <span class="chip ok mini">you can build this</span>' : ''}${rv ? `<div class="ai">✦ ${esc(verdictOf(rv))}</div>` : ''}${extra ? ' · ' + extra : ''}</div></span><span class="go">›</span></div>`;
 }
-function weakText(ev) {                       // the team's weak spots in plain words
-  if (!ev.holes.length && !ev.shared.length) return '<span class="good">covers the meta</span>';
-  const parts = [];
-  if (ev.holes.length) parts.push(`<b>no answer to ${fewText(ev.holes.map(nm), 1)}</b>`);
-  if (ev.shared.length) parts.push(ev.shared.length === 1 ? `${esc(nm(ev.shared[0]))} beats two of them` : `${ev.shared.length} beat two of them`);
-  return parts.join(' · ');
+function coverText(ev, L) {                   // one plain line per team: how many of the common Pokémon it has a winning answer to
+  const total = L.meta.length, beats = total - ev.holes.length, pct = beats / total;
+  if (!ev.holes.length) return `<b class="good">Beats all ${total}</b> common Pokémon`;
+  return `Beats <b class="${pct >= 0.9 ? 'good' : pct >= 0.8 ? 'gold' : 'bad'}">${beats} of ${total}</b> common Pokémon`;
 }
 function bestSwaps(L, team, m, ev) {         // one-member swaps from owned/pending pieces, best first
   const {ri} = m; ev = ev || L.evaluate(team);
@@ -1859,8 +1857,7 @@ function metaClear() { META_F.inc = []; META_F.exc = []; META_F.owned = false; U
 function renderMetaTeams(m) {
   if (!APP.meta || !APP.meta.length) return '<div class="note">No meta group in the data file yet.</div>';
   const f = META_F, active = f.inc.length || f.exc.length || f.owned;
-  const rows = metaTrios(f, m), unf = active ? metaTrios(null) : rows;
-  const rankOf = ids => { const k = ids.slice().sort().join(); const i = unf.findIndex(t => t.ids.slice().sort().join() === k); return i >= 0 ? `#${i + 1}` : '·'; };
+  const rows = metaTrios(f, m);
   let h = `<div class="note">The ${META_TOP} best trios from the top ${META_POOL} of PvPoke's ${esc(LEAGUE.title)} meta, with PvPoke's movesets. Tap a team for roles, weak spots, what you still need and its score.</div>`;
   const fchip = (kind, id) => `<span class="chip ${kind === 'inc' ? 'ok' : 'warn'} f">${icon(id, 'xs')}${esc(nm(id))}<span class="x" onclick="Planner.metaDrop('${kind}','${id}')">✕</span></span>`;
   h += `<div class="tchips mf">
@@ -1872,9 +1869,9 @@ function renderMetaTeams(m) {
   if (UI.metaPick) h += `<div class="add" style="margin:0 0 8px"><input id="metaq" list="species" placeholder="${UI.metaPick === 'inc' ? 'must have: Pokémon name…' : 'leave out: Pokémon name…'}" onkeydown="if(event.key==='Enter'){Planner.metaAdd('${UI.metaPick}');event.preventDefault()}"><button onclick="Planner.metaAdd('${UI.metaPick}')">Add</button></div>`;
   if (active) {
     const bits = [f.inc.length ? `with ${fewText(f.inc.map(nm), 3)}` : '', f.exc.length ? `without ${fewText(f.exc.map(nm), 3)}` : '', f.owned ? 'built from what you own' : ''].filter(Boolean).join(', ');
-    h += `<div class="note">${rows.length ? `${rows.length === META_TOP ? `Top ${META_TOP}` : rows.length} trio${rows.length === 1 ? '' : 's'} ${bits}. # is the place in the unfiltered list.` : `No top-${META_POOL} trio ${bits}. <a href="#" onclick="Planner.metaClear();return false">Clear the filters</a>.`}</div>`;
+    h += `<div class="note">${rows.length ? `The ${rows.length === META_TOP ? META_TOP + ' best' : rows.length} trio${rows.length === 1 ? '' : 's'} ${bits}, best first.` : `No trio from the top ${META_POOL} ${bits}. <a href="#" onclick="Planner.metaClear();return false">Clear the filters</a>.`}</div>`;
   }
-  return h + rows.map(t => teamRow(m, t.ids, null, null, rankOf(t.ids))).join('');
+  return h + `<div class="mlist${f.owned ? ' allown' : ''}">` + rows.map((t, i) => teamRow(m, t.ids, null, null, `#${i + 1}`)).join('') + `</div>`;
 }
 function renderRankings(m) {
   const q = UI.rankQ.toLowerCase(), ty = UI.rankType;

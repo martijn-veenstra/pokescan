@@ -29,7 +29,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **≡ menu** (top left): saved teams, **Meta teams** (the 40 best trios from the top 40 of PvPoke's meta group, scored on
   the device with PvPoke's movesets so the order is PvPoke's view; filters for Pokémon a team *must have* or should
   *leave out* and for teams you can build from what you own; each member's icon carries a ring: green owned, blue
-  pending, dimmed not yours; each row opens the team page with the score), PvPoke's full
+  pending, dimmed not yours; each row says in one line how many of the common Pokémon the team beats, and opens the team
+  page for the score, roles and weak spots), PvPoke's full
   rankings with search and type filter, **Raids** (the best PvE attackers per type: DPS, TDO, Elite TM
   moves, megas and shadows toggle, computed by `scripts/build_pve_data.py` from the PokeMiners game
   master, with your scanned copies marked), scans, trainer profile, sync and help. Every page has a
