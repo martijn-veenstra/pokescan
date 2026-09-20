@@ -169,12 +169,10 @@ class League:
             "sharedWeaknesses": shared,
         }
 
-    def best_teams(self, top, pool_size, cap=None):
-        """The `top` best-scoring trios from the top `pool_size` of the meta. `cap` (default top // 4, at least 3) is the most
-        teams one species may sit in: without it the two or three strongest Pokemon land in every single trio and the list
-        shows one core 25 times over instead of 25 different teams."""
+    def best_teams(self, top, pool_size, cap=0):
+        """The `top` best-scoring trios from the top `pool_size` of the meta. `cap` > 0 limits how many kept teams one species
+        may sit in (the app shows the plain ranking and lets the player leave Pokemon out instead, so the default is no cap)."""
         pool = [g["speciesId"] for g in self.meta[:pool_size]]
-        cap = cap or max(3, top // 4)
         results = []
         for team in itertools.combinations(pool, 3):
             if len({base_species(s) for s in team}) < 3:
@@ -184,7 +182,7 @@ class League:
         results.sort(key=lambda r: -r[0])
         kept, seen = [], {}
         for r in results:
-            if any(seen.get(base_species(s), 0) >= cap for s in r[1]):
+            if cap and any(seen.get(base_species(s), 0) >= cap for s in r[1]):
                 continue
             kept.append(r)
             for s in r[1]:
@@ -210,7 +208,7 @@ def main(argv=None):
     ap.add_argument("--leagues", nargs="+", choices=sorted(LEAGUES), default=["great", "ultra", "master", "little"])
     ap.add_argument("--top", type=int, default=25, help="teams to keep per league")
     ap.add_argument("--pool", type=int, default=40, help="candidates: top N ranked Pokemon of the meta group")
-    ap.add_argument("--cap", type=int, default=None, help="most teams one species may appear in (default: top // 4, at least 3)")
+    ap.add_argument("--cap", type=int, default=0, help="most teams one species may appear in (0 = no cap, the default)")
     ap.add_argument("--pretty", action="store_true")
     args = ap.parse_args(argv)
 

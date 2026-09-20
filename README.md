@@ -26,8 +26,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
 - **Leagues**: the ≡ menu switches the whole app between Great, Ultra and Little League and the GO Battle League
   cups PvPoke currently features (`data/cups.json`, rebuilt daily by `scripts/build_cups.py`): rankings, meta
   teams, the cap used for readiness and power-up targets, search strings and roster tiles all follow.
-- **≡ menu** (top left): saved teams, the derived meta teams (each opens a team page; listed by the score with your own
-  moves, the meta # is the order with PvPoke's movesets, and no Pokémon sits in more than a quarter of them), PvPoke's full
+- **≡ menu** (top left): saved teams, **Meta teams** (the 40 best trios from the top 40 of PvPoke's meta group, scored on
+  the device with PvPoke's movesets so the order is PvPoke's view; filters for Pokémon a team *must have* or should
+  *leave out* and for teams you can build from what you own; each member's icon carries a ring: green owned, blue
+  pending, dimmed not yours; each row opens the team page with the score), PvPoke's full
   rankings with search and type filter, **Raids** (the best PvE attackers per type: DPS, TDO, Elite TM
   moves, megas and shadows toggle, computed by `scripts/build_pve_data.py` from the PokeMiners game
   master, with your scanned copies marked), scans, trainer profile, sync and help. Every page has a
@@ -223,7 +225,7 @@ group is scored against the whole meta group. Pairings use PvPoke's published si
 matchup/counter ratings where available, and a type-effectiveness + ranking-score estimate otherwise.
 
 ```sh
-python3 scripts/generate_pvpoke_team_comps.py                 # top 25 teams per league, no species in more than 6 of them (--cap)
+python3 scripts/generate_pvpoke_team_comps.py                 # top 25 teams per league (--cap N limits how often one species appears)
 python3 scripts/generate_pvpoke_team_comps.py --top 50 --pool 30 --leagues great
 ```
 

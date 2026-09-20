@@ -21,7 +21,7 @@ const ICON_DIR = 'icons/pokemon/';
 const icon = (id, cls) => id
   ? `<img class="pi ${cls || ''}${/_shadow$/.test(id) ? ' sh' : ''}" src="${ICON_DIR}${id}.webp" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${ICON_DIR}_missing.svg'">`
   : `<img class="pi ${cls || ''}" src="${ICON_DIR}_missing.svg" alt="">`;
-const trio = ids => `<span class="trio">${ids.map(id => icon(id, 's')).join('')}</span>`;
+const trio = (ids, m) => `<span class="trio">${ids.map(id => { const st = m ? ownership(m, id) : null; return icon(id, 's' + (st === 'owned' ? ' ow' : st === 'pending' ? ' pd' : m ? ' nt' : '')); }).join('')}</span>`;   // with a model: green ring = owned (ow), blue = pending (pd), dimmed = not yours (nt)
 const mvName = m => (APP.moves[m] || {n: m}).n;
 const fmt = n => n.toLocaleString('nl');
 const bestOf = r => r.combos.reduce((a, b) => pct(b) > pct(a) ? b : a);
@@ -345,13 +345,18 @@ function showMore(el, ev) {
 const fewText = (list, n) => fold(list.map(esc), n || 3, {inline: true, sep: ', '});   // "A, B, C and 4 more" inside a sentence, the rest opens on tap
 const fewChips = (list, cls, n) => fold(list.map(x => chip(x, cls)), n || 3, {chip: true, sep: ' '});
 const attr = v => esc(JSON.stringify(v === undefined ? null : v));   // a JS literal inside an HTML attribute
-function teamRow(m, ids, name, extra) {         // one compact line per team; tap opens the team page
-  const {L} = m, ev = L.evaluate(ids), missing = ids.filter(id => ownership(m, id) !== 'owned');
-  const weak = ev.holes.length || ev.shared.length
-    ? [ev.holes.length ? `<b>${ev.holes.length} unanswered</b>` : '', ev.shared.length ? `${ev.shared.length} beat two of three` : ''].filter(Boolean).join(' · ')
-    : '<span class="good">covers the meta</span>';
+function teamRow(m, ids, name, extra, badge) {  // one compact line per team; tap opens the team page. badge: text for the left column instead of the score
+  const {L} = m, ev = L.evaluate(ids), owned = ids.every(id => ownership(m, id) === 'owned');
+  const weak = weakText(ev);
   const members = ids.map(id => esc(nm(id))).join(' / '), rv = reviewFor(ids);
-  return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc">${ev.score.toFixed(0)}</span>${trio(ids)}<span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${rv ? `<div class="ai">✦ ${esc(verdictOf(rv))}</div>` : ''}${missing.length ? ` · ${missing.length} not owned` : ''}${extra ? ' · ' + extra : ''}</div></span><span class="go">›</span></div>`;
+  return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc${badge ? ' rk' : ''}">${badge || ev.score.toFixed(0)}</span>${trio(ids, m)}<span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${owned ? ' <span class="chip ok mini">you can build this</span>' : ''}${rv ? `<div class="ai">✦ ${esc(verdictOf(rv))}</div>` : ''}${extra ? ' · ' + extra : ''}</div></span><span class="go">›</span></div>`;
+}
+function weakText(ev) {                       // the team's weak spots in plain words
+  if (!ev.holes.length && !ev.shared.length) return '<span class="good">covers the meta</span>';
+  const parts = [];
+  if (ev.holes.length) parts.push(`<b>no answer to ${fewText(ev.holes.map(nm), 1)}</b>`);
+  if (ev.shared.length) parts.push(ev.shared.length === 1 ? `${esc(nm(ev.shared[0]))} beats two of them` : `${ev.shared.length} beat two of them`);
+  return parts.join(' · ');
 }
 function bestSwaps(L, team, m, ev) {         // one-member swaps from owned/pending pieces, best first
   const {ri} = m; ev = ev || L.evaluate(team);
@@ -623,7 +628,7 @@ function teamInner(m, ids, name) {
   const {L, rep, own} = m, ev = L.evaluate(ids), d = L.describe(ids, ev), rl = roles(L, ids), th = threats(L, ids, ev), sw = bestSwaps(L, ids, m, ev);
   const saved = savedName(ids, name), best = rep.today[0];
   const isBest = best && best.members.map(x => x.speciesId).slice().sort().join() === ids.slice().sort().join();
-  const metaRank = (APP.metaTeams || []).findIndex(t => t.members.slice().sort().join() === ids.slice().sort().join()) + 1;
+  const metaRank = metaTrios().findIndex(t => t.ids.slice().sort().join() === ids.slice().sort().join()) + 1;
   const back = PAGE_LABEL[UI.teamFrom] || 'Teams';
   const cov = attr(ids), bm = APP.benchmark || {best: 721, median: 521};
   const pctBar = Math.max(4, Math.min(100, (ev.score - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
@@ -1814,14 +1819,62 @@ function renderBuilder(m, L) {
   }
   return h;
 }
+/* ---------- Meta teams: the best trios of PvPoke's meta, scored live with PvPoke's movesets, filtered by what you want in or out ---------- */
+const META_TOP = 40, META_POOL = 40;
+let METAL = null;                               // {app, L}: a League without your moves and without the matrix, so the ranking is PvPoke's view
+function metaLeague() {
+  if (!METAL || METAL.app !== APP) METAL = {app: APP, L: PVP.fromRoster(APP, {owned: {}, pending: {}, candidates: {}, moves: {}}, null)};
+  return METAL.L;
+}
+function metaTrios(f, m) {                      // the top META_TOP trios from the top META_POOL of the meta group; f = {inc, exc, owned}
+  const pool = (APP.meta || []).slice(0, META_POOL).map(x => x.speciesId || x).filter(id => APP.pokemon[id]);
+  const all = metaLeague().scoredTrios(pool);
+  const out = [];
+  for (const [ev, t] of all) {
+    if (f) {
+      if (f.inc.length && !f.inc.every(id => t.includes(id))) continue;
+      if (f.exc.length && f.exc.some(id => t.includes(id))) continue;
+      if (f.owned && m && !t.every(id => ownership(m, id) === 'owned')) continue;
+    }
+    out.push({ids: t, score: ev.score});
+    if (out.length >= META_TOP) break;
+  }
+  return out;
+}
+const META_F = Object.assign({inc: [], exc: [], owned: false}, JSON.parse(localStorage.getItem('metaf') || '{}'));
+const saveMetaF = () => localStorage.setItem('metaf', JSON.stringify(META_F));
+function metaAdd(kind) {                        // the inline picker's Add button (or Enter)
+  const el = $('metaq'), raw = (el.value || '').trim(); if (!raw) return;
+  const id = APP.pokemon[raw.toLowerCase()] ? raw.toLowerCase() : idByName(raw);
+  if (!id || !APP.pokemon[id]) { el.value = ''; el.placeholder = `no "${raw}" in this league`; return; }
+  const list = META_F[kind], other = META_F[kind === 'inc' ? 'exc' : 'inc'];
+  if (kind === 'inc' && list.length >= 3) return;
+  if (!list.includes(id)) list.push(id); const j = other.indexOf(id); if (j >= 0) other.splice(j, 1);
+  UI.metaPick = null; saveMetaF(); renderMeta('teams');
+}
+function metaPick(kind) { UI.metaPick = UI.metaPick === kind ? null : kind; renderMeta('teams'); const el = $('metaq'); if (el) el.focus(); }
+function metaDrop(kind, id) { META_F[kind] = META_F[kind].filter(x => x !== id); saveMetaF(); renderMeta('teams'); }
+function metaOwned(on) { META_F.owned = !!on; saveMetaF(); renderMeta('teams'); }
+function metaClear() { META_F.inc = []; META_F.exc = []; META_F.owned = false; UI.metaPick = null; saveMetaF(); renderMeta('teams'); }
 function renderMetaTeams(m) {
-  const teams = APP.metaTeams || [];
-  if (!teams.length) return '<div class="note">No derived meta teams in the data file yet.</div>';
-  // the data file orders trios by PvPoke's recommended movesets; the row shows the score with your own moves for the members you own,
-  // so sort by that shown score and keep the data-file position as the "meta #" label
-  const rows = teams.map((t, i) => ({t, i, score: m.L.evaluate(t.members).score})).sort((a, b) => b.score - a.score);
-  return `<div class="note">The ${teams.length} best trios from the top 40 of PvPoke's meta group, scored with the same heuristic, no Pokémon in more than ${Math.max(3, Math.floor(teams.length / 4))} of them. Ordered by the score with your moves; meta # is the order with PvPoke's movesets. Tap one for its page: roles, weak spots, what you still need, Pokémon GO search strings, and Try in builder / Coverage in its ⋮ menu.</div>` +
-    rows.map(({t, i}) => teamRow(m, t.members, null, `meta #${i + 1}`)).join('');
+  if (!APP.meta || !APP.meta.length) return '<div class="note">No meta group in the data file yet.</div>';
+  const f = META_F, active = f.inc.length || f.exc.length || f.owned;
+  const rows = metaTrios(f, m), unf = active ? metaTrios(null) : rows;
+  const rankOf = ids => { const k = ids.slice().sort().join(); const i = unf.findIndex(t => t.ids.slice().sort().join() === k); return i >= 0 ? `#${i + 1}` : '·'; };
+  let h = `<div class="note">The ${META_TOP} best trios from the top ${META_POOL} of PvPoke's ${esc(LEAGUE.title)} meta, with PvPoke's movesets. Tap a team for roles, weak spots, what you still need and its score.</div>`;
+  const fchip = (kind, id) => `<span class="chip ${kind === 'inc' ? 'ok' : 'warn'} f">${icon(id, 'xs')}${esc(nm(id))}<span class="x" onclick="Planner.metaDrop('${kind}','${id}')">✕</span></span>`;
+  h += `<div class="tchips mf">
+    <span class="chip ${UI.metaPick === 'inc' ? 'sel' : ''} ${f.inc.length >= 3 ? 'dim' : ''}" onclick="Planner.metaPick('inc')">＋ must have</span>
+    <span class="chip ${UI.metaPick === 'exc' ? 'sel' : ''}" onclick="Planner.metaPick('exc')">－ leave out</span>
+    <span class="chip ${f.owned ? 'ok sel' : ''}" onclick="Planner.metaOwned(${!f.owned})">${f.owned ? '✓ ' : ''}only teams I can build</span>
+    ${f.inc.map(id => fchip('inc', id)).join('')}${f.exc.map(id => fchip('exc', id)).join('')}
+    ${active ? `<span class="chip" onclick="Planner.metaClear()">clear</span>` : ''}</div>`;
+  if (UI.metaPick) h += `<div class="add" style="margin:0 0 8px"><input id="metaq" list="species" placeholder="${UI.metaPick === 'inc' ? 'must have: Pokémon name…' : 'leave out: Pokémon name…'}" onkeydown="if(event.key==='Enter'){Planner.metaAdd('${UI.metaPick}');event.preventDefault()}"><button onclick="Planner.metaAdd('${UI.metaPick}')">Add</button></div>`;
+  if (active) {
+    const bits = [f.inc.length ? `with ${fewText(f.inc.map(nm), 3)}` : '', f.exc.length ? `without ${fewText(f.exc.map(nm), 3)}` : '', f.owned ? 'built from what you own' : ''].filter(Boolean).join(', ');
+    h += `<div class="note">${rows.length ? `${rows.length === META_TOP ? `Top ${META_TOP}` : rows.length} trio${rows.length === 1 ? '' : 's'} ${bits}. # is the place in the unfiltered list.` : `No top-${META_POOL} trio ${bits}. <a href="#" onclick="Planner.metaClear();return false">Clear the filters</a>.`}</div>`;
+  }
+  return h + rows.map(t => teamRow(m, t.ids, null, null, rankOf(t.ids))).join('');
 }
 function renderRankings(m) {
   const q = UI.rankQ.toLowerCase(), ty = UI.rankType;
@@ -2090,7 +2143,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

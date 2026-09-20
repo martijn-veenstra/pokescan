@@ -1,4 +1,5 @@
 // API tests: run against the in-memory store, or against Postgres when DATABASE_URL is set.
+process.env.PRECOMPRESSED = '1';               // the static handler serves .br/.gz siblings only in production or with this flag
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

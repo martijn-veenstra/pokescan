@@ -223,7 +223,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   // Static app. API routes above win; unknown paths fall back to index.html so the PWA start_url always resolves.
   await app.register(fastifyStatic, {
     root: ROOT, prefix: '/', index: ['index.html'], cacheControl: false,   // Cache-Control is set in setHeaders below (the plugin's own header would overwrite it)
-    preCompressed: true,                     // serve file.br / file.gz siblings written by scripts/precompress.mjs when the client accepts them
+    preCompressed: process.env.NODE_ENV === 'production' || process.env.PRECOMPRESSED === '1',   // file.br / file.gz siblings from scripts/precompress.mjs (Docker build); off in dev so a stale sibling never shadows an edited file
     allowedPath: p => !/^\/(server|scripts|tests|node_modules|\.git|\.github|test-results|playwright-report)(\/|$)/.test(p) && !/\/\.[^/]*$/.test(p) && !/^\/(package(-lock)?\.json|Dockerfile|railway\.json|playwright\.config\.js)$/.test(p),
     setHeaders(res, filePath) {
       if (/[\\/]vendor[\\/]/.test(filePath) || /[\\/]icons[\\/]pokemon[\\/]/.test(filePath) || /\.(png|woff2?)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
