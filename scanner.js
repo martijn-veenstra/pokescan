@@ -69,7 +69,7 @@ function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.74';
+const APP_VERSION='9.75';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1174,7 +1174,8 @@ function planFor(r,best){                       // the evolution chain of a scan
     const cpNow=calcCP(eb,best[1],best[2],best[3],cpmAt(best[0]));
     if(cpNow>LEAGUE.cp){ lines.push(`→ <b>${name}</b> would be ${cpNow} CP: <span class="no">over the ${LEAGUE.cp} cap</span>`); }
     else { const rk=pvpRank(eb,best[1],best[2],best[3],LEAGUE.cp), mr=APP.pokemon[evo]?` · meta #${APP.pokemon[evo].rank}`:'', c=costTo(best[0],rk.lv);
-      lines.push(`→ <b>${name}</b> ${cpNow} CP now, <span class="ok">fits</span> up to L${rk.lv} (${rk.cp} CP, IV #${rk.n}, ${rk.pct.toFixed(1)}%${mr}) · ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy to power up, plus the candy to evolve`); }
+      const need=window.Planner&&Planner.evoShort?Planner.evoShort(Planner.evoBranch(from,evo)):'';
+      lines.push(`→ <b>${name}</b> ${cpNow} CP now, <span class="ok">fits</span> up to L${rk.lv} (${rk.cp} CP, IV #${rk.n}, ${rk.pct.toFixed(1)}%${mr}) · ${c.dust.toLocaleString('nl')} dust · ${c.candy} candy to power up, plus the candy to evolve${need?` · <span class="need">needs ${need}</span>`:''}`); }
     if(depth<2) walk(evo,depth+1);
   } };
   walk(id,1);

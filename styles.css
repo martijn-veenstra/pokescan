@@ -417,3 +417,4 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .tchips.mf .chip.f .x{color:var(--dim);margin-left:2px;cursor:pointer}.tchips.mf .chip .pi{margin:-2px 0 -2px -3px}
 .team.row .dt .gold{color:var(--gold)}.team.row .dt .bad{color:#F59A8B}
 .mlist.allown .chip.mini{display:none}   /* the 'only teams I can build' filter already says it */
+.avb .rf.need{color:var(--ink)}.avb .rf.need b{color:var(--gold)}.plan .need{color:var(--gold)}

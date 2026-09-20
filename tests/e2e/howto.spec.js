@@ -47,3 +47,28 @@ test('Ninetales: catch it in raids or evolve a Vulpix from eggs', async ({ page 
   await expect(card.locator('code')).toContainText(/vulpix&cp-\d+/);
   expect(errors).toEqual([]);
 });
+
+test('Umbreon and Gallade: the evolution conditions from the game master, in plain words', async ({ page }) => {
+  const errors = await openApp(page, '#/mon/umbreon');
+  await page.evaluate(() => { results.length = 0; save(); Planner.refresh(); });
+  await page.evaluate(() => Sources.load(true));
+  await expect.poll(() => page.evaluate(() => Sources.ready() && !!localStorage.getItem('evo'))).toBe(true);
+  await page.evaluate(() => Planner.renderMon());
+  const card = page.locator('#mon .sec:has-text("How to get Umbreon") + .avb');
+  await expect(card).toContainText('Evolve Eevee → Umbreon');
+  await expect(card).toContainText('25 candy');
+  await expect(card).toContainText(/Also needed: walk 10 km with it as your buddy · evolve at night/);
+  await expect(card).toContainText(/Name it Tamao before evolving/);
+  // Gallade: an item and a gender
+  await page.evaluate(() => Planner.openMon('gallade'));
+  const g = page.locator('#mon .sec:has-text("How to get Gallade") + .avb');
+  await expect(g).toContainText('Evolve Kirlia → Gallade');
+  await expect(g).toContainText(/Also needed: a Sinnoh Stone · it must be male/);
+  // an owned Eevee: Today's "Do next" evolve item carries the short form
+  await page.evaluate(() => { const b = DATA.stats['EEVEE'][0], lv = 20, m = cpmAt(lv); const r = { species: 'EEVEE', cp: calcCP(b, 15, 15, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 15, 15, 15, b]], appraisal: [15, 15, 15], txt: '', cpCandidates: [] }; r.key = `EEVEE|${r.cp}|${r.hp}|${lv}|`; results.push(r); save(); render(); Planner.refresh(); });
+  const short = await page.evaluate(() => Planner.evoShort(Planner.evoBranch('eevee', 'umbreon')));
+  expect(short).toBe('walk 10 km as buddy, evolve at night');
+  expect(await page.evaluate(() => Planner.evoShort(Planner.evoBranch('kadabra', 'alakazam')))).toBe('trade first or pay the candy');
+  expect(await page.evaluate(() => Planner.evoShort(Planner.evoBranch('eevee', 'vaporeon')))).toBe('');
+  expect(errors).toEqual([]);
+});

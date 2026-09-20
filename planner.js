@@ -175,7 +175,7 @@ function nextMoves(m) {
     const delta = Math.round((g.bestTrio.teamScore - bestScore) * 10) / 10;
     const id = g.speciesId, a = auto[id], pre = (APP.prevo || {})[id];
     let title, sub = `lifts your best team to ${g.bestTrio.teamScore.toFixed(1)}`;
-    if (a) { const c = costTo(a.level, a.toLevel); title = `Evolve your ${a.from} → ${nm(id)}`; sub += ` · fits to L${a.toLevel} · ${fmt(c.dust)} dust after evolving`; }
+    if (a) { const c = costTo(a.level, a.toLevel), need = evoShort(evoBranch(a.fromId, id)); title = `Evolve your ${a.from} → ${nm(id)}`; sub += ` · fits to L${a.toLevel} · ${fmt(c.dust)} dust after evolving${need ? ' · ' + need : ''}`; }
     else if (id in ri.pending) { title = `Get ${nm(id)}`; }
     else if (pre && DATA.stats[pre.split('_')[0].toUpperCase()]) { const sc = safeCap(pre, id); title = sc ? `Catch a ${nm(pre)} ≤ ${sc.safe} CP` : `Catch a ${nm(pre)}`; if (sc) sub += ` · ${sc.safe + 1}–${sc.max} CP only with the right IVs`; }
     else title = `Catch ${nm(id)}`;
@@ -977,9 +977,65 @@ async function loadEvo() {
   try { const r = await fetch('data/evo.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}); if (r.ok) { EVO = await r.json(); localStorage.setItem('evo', JSON.stringify(EVO)); if (UI.mon && onView() === 'mon') renderMon(); } } catch {}
 }
 const evoBase = id => id.replace(/_shadow$/, '');
-function evoCandy(preId, toId) {              // candy to evolve pre → to, from the game master (shadow ids share the base species' entry)
+function evoBranch(preId, toId) {             // the game master's evolution branch pre → to: candy plus every condition (shadow ids share the base species' entry)
   const lst = EVO && EVO.evolve && EVO.evolve[evoBase(preId)]; if (!lst) return null;
-  const hit = lst.find(x => x.to === evoBase(toId)) || (lst.length === 1 ? lst[0] : null); return hit ? hit.candy : null;
+  return lst.find(x => x.to === evoBase(toId)) || (lst.length === 1 ? lst[0] : null);
+}
+const evoCandy = (preId, toId) => { const b = evoBranch(preId, toId); return b ? b.candy : null; };
+/* the conditions of an evolution branch in plain words. Items and lures are named as the game names them; quests come from the
+   EVOLUTION_QUEST templates (walk N km, N hearts, catch N of a type…). evoNeeds = full sentences for the How to get card,
+   evoShort = a few words for one-line places. */
+const EVO_ITEMS = {GEN4_EVOLUTION_STONE: 'Sinnoh Stone', GEN5_EVOLUTION_STONE: 'Unova Stone', SUN_STONE: 'Sun Stone', KINGS_ROCK: "King's Rock", METAL_COAT: 'Metal Coat', DRAGON_SCALE: 'Dragon Scale', UP_GRADE: 'Up-Grade', BEANS: 'Zygarde Cells'};
+const EVO_HAS_COND = b => !!(b && (b.item || b.lure || b.km || b.time || b.upside || b.gender || b.trade || b.quest));
+const capT = t => t.charAt(0).toUpperCase() + t.slice(1);
+const typeList = (types, suffix) => { const ts = (types || []).map(capT); return ts.length > 1 ? `${ts.slice(0, -1).join('-, ')}- or ${ts[ts.length - 1]}${suffix}` : `${ts[0] || ''}${suffix}`; };
+function evoNeeds(b) {
+  if (!b) return [];
+  const out = [], q = b.quest;
+  if (b.item) { const nmI = EVO_ITEMS[b.item] || 'a special evolution item'; out.push(b.itemN ? `<b>${b.itemN} ${nmI}</b>` : `${/^[AEIOU]/i.test(nmI) ? 'an' : 'a'} <b>${nmI}</b>`); }
+  if (b.lure) out.push(`evolve next to an active <b>${capT(b.lure.toLowerCase())} Lure Module</b>`);
+  if (q && q.t === 'walk') out.push(`walk <b>${q.n} km</b> with it as your buddy`);
+  else if (b.km) out.push(`walk <b>${b.km} km</b> with it as your buddy`);
+  if (q && q.t === 'hearts') out.push(`earn <b>${q.n} hearts</b> with it as your buddy`);
+  if (q && q.t === 'feed') out.push(`give it <b>${q.n} treats</b> as your buddy`);
+  if (q && q.t === 'catch') out.push(`catch <b>${q.n} ${typeList(q.types, '-type')}</b> Pokémon with it as your buddy`);
+  if (q && q.t === 'defeat') out.push(`defeat <b>${q.n} ${typeList(q.types, '-type')}</b> Pokémon with it`);
+  if (q && q.t === 'raidwin') out.push(`win <b>${q.n} raids</b> with it as your buddy`);
+  if (q && q.t === 'battlewin') out.push(`win <b>${q.n} raids${q.raid ? ' or Max Battles' : ''}</b>${q.types ? ` against ${typeList(q.types, '-types')}` : ''} with it`);
+  if (q && q.t === 'excellent') out.push(`land <b>${q.n} Excellent Throws</b> with it as your buddy`);
+  if (q && q.t === 'incense') out.push(`use an <b>Incense</b> while it is your buddy`);
+  if (b.time) out.push({day: 'evolve <b>during the day</b>', night: 'evolve <b>at night</b>', dusk: 'evolve <b>at dusk</b>, in game time', fullmoon: 'evolve <b>during a full moon</b>'}[b.time]);
+  if (b.upside) out.push('hold your phone <b>upside down</b> while you evolve it');
+  if (b.gender) out.push(`it must be <b>${b.gender === 'M' ? 'male' : 'female'}</b>`);
+  if (b.trade) out.push(`<b>free</b> if you trade it first`);
+  return out;
+}
+function evoShort(b) {
+  if (!EVO_HAS_COND(b)) return '';
+  const q = b.quest, bits = [];
+  if (b.item) bits.push(EVO_ITEMS[b.item] ? (b.itemN ? `${b.itemN} ${EVO_ITEMS[b.item]}` : EVO_ITEMS[b.item]) : 'evolution item');
+  if (b.lure) bits.push(`${capT(b.lure.toLowerCase())} Lure`);
+  if (q && q.t === 'walk') bits.push(`walk ${q.n} km as buddy`); else if (b.km) bits.push(`walk ${b.km} km as buddy`);
+  if (q && q.t === 'hearts') bits.push(`${q.n} buddy hearts`);
+  if (q && q.t === 'feed') bits.push(`${q.n} buddy treats`);
+  if (q && q.t === 'catch') bits.push(`catch ${q.n} ${typeList(q.types, '-types')} as buddy`);
+  if (q && q.t === 'defeat') bits.push(`defeat ${q.n} ${typeList(q.types, '-types')}`);
+  if (q && (q.t === 'raidwin' || q.t === 'battlewin')) bits.push(`win ${q.n} raids`);
+  if (q && q.t === 'excellent') bits.push(`${q.n} Excellent Throws`);
+  if (q && q.t === 'incense') bits.push('use an Incense');
+  if (b.time) bits.push({day: 'evolve by day', night: 'evolve at night', dusk: 'evolve at dusk', fullmoon: 'full moon'}[b.time]);
+  if (b.upside) bits.push('phone upside down');
+  if (b.gender) bits.push(b.gender === 'M' ? 'male only' : 'female only');
+  if (b.trade) bits.push('trade first or pay the candy');
+  return bits.join(', ');
+}
+const EEVEE_NAMES = {vaporeon: 'Rainer', jolteon: 'Sparky', flareon: 'Pyro', espeon: 'Sakura', umbreon: 'Tamao', leafeon: 'Linnea', glaceon: 'Rea', sylveon: 'Kira'};
+function evoNote(preId, toId) {                // chance-based branches (Eevee) and the one-time nickname trick
+  const lst = EVO && EVO.evolve && EVO.evolve[evoBase(preId)]; if (!lst) return '';
+  const free = lst.filter(x => !EVO_HAS_COND(x)), to = evoBase(toId), notes = [];
+  if (free.length > 1 && free.some(x => x.to === to)) notes.push(`${esc(nm(preId))} becomes ${free.map(x => esc(nm(x.to))).slice(0, -1).join(', ')} or ${esc(nm(free[free.length - 1].to))} at random`);
+  if (evoBase(preId) === 'eevee' && EEVEE_NAMES[to]) notes.push(`name it <b>${EEVEE_NAMES[to]}</b> before evolving to force ${esc(nm(to))}, once per account`);
+  return notes.join(' · ');
 }
 function ownedCopies(preId) {                  // your live scans of this species that fit the league after evolving
   const sp = evoBase(preId).split('_')[0].toUpperCase(), sh = /_shadow$/.test(preId);
@@ -995,10 +1051,13 @@ function howToGet(m, id) {
   if (direct && direct.length) routes.push({live: true, order: 0, html: `<div class="rt"><div class="rh">Catch it <small>as ${esc(name)}</small></div>${bundleAvail(direct, name).map(l => block(l.label, l.now, l.html)).join('')}</div>`});
   // 2 · evolve a pre-evolution
   fam.slice(1).forEach((pre, i) => {
-    const to = fam[i], candy = evoCandy(pre, to), sc = DATA.stats[evoBase(pre).split('_')[0].toUpperCase()] ? safeCap(pre, to) : null, cs = candidateSearch(to);
+    const to = fam[i], br = evoBranch(pre, to), candy = br ? br.candy : null, sc = DATA.stats[evoBase(pre).split('_')[0].toUpperCase()] ? safeCap(pre, to) : null, cs = candidateSearch(to);
     const src = srcOf(pre), lines = src && src.length ? bundleAvail(src, nm(pre)).map(l => block(l.label, l.now, l.html)).join('') : '';
     const mine = ownedCopies(pre).map(r => { const b = bestOf2(r), eb = evoBaseStats(to); const cp = eb ? calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) : null; return {r, cp}; }).filter(x => x.cp && x.cp <= LEAGUE.cp).sort((a, b) => b.cp - a.cp);
     let facts = `<div class="rf">${shadow ? 'Shadow evolution keeps the Shadow bonus · ' : ''}${candy ? `<b>${candy}</b> candy` : 'candy cost unknown'}${sc ? ` · catch one ≤ <b>${sc.safe}</b> CP so it stays under ${LEAGUE.cp} as ${esc(nm(to))} <span class="dim">(${sc.safe + 1}–${sc.max} CP only with the right IVs)</span>` : sc === null && DATA.stats[evoBase(pre).split('_')[0].toUpperCase()] ? ' · any copy stays legal after evolving' : ''}</div>`;
+    { const needs = evoNeeds(br), note = evoNote(pre, to);
+      if (needs.length) facts += `<div class="rf need">Also needed: ${needs.join(' · ')}.</div>`;
+      if (note) facts += `<div class="rf dim">${note.charAt(0).toUpperCase() + note.slice(1)}.</div>`; }
     if (mine.length) facts += `<div class="rf good">You have a ${esc(nm(pre))} at ${mine[0].r.cp} CP: evolved it is about ${mine[0].cp} CP as ${esc(nm(to))}.</div>`;
     if (cs && !shadow) facts += `<div class="srchi" style="margin-top:4px"><code>${esc(cs.q)}</code><button onclick="Planner.copyText(${attr(cs.q)},this)">Copy</button></div>`;
     routes.push({live: !!lines, order: 1 + i, html: `<div class="rt"><div class="rh">Evolve <b>${esc(nm(pre))}</b> → ${esc(nm(to))}</div>${facts}${lines || (shadow ? '' : `<div class="rf dim">${ready ? `${esc(nm(pre))} is not in raids, eggs, research or announced events right now; wild spawns are not listed.` : 'Loading the schedule…'}</div>`)}</div>`});
@@ -1635,7 +1694,7 @@ function monInner(m, id, noHead) {
     const status = o.toLevel > o.level ? (o.toLevel > 40 ? [`needs L${o.toLevel}`, 'XL candy needed'] : [`power up to L${o.toLevel}`, `${fmt(c.dust)} dust · ${c.candy} candy`]) : ['ready for GL', `${o.cp} CP at L${o.level}`];
     h += `<div class="kpis"><div><small>IVs</small><b>${o.ivs.join('/')}${appraised ? ' <span class="okc">✓</span>' : ''}</b><span class="sub">${appraised ? 'from the appraisal' : 'solved from CP and HP'}</span></div><div><small>GL rank</small><b>#${o.glRank}</b><span class="sub">${o.glPct.toFixed(1)}% stat product</span></div><div><small>Status</small><b>${status[0]}</b><span class="sub">${status[1]}</span></div></div>`;
   } else if (!noHead && o && o.manual) h += `<div class="note" style="margin:0">Added by hand, no scan: import a screenshot of this Pokémon for its IVs, level and moves.</div>`;
-  else if (!noHead && a) h += `<div class="note" style="margin:0">Evolves from your <b>${esc(a.from)}</b>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.</div>`;
+  else if (!noHead && a) { const need = evoShort(evoBranch(a.fromId, id)); h += `<div class="note" style="margin:0">Evolves from your <b>${esc(a.from)}</b>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.${need ? ` Needs: ${esc(need)}.` : ''}</div>`; }
   else if (!noHead && !o && sc) h += `<div class="note" style="margin:0">Catch a <b>${esc(nm(pre))}</b> ≤ <b>${sc.safe}</b> CP: it evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs).</div>`;
   if (!noHead && !o) h += `<div class="notown"><div><b>Not in your roster yet</b><span class="dt">${a ? `You own its pre-evolution, not ${esc(e.name)} itself. ` : ''}Once you have one, screenshot its status screen in Pokémon GO and add it: IVs, level and moves are read from it and this page fills in.</span></div><button class="btn sec" onclick="Planner.scanFor('${id}')">＋ Add a scan of this Pokémon</button></div>`;
   if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0"><button class="btn sec" style="margin:0" onclick="Planner.updateScan(${attr(o.scan.key)},'mon')">⟳ Update with a new scan</button></div><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this copy is updated, no second card.</div>`;
@@ -2139,7 +2198,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

@@ -184,9 +184,71 @@ def build(gm):
                       "rank": "DPS^3 x TDO, boss weak to the type (x1.6)", "source": GM_URL}}
 
 
+QUEST_TYPES = {"QUEST_BUDDY_EVOLUTION_WALK": "walk", "QUEST_BUDDY_EARN_AFFECTION_POINTS": "hearts", "QUEST_BUDDY_FEED": "feed",
+               "QUEST_CATCH_POKEMON": "catch", "QUEST_FIGHT_POKEMON": "defeat", "QUEST_COMPLETE_RAID_BATTLE": "raidwin",
+               "QUEST_COMPLETE_BATTLE": "battlewin", "QUEST_LAND_THROW": "excellent", "QUEST_USE_INCENSE": "incense"}
+
+
+def quest_summary(tmpl):
+    """An evolution quest template (EVOLUTION_QUEST context) as {t, n, types?, raid?}: the app writes the sentence."""
+    q = tmpl.get("evolutionQuestTemplate") or {}
+    t = QUEST_TYPES.get(q.get("questType"))
+    if not t:
+        return None
+    goal = (q.get("goals") or [{}])[0]
+    out = {"t": t, "n": goal.get("target", 1)}
+    types = []
+    for c in goal.get("condition") or []:
+        for k in ("withPokemonType", "withOpponentPokemonBattleStatus"):
+            for ty in (c.get(k) or {}).get("pokemonType", []) + (c.get(k) or {}).get("opponentPokemonType", []):
+                types.append(ty.replace("POKEMON_TYPE_", "").lower())
+        if c.get("type") == "WITH_COMBAT_TYPE":
+            out["raid"] = 1
+    if types:
+        out["types"] = types
+    return out
+
+
+def branch_conditions(br, quests):
+    """Everything the game asks for beyond candy, in a compact shape (only the keys that apply)."""
+    c = {}
+    if br.get("evolutionItemRequirement"):
+        c["item"] = br["evolutionItemRequirement"].replace("ITEM_", "")
+        if br.get("evolutionItemRequirementCost"):
+            c["itemN"] = br["evolutionItemRequirementCost"]
+    if br.get("lureItemRequirement"):
+        c["lure"] = br["lureItemRequirement"].replace("ITEM_TROY_DISK_", "")
+    if br.get("kmBuddyDistanceRequirement"):
+        c["km"] = br["kmBuddyDistanceRequirement"]
+    if br.get("mustBeBuddy"):
+        c["buddy"] = 1
+    for k, v in (("onlyDaytime", "day"), ("onlyNighttime", "night"), ("onlyDuskPeriod", "dusk"), ("onlyFullMoon", "fullmoon")):
+        if br.get(k):
+            c["time"] = v
+    if br.get("onlyUpsideDown"):
+        c["upside"] = 1
+    if br.get("genderRequirement"):
+        c["gender"] = br["genderRequirement"][0]
+    if br.get("noCandyCostViaTrade"):
+        c["trade"] = 1
+    for qd in br.get("questDisplay") or []:
+        q = quests.get(qd.get("questRequirementTemplateId"))
+        if q:
+            c["quest"] = q
+            break
+    return c
+
+
 def build_evo(gm):
-    """data/evo.json: evolution candy costs, which species exist as Shadow, purification costs. Ids like PvPoke's (vulpix, vulpix_alolan)."""
+    """data/evo.json: evolution candy costs and conditions (items, lures, buddy km, day/night, gender, trade, quests), which
+    species exist as Shadow, purification costs. Ids like PvPoke's (vulpix, vulpix_alolan)."""
     evolve, shadow, purify = {}, set(), {}
+    quests = {}
+    for t in gm:
+        if t.get("templateId", "").endswith("_EVOLUTION_QUEST"):
+            q = quest_summary(t.get("data", {}))
+            if q:
+                quests[t["templateId"]] = q
     for t in gm:
         ps = t.get("data", {}).get("pokemonSettings")
         if not ps or not isinstance(ps.get("pokemonId"), str):
@@ -204,6 +266,7 @@ def build_evo(gm):
             entry = {"to": to, "candy": br.get("candyCost", 0)}
             if br.get("candyCostPurified"):
                 entry["purified"] = br["candyCostPurified"]
+            entry.update(branch_conditions(br, quests))
             lst = evolve.setdefault(pid_l, [])
             if not any(x["to"] == to for x in lst):
                 lst.append(entry)
