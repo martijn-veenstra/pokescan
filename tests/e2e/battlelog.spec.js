@@ -144,3 +144,23 @@ test('a read recording is a draft first: summary, team pick, then Save puts it i
   expect(await page.evaluate(() => Planner.BATTLES.length)).toBe(2);
   expect(errors).toEqual([]);
 });
+
+test('a truncated read says how little of the recording it managed, instead of looking complete', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('blog'); });
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(() => {
+    // what a stall leaves behind: one battle read, but only the first 37 s of a 205 s recording
+    Planner.logBattleImport({ file: 'stalled.mp4', kind: 'video', size: 396e6, ms: 130000, ok: true,
+      film: { frames: 80, cal: true, rows: 70, shots: 6, banners: 12, good: 1, entries: 1, dur: 205, seen0: 2, seen1: 37 } });
+    Planner.logBattleImport({ file: 'whole.mp4', kind: 'video', size: 396e6, ms: 130000, ok: true,
+      film: { frames: 324, cal: true, rows: 300, shots: 12, banners: 52, good: 1, entries: 1, dur: 205, seen0: 2, seen1: 200 } });
+  });
+  const log = page.locator('#battles .team.card.blog');
+  await expect(log).toContainText('1 battle read.');
+  await expect(log, 'the truncated one says what is missing').toContainText('Only 2–37 s of the 205 s recording could be read');
+  await expect(log).toContainText('read 2–37s of 205s');
+  // a read that covered the battle says nothing extra
+  const rows = log.locator('.il');
+  await expect(rows.nth(0), 'the complete read is not flagged').not.toContainText('could be read');
+  expect(errors).toEqual([]);
+});

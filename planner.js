@@ -1364,7 +1364,12 @@ function logBattleImport(e) {
 function clearBattleLog() { BLOG.length = 0; localStorage.removeItem('blog'); renderBattles(); }
 function filmWhy(f) {                           // the reader's own diagnostics, in words
   if (!f) return 'The recording was read, but the battle reader did not run on it.';
-  if (f.entries) return `${f.entries} battle${f.entries === 1 ? '' : 's'} read.`;
+  if (f.entries) {
+    // a stall can end playback part way: say so rather than let a third of a battle look like the whole thing
+    const cov = f.dur && f.seen1 ? Math.round(100 * (f.seen1 - (f.seen0 || 0)) / f.dur) : null;
+    const part = cov !== null && cov < 70 ? ` Only ${f.seen0 || 0}–${f.seen1} s of the ${f.dur} s recording could be read, so the rest of the battle is missing.` : '';
+    return `${f.entries} battle${f.entries === 1 ? '' : 's'} read.${part}`;
+  }
   const cal = f.cal !== undefined ? f.cal : f.hud;   // entries logged before 9.87 called it hud
   if (!cal) return `No battle HUD found in ${f.frames || 0} sampled frames. The reader measures the two cards from the pokéballs and shield hexagons — it needs a Great League battle recorded full-screen on this phone, not a cropped or rotated video.`;
   if (!f.good) return `The battle cards were found but only briefly (${f.rows || 0} samples). A battle needs about four seconds of clear HUD to be read.`;
@@ -1377,7 +1382,7 @@ function blogCard() {
     const when2 = new Date(e.t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
     const name = (e.file || '').length > 26 ? (e.file || '').slice(0, 13) + '…' + (e.file || '').slice(-10) : (e.file || '');
     const why = e.ok ? filmWhy(e.film) : '';
-    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${(e.film.cal !== undefined ? e.film.cal : e.film.hud) ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}${e.film.banners ? ` · ${e.film.banners} banners` : ''}` : '';
+    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${(e.film.cal !== undefined ? e.film.cal : e.film.hud) ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}${e.film.banners ? ` · ${e.film.banners} banners` : ''}${e.film.seen1 && e.film.dur ? ` · read ${e.film.seen0 || 0}–${e.film.seen1}s of ${e.film.dur}s` : ''}` : '';
     return `<div class="il"><span class="t">${when2}</span><span><span class="f">${esc(name)}</span> <span class="dim">${e.size ? (e.size / 1e6).toFixed(0) + ' MB' : ''}${e.ms ? ` · ${(e.ms / 1000).toFixed(0)}s` : ''}</span>
       <br><span class="r ${e.ok && e.film && e.film.entries ? 'ok' : 'err'}">${e.ok && e.film && e.film.entries ? '✓ ' : '⚠ '}${esc(e.ok ? why : (e.msg || 'the import failed'))}</span>
       ${dg ? `<br><span class="d">${esc(dg)}</span>` : ''}${!e.ok && e.detail ? `<br><span class="d">${esc(e.detail)}</span>` : ''}</span></div>`;

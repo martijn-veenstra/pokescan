@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.88';
+const APP_VERSION='9.89';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -942,7 +942,9 @@ async function scanVideo(file,trainer){
         if(t!==lastSeen){ lastSeen=t; lastProgressAt=Date.now(); }
         else if(Date.now()-lastProgressAt>6000){
           if(vid.ended||t>=dur-0.5) return finish();
-          if(nudged<3){ nudged++; lastProgressAt=Date.now(); status(`Video ${Math.round(t)}s · playback stalled, nudging…`); try{ await vid.play(); }catch(e){} return; }
+          if(nudged<3){ nudged++; lastProgressAt=Date.now(); status(`Video ${Math.round(t)}s · playback stalled, nudging…`);
+            try{ if(vid.playbackRate>1){ vid.playbackRate=1; gain('note','playback stalled: dropped to real time'); } }catch(e){}   // 2x decode is often what starved it
+            try{ await vid.play(); }catch(e){} return; }
           if(snaps.length>=3){ stalledAt=t; gain('note',`playback stalled at ${Math.round(t)} s; kept the ${snaps.length} frames seen so far`); return finish(); }   // a battle: keep what we have
           return finish(fail('the video stalled three times; try again or record a shorter clip'));
         }
@@ -975,6 +977,19 @@ async function scanVideo(file,trainer){
     }
     vid.onseeked=null;
     if(got) gain('note',`${got} closing frame${got===1?'':'s'} fetched by seeking`);
+  }
+  // playback gave up part way: keep reading the battle by seeking, or the entry covers only what played
+  if(stalledAt!==null && window.Film && Film.seen()){
+    const STEP=0.6, CAP=400; let n=0, fail2=0;
+    for(let t=stalledAt+STEP; t<dur && n<CAP; t+=STEP){
+      const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
+      if(!seeked){ if(++fail2>=3) break; continue; }
+      fail2=0; ctx.drawImage(vid,0,0); frames++; n++;
+      Film.frame(ctx,cv.width,cv.height,t);
+      if(n%8===0){ status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · reading the rest by seeking…`); progress(Math.min(1,t/dur)); }
+    }
+    vid.onseeked=null;
+    if(n) gain('note',`${n} more frames of the battle fetched by seeking after the stall`);
   }
   gain('mode',mode);
   status(`Video done · ${results.length-before} new · ${reads} screens read`);

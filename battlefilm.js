@@ -127,9 +127,11 @@ const seen = () => !!(S && S.rows.length >= MIN_ROWS);
 let LAST = null;                                   // the last read's diagnostics, so a failed import can say why
 function report() {
   if (!S) return LAST;
+  const first = S.rows[0], last = S.rows[S.rows.length - 1];
   return {frames: S.frames, cal: !!S.cal, miss: S.miss, rows: S.rows.length, shots: S.shots.length,
           banners: S.banners.length, good: S.rows.length >= MIN_ROWS ? splitRows(S.rows).length : 0,
-          entries: 0, dur: Math.round(S.dur)};
+          entries: 0, dur: Math.round(S.dur),
+          seen0: first ? Math.round(first.t) : 0, seen1: last ? Math.round(last.t) : 0};
 }
 
 function frame(ctx, W, H, t) {

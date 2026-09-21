@@ -177,6 +177,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   Each battle page can ask for an **AI review** of that one match (Pro, on request, at most 5 an hour per account
   via `COACH_BATTLE_PER_HOUR`): Claude reads the timeline and answers in four sections — what happened, the turning
   point, what to do differently, and how the two teams line up.
+- **A stalled recording keeps being read**: a 400 MB file played at 2× can starve the decoder, and playback dies part
+  way. The importer drops to real time on the first stall, and when playback gives up for good it carries on reading
+  the battle by seeking, so a stall no longer truncates the entry silently. The log names the span it managed
+  (`read 2–37s of 205s`) and says what is missing when the coverage is partial.
 - **When a read finds nothing, the battle log says why**: every import from that page leaves an entry under
   **Last imports** — how many frames were sampled, whether the two HUD cards were found at all, how many battles
   and names came out — so a recording the reader cannot use explains itself instead of failing silently. Those
