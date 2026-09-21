@@ -611,8 +611,8 @@ function renderTeamsInner(el) {
   el.innerHTML = h;
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
-const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'pro'];
-const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans & import', matchups: 'Matchups', battles: 'Battle log'};
+const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'battle', 'pro'];
+const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans & import', matchups: 'Matchups', battles: 'Battle log', battle: 'Battle'};
 const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
@@ -705,7 +705,10 @@ function teamInner(m, ids, name) {
   }).join('') + '</div>';
   // to-dos for these members
   const todo = openMoves(m).filter(x => (x.species && ids.includes(x.species)) || (x.id.startsWith('get:') && ids.includes(x.id.slice(4))) || (x.id.startsWith('park:') && ids.includes(x.id.slice(5))));
-  { const rr = teamRecord(ids); if (rr) h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px">Your record <small>GO Battle League, logged by you</small></div><div><b style="font-family:Sora,sans-serif;font-size:18px;color:var(--green)">${rec(rr)}</b>${rr.worst.length ? ` <span class="dim">· trouble leads: ${rr.worst.map(x => `${esc(nm(x.id))} ${rec(x)}`).join(', ')}</span>` : ''} <a href="#" class="dim" style="font-size:12px" onclick="Planner.nav('#/battles');return false">log</a></div></div>`; }
+  { const rr = teamRecord(ids); if (rr) h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px">Your record <small>GO Battle League, logged by you</small></div><div><b style="font-family:Sora,sans-serif;font-size:18px;color:var(--green)">${rec(rr)}</b>${rr.worst.length ? ` <span class="dim">· trouble leads: ${rr.worst.map(x => `${esc(nm(x.id))} ${rec(x)}`).join(', ')}</span>` : ''} <a href="#" class="dim" style="font-size:12px" onclick="Planner.nav('#/battles');return false">log</a></div></div>`;
+    const mine = BATTLES.filter(b => b.ids && teamKey(b.ids) === teamKey(ids) && (b.result || b.opp)).sort((a2, b2) => b2.t - a2.t);
+    if (mine.length) h += `<div class="sec">Its battles <small>${mine.length} logged with this trio</small></div>`
+      + fold(mine.map(b => battleRow(b, true)), 5, {label: n => `show ${n} older`}); }
   h += reviewCard(ids, !!saved);
   h += `<div class="sec">To do for this team</div>`;
   h += todo.length ? todo.map(moveCard).join('') : `<div class="note">Nothing open: the members you own are at the cap and carry the right moves.</div>`;
@@ -800,14 +803,18 @@ function mdLite(t) {                          // minimal markdown: paragraphs, b
 /* AI review: the same roster summary with the slots, their weak spots and the app's candidates attached (non-conversational) */
 const BCOACH = Object.assign({reviews: {}}, JSON.parse(localStorage.getItem('bcoach') || '{}'));
 BCOACH.reviews = BCOACH.reviews || {}; BCOACH.reviewBusy = {}; BCOACH.reviewFailed = {};
-const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, b) => b[1].t - a[1].t).slice(0, 30); localStorage.setItem('bcoach', JSON.stringify({reviews: Object.fromEntries(keep)})); };
+const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, b) => b[1].t - a[1].t).slice(0, 30);
+  const kb = Object.entries(BCOACH.battles || {}).sort((a, b) => b[1].t - a[1].t).slice(0, 40);
+  localStorage.setItem('bcoach', JSON.stringify({reviews: Object.fromEntries(keep), battles: Object.fromEntries(kb)})); };
 
 /* ---------- always-on AI review: every complete team gets one structured review, cached per trio and league ---------- */
 const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
 const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
 const coachOn = () => !!(window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable());
-function parseReview(text) {                   // the review prompt asks for **Verdict** / **Strengths** / **Weak spots** / **Swaps** / **Order**
-  const out = {}, re = /\*\*(Verdict|Strengths|Weak spots|Swaps|Order)\*\*:?\s*/gi, parts = text.split(re);
+const TEAM_SECS = ['Verdict', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
+const BATTLE_SECS = ['What happened', 'Turning point', 'Do differently', 'Matchup note'];
+function parseReview(text, secs) {             // the team prompt asks for Verdict / Strengths / Weak spots / Swaps / Order; a battle review has its own four
+  const out = {}, re = new RegExp('\\*\\*(' + (secs || TEAM_SECS).join('|') + ')\\*\\*:?\\s*', 'gi'), parts = text.split(re);
   if (parts.length < 3) return {Verdict: text.trim()};
   for (let i = 1; i < parts.length; i += 2) out[parts[i][0].toUpperCase() + parts[i].slice(1).toLowerCase()] = (parts[i + 1] || '').trim();
   return out;
@@ -839,6 +846,50 @@ async function autoReview(ids) {
     await new Promise(r => setTimeout(r, 900));
   }
   delete BCOACH.reviewBusy[key]; paint();
+}
+/* ---------- the AI review of one battle: on demand, Pro, and capped server-side at 5 an hour ---------- */
+BCOACH.battles = BCOACH.battles || {}; BCOACH.bBusy = {}; BCOACH.bFailed = {};
+function battleContext(b) {
+  const ctx = coachContext(M());
+  const who = (ids, names) => (ids && ids.length ? ids.map(nm) : names || []);
+  ctx.battle = {
+    result: b.result || null, when: new Date(b.t).toISOString().slice(0, 10),
+    my: who(b.ids, b.myNames), opp: who(b.opp, b.oppNames),
+    myTeamName: b.team || undefined,
+    shields: b.shields || undefined, fainted: b.fainted || undefined,
+    timeline: (b.filmData && b.filmData.events ? b.filmData.events : []).map(e => ({at: e.t, what: e.what, left: e.to})),
+    sentOut: (b.filmData && b.filmData.reads ? b.filmData.reads : []).map(r => ({at: r.t, side: r.side, name: nm(idByName(r.species) || '') || r.species, cp: r.cp})),
+    seconds: b.filmData ? b.filmData.dur : undefined,
+  };
+  delete ctx.builder;
+  return ctx;
+}
+async function askBattleReview(id) {
+  const b = battleById(id); if (!b || !coachOn() || BCOACH.bBusy[id]) return;
+  BCOACH.bBusy[id] = true; delete BCOACH.bFailed[id]; renderBattle();
+  const t0 = Date.now(), tick = setInterval(() => { document.querySelectorAll('.rvsec').forEach(el => { el.textContent = Math.round((Date.now() - t0) / 1000) + 's'; }); }, 1000);
+  let caught = false;
+  try {
+    const text = await Sync.coach(battleContext(b), null, 'battle');
+    BCOACH.battles[id] = {t: Date.now(), text}; saveBCoach(); caught = true;
+  } catch (e) { BCOACH.bFailed[id] = (e && e.message) || 'no answer'; }
+  clearInterval(tick);
+  const balls = caught ? document.querySelectorAll('.view.on .pball.rv.on') : [];
+  if (balls.length) { balls.forEach(x => { x.classList.remove('on'); x.classList.add('done'); }); await new Promise(r => setTimeout(r, 900)); }
+  delete BCOACH.bBusy[id]; renderBattle();
+}
+function battleReviewCard(b) {
+  if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered()
+    ? proTeaser('Battle review', 'Claude reads this match from the timeline: the lead matchup, the shield trade, and the one thing to do differently.') : '';
+  const rv = BCOACH.battles[b.id], busy = BCOACH.bBusy[b.id], failed = BCOACH.bFailed[b.id];
+  const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>Battle review <small>${extra}</small></span>${rv ? ctxMenu([['Ask again', `Planner.askBattleReview(${attr(b.id)})`]]) : ''}</div>`;
+  const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
+  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is reading this match: the lead matchup, the shield trade and what to do differently.');
+  if (failed && !rv) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">try again</a>`);
+  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">Review this battle</a> — Claude reads the timeline and says what to do differently. Up to 5 an hour.`);
+  const sec = parseReview(rv.text, BATTLE_SECS), order = BATTLE_SECS;
+  const body = order.filter(k => sec[k]).map(k => `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('') || `<div class="rsec">${linkNames(mdLite(rv.text))}</div>`;
+  return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
 }
 function refreshReview(ids) { const key = reviewKey(ids); delete BCOACH.reviews[key]; delete BCOACH.reviewFailed[key]; saveBCoach(); autoReview(ids); const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); }
 function reviewCard(ids, auto) {                // the card; auto = ask Claude by itself when there is no review yet (builder and saved parties), else offer a button
@@ -1224,11 +1275,16 @@ function route() {
     if (cur !== 'team') leave();
     UI.team = {ids, name: seg[2] || null}; showView('team'); window.scrollTo(0, 0); return;
   }
+  if (p === 'battle' && seg[1]) {
+    if (!BATTLES.some(b => b.id === seg[1])) { nav('#/battles'); return; }
+    if (cur !== 'battle') leave();
+    UI.battle = seg[1]; showView('battle'); window.scrollTo(0, 0); return;
+  }
   if (p === 'inbox') { if (window.Share) Share.drainInbox(); nav('#/scans'); return; }   // files shared to the app (Web Share Target)
-  if (p === 'mon' || p === 'scan' || p === 'team') { nav('#/' + (localStorage.getItem('tab') || 'today')); return; }
+  if (p === 'mon' || p === 'scan' || p === 'team' || p === 'battle') { nav('#/' + (localStorage.getItem('tab') || 'today')); return; }
   const page = PAGES.includes(p) ? p : 'today';
   if (['builder', 'meta', 'rank', 'raids'].includes(page)) UI.metaPanel = {builder: 'build', meta: 'teams', rank: 'rank', raids: 'raids'}[page];
-  UI.mon = null; UI.scan = null; UI.team = null;
+  UI.mon = null; UI.scan = null; UI.team = null; UI.battle = null;
   if (page === 'pro') renderPro(); else if (PRO_POLL) { clearInterval(PRO_POLL); PRO_POLL = null; }
   showView(page);
   if (page !== cur) window.scrollTo(0, 0);
@@ -1259,6 +1315,10 @@ function logRating(v, extra) {
   saveBattles(); renderBattles(); status(`Rating ${rating} saved`);
 }
 function delBattle(id) { BATTLES = BATTLES.filter(b => b.id !== id); saveBattles(); renderBattles(); }
+function importFilm(files) {                    // a recording picked on the battle log page: the scans pipeline reads it
+  if (!files || !files.length || typeof importFiles !== 'function') return;
+  importFiles([...files]).then(() => renderBattles());
+}
 async function importBattle(files) {
   if (!files || !files.length || typeof readBattle !== 'function') return;
   let n = 0;
@@ -1320,58 +1380,116 @@ function renderBattles() {
   const el = $('battles'); if (!el) return;
   try { el.innerHTML = battlesInner(); } catch (e) { el.innerHTML = errorCard('Battle log', e); }
 }
-/* a battle read from a recording carries a minute-by-minute timeline: keep it out of the row, one tap away */
-function filmLine(b) {
-  const f = b.film && b.film.length ? b.film : null; if (!f) return '';
-  const sh = b.shields || {}, fa = b.fainted || {};
-  const bits = [sh.me != null ? `you used ${sh.me} shield${sh.me === 1 ? '' : 's'}` : '', sh.opp != null ? `they used ${sh.opp}` : '',
-    fa.me != null ? `${fa.me} of yours fainted` : '', fa.opp != null ? `${fa.opp} of theirs` : ''].filter(Boolean).join(' · ');
-  return `<div class="xm" hidden><div class="filmt">${bits ? `<div class="fsum">${esc(bits)}</div>` : ''}${f.map(l => `<div>${esc(l)}</div>`).join('')}</div></div>`
-       + `<div class="xmore dim" data-more="show the timeline · ${f.length} moments" onclick="Planner.showMore(this, event)">▸ show the timeline · ${f.length} moments</div>`;
-}
 function battlesInner() {
   if (!APP || !window.PVP) return '<div class="note">Loading PvPoke data…</div>';
   const m = M(), L = builderLeague(m), st = battleStats(LEAGUE.slug), ids = blTeamIds();
   let h = '';
+  // the battle log is where a recording belongs: same pipeline as Scans & import, which keeps working too
+  h += `<button class="btn" onclick="document.getElementById('vfile').click()">＋ Import a battle recording <span style="display:block;font-weight:500;font-size:12px;opacity:.75">read on this phone · a whole set becomes one entry per battle</span></button>`;
   // rating
   const pts = st.ratings.slice(-40).map(b => b.rating);
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>Rating <small>${esc(LEAGUE.title)}</small></span>${st.ratings.length ? ctxMenu([['Delete last rating', `Planner.delBattle(${attr(st.now.id)})`, true]]) : ''}</div>
     ${st.now ? `<div style="display:flex;align-items:baseline;gap:10px"><span class="big" style="font-family:Sora,sans-serif;font-weight:800;font-size:30px;color:var(--green)">${st.now.rating}</span><span class="dim" style="font-size:12px">${when(st.now.t)}${(() => { const wk = st.ratings.filter(b => b.t < st.now.t - WEEK).pop(); return wk ? ` · ${st.now.rating - wk.rating >= 0 ? '+' : ''}${st.now.rating - wk.rating} vs a week ago` : ''; })()}</span></div>${sparkline(pts)}` : '<div class="dt">No rating yet. After a set, type the rating the game shows or import the end-of-set screenshot.</div>'}
     <div class="add" style="margin:8px 0 0"><input id="blrating" type="number" inputmode="numeric" placeholder="rating after your set" style="flex:1;min-width:120px"><button onclick="Planner.logRating(document.getElementById('blrating').value)">Save</button><button onclick="document.getElementById('bfile').click()" style="background:var(--card);color:var(--ink);border:1px solid var(--line)">Screenshot…</button></div>
     <div class="dt" style="margin-top:6px">Screenshot: the end-of-set screen (x/5 and rating) or the post-battle rating screen. Whatever is legible is saved; the rest you can tap in below.</div></div>`;
-  // log a battle
+  // log a battle, by hand
+  let log = '';
   const teams = [['builder', 'Builder']].concat(Object.keys(ROSTER.tagged).map(n => [n, n]));
-  h += `<div class="sec">Log a battle <small>team · their lead · result</small></div>`;
-  h += `<div class="tchips">${teams.map(([k, l]) => `<span class="chip ${BL.team === k ? 'ok' : ''}" onclick="Planner.blTeam(${attr(k)})">${esc(l)}</span>`).join('')}</div>`;
-  if (ids.length !== 3) h += `<div class="note">Pick a saved party, or fill the builder with the three you run.</div>`;
+  log += `<div class="sec">Log a battle <small>team · their lead · result</small></div>`;
+  log += `<div class="tchips">${teams.map(([k, l]) => `<span class="chip ${BL.team === k ? 'ok' : ''}" onclick="Planner.blTeam(${attr(k)})">${esc(l)}</span>`).join('')}</div>`;
+  if (ids.length !== 3) log += `<div class="note">Pick a saved party, or fill the builder with the three you run.</div>`;
   else {
     const pool = L.pool(), q = BL.q.toLowerCase(), hits = q ? pool.filter(o => nm(o).toLowerCase().includes(q) || o.includes(q)).slice(0, 8) : [];
     const recent = []; for (const b of BATTLES.slice().reverse()) if (b.lead && !recent.includes(b.lead) && APP.pokemon[b.lead]) { recent.push(b.lead); if (recent.length >= 8) break; }
-    h += `<div class="team" style="cursor:default"><div class="dt" style="margin-bottom:4px">${ids.map(nm).map(esc).join(' / ')}</div>
+    log += `<div class="team" style="cursor:default"><div class="dt" style="margin-bottom:4px">${ids.map(nm).map(esc).join(' / ')}</div>
       <div class="add" style="margin:4px 0"><input id="blq" placeholder="their lead (optional): search…" value="${esc(BL.q)}" oninput="Planner.blSearch(this.value)"></div>
       ${hits.length ? `<div class="tchips">${hits.map(o => `<span class="chip ${BL.lead === o ? 'ok' : ''}" onclick="Planner.blLead('${o}')">${esc(nm(o))}</span>`).join('')}</div>` : recent.length ? `<div class="tchips">${recent.map(o => `<span class="chip ${BL.lead === o ? 'ok' : ''}" onclick="Planner.blLead('${o}')">${esc(nm(o))}</span>`).join('')}</div>` : ''}
       ${BL.lead ? `<div class="dt" style="margin:4px 0">Their lead: <b style="color:var(--ink)">${esc(nm(BL.lead))}</b> <a href="#" class="dim" onclick="Planner.blLead(null);return false">clear</a></div>` : ''}
       <div class="wl"><button class="win" onclick="Planner.logBattle('W')">Win</button><button class="loss" onclick="Planner.logBattle('L')">Loss</button></div></div>`;
   }
-  // stats
+  // the aggregate stats, folded away so they stop pushing the log itself off the screen
+  let stats = '';
   if (st.fights.length) {
     if (st.faced.length) {                    // opponents read from shared result screens: the ladder you actually play on
       const top = st.faced.slice(0, 12), n = st.fights.filter(b => b.opp && b.opp.length).length;
-      h += `<div class="sec">What you face <small>${n} battle${n === 1 ? '' : 's'} with opponents read</small></div><div class="team" style="cursor:default"><div class="chips">${fold(top.map(x => `<span class="chip ${x.l > x.w ? 'warn' : x.w > x.l ? 'ok' : ''}" onclick="Planner.openMon('${x.id}')" style="cursor:pointer">${esc(nm(x.id))} <span style="opacity:.7">×${x.n} · ${rec(x)}</span></span>`), 8, {chip: true})}</div>
+      stats += `<div class="sec">What you face <small>${n} battle${n === 1 ? '' : 's'} with opponents read</small></div><div class="team" style="cursor:default"><div class="chips">${fold(top.map(x => `<span class="chip ${x.l > x.w ? 'warn' : x.w > x.l ? 'ok' : ''}" onclick="Planner.openMon('${x.id}')" style="cursor:pointer">${esc(nm(x.id))} <span style="opacity:.7">×${x.n} · ${rec(x)}</span></span>`), 8, {chip: true})}</div>
         <div class="dt" style="margin-top:6px">Red: you lose to it more than you beat it. Share the end-of-battle screen after each match to keep this current.</div></div>`;
     }
-    h += `<div class="sec">Results <small>${rec(st.total)} · ${st.fights.length} logged</small></div>`;
-    h += `<div class="team card" style="cursor:default">${kv([
+    stats += `<div class="sec">Results <small>${rec(st.total)} · ${st.fights.length} logged</small></div>`;
+    stats += `<div class="team card stats" style="cursor:default">${kv([
       ['Teams', st.teams.slice(0, 5).map(t => `<div style="cursor:pointer" onclick="Planner.openTeam(${attr(t.ids)},${attr(t.name || null)})"><b>${rec(t)}</b> ${esc(t.name || t.ids.map(nm).join(' / '))}</div>`).join('') || '—'],
       ['Their leads', st.leads.length ? st.leads.slice(0, 6).map(x => `<div style="cursor:pointer" onclick="Planner.openMon('${x.id}')"><b>${rec(x)}</b> vs ${esc(nm(x.id))}${x.l > x.w ? ' <span class="chip warn">trouble</span>' : ''}</div>`).join('') : '<span class="dim">log the lead to see who gives you trouble</span>'],
       ['Members', st.members.slice(0, 6).map(x => `<b>${rec(x)}</b> ${esc(nm(x.id))}`).join('<br>') || '—'],
     ])}</div>`;
   }
-  // recent
-  const recentB = st.all.slice().reverse().slice(0, 12);
-  if (recentB.length) h += `<div class="sec">Recent</div>` + recentB.map(b => `<div class="team row" style="cursor:default"><span class="sc" style="color:${b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)'}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : b.src === 'film' ? ' · read from your recording' : ''}</div></span>${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>` + filmLine(b)).join('');
+  // the log itself comes before the widgets and the totals: it is what the page is for
+  const recentB = st.all.slice().reverse().slice(0, 20);
+  if (recentB.length) h += `<div class="sec">Battles <small>tap one for the timeline and a review</small></div>`
+    + recentB.map(b => battleRow(b)).join('');
+  else h += `<div class="empty"><b>No battles yet.</b><br>Import a recording above, or log one by hand below.</div>`;
+  h += log;
+  if (stats) h += fold([stats], 0, {label: () => `show your record · ${rec(st.total)}`});
   h += `<div class="note">Everything here is yours: the log lives on this device and follows your account when sync is on. Team pages and the AI review use these records next to the meta numbers.</div>`;
   return h;
+}
+/* the saved party a battle was played with: an exact trio first, else the party sharing the most members */
+function matchParty(ids) {
+  if (!ids || !ids.length) return null;
+  const exact = partyFor(ids); if (exact) return exact;
+  let best = null, bn = 0;
+  for (const [name, v] of Object.entries(ROSTER.tagged)) {
+    const n = v.filter(x => ids.includes(x)).length;
+    if (n > bn) { bn = n; best = name; }
+  }
+  return bn >= 2 ? best : null;                 // two of three is a suggestion; one is a coincidence
+}
+function battleById(id) { return BATTLES.find(b => b.id === id) || null; }
+function setBattleTeam(id, name) {              // attributing a battle is what makes the team page and the stats count it
+  const b = battleById(id); if (!b) return;
+  if (name && ROSTER.tagged[name]) { b.team = name; b.ids = ROSTER.tagged[name].slice(); } else { b.team = null; }
+  saveBattles(); renderBattles(); if (onView() === 'battle') renderBattle(); refresh();
+}
+function teamChips(b) {                         // pick the party you played with; the best match is offered first
+  const names = Object.keys(ROSTER.tagged);
+  if (!names.length) return '';
+  const guess = b.team || matchParty(b.myIds || b.ids || (b.myLead ? [b.myLead] : []));
+  const chip = n => `<span class="chip ${b.team === n ? 'ok sel' : n === guess && !b.team ? 'sug' : ''}" onclick="event.stopPropagation();Planner.setBattleTeam(${attr(b.id)},${attr(n)})">${esc(n)}${n === guess && !b.team ? ' ?' : ''}</span>`;
+  return `<div class="tchips bteam"><span class="lb">Played with</span>${names.map(chip).join('')}${b.team ? `<span class="chip" onclick="event.stopPropagation();Planner.setBattleTeam(${attr(b.id)},null)">clear</span>` : ''}</div>`;
+}
+function renderBattle() {
+  const el = $('battle'); if (!el) return;
+  try { el.innerHTML = battleInner(); } catch (e) { el.innerHTML = errorCard('Battle', e); }
+}
+function battleInner() {
+  const b = UI.battle && battleById(UI.battle);
+  if (!b) return '<div class="note">That battle is no longer in the log.</div>';
+  if (!APP || !window.PVP) return '<div class="note">Loading PvPoke data…</div>';
+  const res = b.result === 'W' ? 'Win' : b.result === 'L' ? 'Loss' : b.result === 'D' ? 'Draw' : 'Battle';
+  const col = b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)';
+  // once a party is attributed its three names are the truth; a partial read only speaks for itself
+  const side = (ids, names, label) => { const use = ids && ids.length === 3 ? ids.map(nm) : (names && names.length ? names : (ids || []).map(nm));
+    return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${esc(use.join(' / ') || 'not read')}</div></div>`; };
+  let h = `<div class="back" onclick="Planner.nav('#/battles')">‹ ${esc(PAGE_LABEL.battles)}</div>`;
+  h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center">
+    <span style="color:${col}">${res}</span><span class="dim" style="font-size:12px;font-weight:400">${when(b.t)}</span></div>
+    <div class="bvs">${side(b.ids, b.myNames, 'you')}<span class="vs">vs</span>${side(b.opp, b.oppNames, 'them')}</div>
+    ${kv([['Shields', b.shields ? `you ${b.shields.me} · them ${b.shields.opp}` : '—'], ['Fainted', b.fainted ? `you ${b.fainted.me} · them ${b.fainted.opp}` : '—'],
+         ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in']])}
+    ${teamChips(b)}</div>`;
+  if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="team card" style="cursor:default"><div class="filmt">${b.film.map(l => `<div>${esc(l)}</div>`).join('')}</div></div>`;
+  h += battleReviewCard(b);
+  h += `<div class="note">Read from a recording on this phone, so it can be wrong: <a href="#" onclick="Planner.delBattleGo(${attr(b.id)});return false">delete this battle</a> and it leaves your record and the stats.</div>`;
+  return h;
+}
+function delBattleGo(id) { delBattle(id); nav('#/battles'); }
+function openBattle(id) { nav('#/battle/' + id); }
+function battleRow(b, noChips) {                // one line per battle; a film entry with no team yet asks for one in place
+  const col = b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)';
+  const open = b.result || b.opp ? ` onclick="Planner.openBattle(${attr(b.id)})" style="cursor:pointer"` : ' style="cursor:default"';
+  const src = b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : b.src === 'film' ? ' · read from your recording' : '';
+  const row = `<div class="team row"${open}><span class="sc" style="color:${col}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${src}</div></span>${b.result || b.opp ? '<span class="go">›</span>' : ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`;
+  // asked only where it is still missing, so an attributed log stays quiet
+  return row + (!noChips && b.src === 'film' && !b.team ? teamChips(b) : '');
 }
 function blTeam(k) { BL.team = k; saveBL(); renderBattles(); }
 function blLead(id) { BL.lead = id; BL.q = ''; saveBL(); renderBattles(); }
@@ -2337,7 +2455,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

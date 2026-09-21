@@ -25,6 +25,9 @@ const MAX_OCR = 20;             // hard cap on name reads per recording
 
 const MISS_MAX = 12;             // consecutive misses before locate() drops to every 8th sample
 const MISS_EVERY = 8;
+const GAP = 4;                  // s without a HUD that ends a battle: a set recording holds several
+const MIN_ROWS = 8;             // samples a segment needs before it counts as a battle at all
+const MAX_OCR_ALL = 80;         // name reads across the whole recording, however many battles it holds
 
 let S = null;
 
@@ -133,10 +136,13 @@ function grab(ctx, r, scale) {                            // upscaled greyscale 
 
 /* ---------- per frame ---------- */
 function start(dur) {
-  S = {dur, hud: null, row: 0, rows: [], shots: [], ends: [], last: {my: null, opp: null}, lastT: -9, frames: 0, miss: 0};
+  S = {dur, hud: null, row: 0, segs: [], cur: null, lastT: -9, frames: 0, miss: 0, shots: 0};
 }
 function stop() { S = null; }          // scanVideo failed or finished: let the queued crops go
-const seen = () => !!(S && S.rows.length >= 8);
+const newSeg = t => ({rows: [], shots: [], ends: [], last: {my: null, opp: null}, t0: t, lastHud: t});
+const allSegs = () => S ? S.segs.concat(S.cur ? [S.cur] : []) : [];
+const goodSegs = () => allSegs().filter(g => g.rows.length >= MIN_ROWS);
+const seen = () => goodSegs().length > 0;
 
 function frame(ctx, W, H, t) {
   if (!S || t - S.lastT < SAMPLE_MIN) return;
@@ -153,21 +159,27 @@ function frame(ctx, W, H, t) {
   const row = S.row;
   const myMon = count(ctx, hud.my, BALLS, isRed, true, row), oppMon = count(ctx, hud.opp, BALLS, isRed, false, row);
   if (myMon < 1 || oppMon < 1) return keepEnd(ctx, W, H, t);   // a countdown, a switch sheet or the end screen
-  S.rows.push({t, myMon, oppMon,
+  // a recording of a whole set holds several battles, and between them the HUD is gone: a gap that long ends the
+  // battle, and the frames caught during it (the VICTORY / DEFEAT screen) belong to the segment that just closed
+  if (S.cur && t - S.cur.lastHud > GAP) { S.segs.push(S.cur); S.cur = null; }
+  if (!S.cur) S.cur = newSeg(t);
+  const g = S.cur; g.lastHud = t;
+  g.rows.push({t, myMon, oppMon,
     mySh: count(ctx, hud.my, SHIELDS, isPink, true, row), oppSh: count(ctx, hud.opp, SHIELDS, isPink, false, row)});
   for (const side of ['my', 'opp']) {
     const c = hud[side], mine = side === 'my', nr = rect(c, 0.02, 0.60, mine, row), p = profile(ctx, nr);
     if (p.ink < 40) continue;
-    if (profileDist(p, S.last[side]) > NAME_CHANGE && S.shots.length < MAX_OCR) {
-      S.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row), 3)});
+    if (profileDist(p, g.last[side]) > NAME_CHANGE && g.shots.length < MAX_OCR && S.shots < MAX_OCR_ALL) {
+      g.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row), 3)});
+      S.shots++;
     }
-    S.last[side] = p;
+    g.last[side] = p;
   }
 }
-function keepEnd(ctx, W, H, t) {                          // the closing screen decides the result
-  if (!S || t < S.dur * 0.5) return;
-  S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
-  if (S.ends.length > 4) S.ends.shift();
+function keepEnd(ctx, W, H, t) {                          // the closing screen decides the result of the battle just played
+  if (!S || !S.cur) return;                               // nothing open yet: the recording has not reached a battle
+  S.cur.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
+  if (S.cur.ends.length > 4) S.cur.ends.shift();
 }
 
 /* ---------- reading the queued crops ---------- */
@@ -216,42 +228,42 @@ function events(rows) {                                   // counts only ever fa
   return out;
 }
 
-async function finish(file) {
-  if (!seen()) { S = null; return null; }
-  status('Reading the battle from the recording…');
-  const P = window.Planner;
-  const reads = [];
-  for (let i = 0; i < S.shots.length; i++) {
-    const sh = S.shots[i];
-    progress(i / Math.max(1, S.shots.length));
+const verdict = txt => {                                  // the end screen is big, blurred type: match words loosely
+  for (const w of txt.split(/[^A-Z]+/)) {
+    if (w.length < 4) continue;
+    if (lev(w, 'VICTORY') <= 2) return 'W';
+    if (lev(w, 'EFFORT') <= 2 || lev(w, 'DEFEAT') <= 2) return 'L';
+    if (lev(w, 'DRAW') <= 1) return 'D';
+  }
+  return null;
+};
+const line = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+const LABEL = {mySh: 'you shielded', oppSh: 'they shielded', myMon: 'you lost', oppMon: 'they lost'};
+const FILM_MAX = 60;                                      // BATTLES syncs whole: keep each timeline bounded
+
+/* one segment of the recording — one battle — into a log entry, or null when its names could not be read */
+async function readSeg(g, file, t0, onShot) {
+  const P = window.Planner, reads = [];
+  for (const sh of g.shots) {
+    onShot();
     const sp = matchSpecies(await ocr(sh.name, LETTERS, 7));
     if (!sp) continue;
     const cp = parseInt((await ocr(sh.cp, '0123456789CP cp', 7)).replace(/\D/g, ''), 10) || null;
     reads.push({t: sh.t, side: sh.side, species: sp, cp});
   }
   // a name must hold for 3 s to be an entry: the opponent's card flashes their first party slot at the buzzer
+  const endT = g.lastHud;
   const stable = reads.filter((r, i) => {
     const next = reads.find((x, j) => j > i && x.side === r.side);
-    return (next ? next.t - r.t : S.dur - r.t) >= 3;
+    return (next ? next.t - r.t : endT - r.t) >= 3;
   });
-  const sideOf = s => stable.filter(r => r.side === s);
-  const teamOf = s => { const out = []; for (const r of sideOf(s)) if (!out.some(x => x.species === r.species)) out.push(r); return out; };
+  const teamOf = s => { const out = []; for (const r of stable) if (r.side === s && !out.some(x => x.species === r.species)) out.push(r); return out; };
   const my = teamOf('my'), opp = teamOf('opp');
-  if (!my.length || !opp.length) { S = null; return null; }
+  if (!my.length || !opp.length) return null;
 
-  const ev = events(S.rows);
-  const last = S.rows[S.rows.length - 1] || {};
+  const ev = events(g.rows), last = g.rows[g.rows.length - 1] || {};
   let result = null;
-  const verdict = txt => {                                // the end screen is big, blurred type: match words loosely
-    for (const w of txt.split(/[^A-Z]+/)) {
-      if (w.length < 4) continue;
-      if (lev(w, 'VICTORY') <= 2) return 'W';
-      if (lev(w, 'EFFORT') <= 2 || lev(w, 'DEFEAT') <= 2) return 'L';
-      if (lev(w, 'DRAW') <= 1) return 'D';
-    }
-    return null;
-  };
-  for (const e of S.ends.slice().reverse()) {
+  for (const e of g.ends.slice().reverse()) {
     const r = verdict((await ocr(e.img, '', 11)).toUpperCase());
     if (r) { result = r; break; }
   }
@@ -259,18 +271,18 @@ async function finish(file) {
 
   const nameOf = r => title(r.species), id = n => (P && P.idByName ? P.idByName(n) : null);
   const myIds = my.map(r => id(nameOf(r))).filter(Boolean), oppIds = opp.map(r => id(nameOf(r))).filter(Boolean);
-  const line = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
-  const label = {mySh: 'you shielded', oppSh: 'they shielded', myMon: 'you lost', oppMon: 'they lost'};
+  // times run from the start of this battle, not of the recording, so a set's third battle still reads 0:00 up
+  const rel = t => Math.max(0, t - g.t0);
   const film = [];
-  for (const r of stable) film.push({t: r.t, text: `${line(r.t)} ${r.side === 'my' ? 'you sent' : 'they sent'} ${nameOf(r)}${r.cp ? ' (' + r.cp + ')' : ''}`});
-  for (const e of ev) film.push({t: e.t, text: `${line(e.t)} ${label[e.what]}${/Mon$/.test(e.what) ? ' a Pokémon' : ` (${e.to} left)`}`});
+  for (const r of stable) film.push({t: rel(r.t), text: `${line(rel(r.t))} ${r.side === 'my' ? 'you sent' : 'they sent'} ${nameOf(r)}${r.cp ? ' (' + r.cp + ')' : ''}`});
+  for (const e of ev) film.push({t: rel(e.t), text: `${line(rel(e.t))} ${LABEL[e.what]}${/Mon$/.test(e.what) ? ' a Pokémon' : ` (${e.to} left)`}`});
   film.sort((a, b) => a.t - b.t);
 
-  const FILM_MAX = 60;                                    // BATTLES syncs whole: keep the timeline bounded
-  const entry = {
-    t: (file && file.lastModified) || Date.now(),
+  return {
+    t: ((file && file.lastModified) || Date.now()) + Math.round(g.t0 * 1000),   // battles in a set keep their order
     result,
-    ids: myIds.length === 3 ? myIds : null,
+    ids: myIds.length === 3 ? myIds : null,          // a complete trio, which the stats need
+    myIds,                                           // everything the read did resolve, even a partial team: this is what matches a saved party
     team: (P && P.partyFor) ? P.partyFor(myIds) : null,
     lead: oppIds[0] || null,
     opp: oppIds,
@@ -282,18 +294,40 @@ async function finish(file) {
     film: film.slice(0, FILM_MAX).map(f => f.text),
     // everything the read found, kept as data and not only as sentences: the AI review and any later screen can use it
     filmData: {
-      reads: stable.map(r => ({t: Math.round(r.t * 10) / 10, side: r.side, species: r.species, cp: r.cp})),
-      events: ev.map(e => ({t: Math.round(e.t * 10) / 10, what: e.what, from: e.from, to: e.to})),
-      samples: S.rows.length, dur: Math.round(S.dur)
+      reads: stable.map(r => ({t: Math.round(rel(r.t) * 10) / 10, side: r.side, species: r.species, cp: r.cp})),
+      events: ev.map(e => ({t: Math.round(rel(e.t) * 10) / 10, what: e.what, from: e.from, to: e.to})),
+      samples: g.rows.length, dur: Math.round(g.lastHud - g.t0)
     },
     src: 'film'
   };
-  if (P && P.addBattle) P.addBattle(entry);
-  gain('note', `battle read from the recording: ${entry.myNames.join(' / ')} vs ${entry.oppNames.join(' / ')}`);
-  status(`${result === 'W' ? '✓ Win' : result === 'L' ? '✕ Loss' : 'Battle'} vs ${entry.oppNames.join(' / ')} logged`);
-  const out = Object.assign({}, entry); S = null;
+}
+
+/* every battle the recording holds, logged oldest first. Returns the entries, or null when none could be read. */
+async function finish(file) {
+  if (!seen()) { S = null; return null; }
+  const segs = goodSegs(), P = window.Planner;
+  status(segs.length > 1 ? `Reading ${segs.length} battles from the recording…` : 'Reading the battle from the recording…');
+  const total = segs.reduce((n, g) => n + g.shots.length, 0);
+  let done = 0;
+  const onShot = () => progress(done++ / Math.max(1, total));
+  const out = [];
+  for (const g of segs) {
+    let e = null;
+    try { e = await readSeg(g, file, g.t0, onShot); } catch (err) { console.error(err); }
+    if (!e) continue;
+    if (P && P.addBattle) P.addBattle(e);
+    out.push(e);
+  }
+  S = null;
+  if (!out.length) return null;
+  const one = out[0], many = out.length > 1;
+  gain('note', many ? `${out.length} battles read from the recording`
+                    : `battle read from the recording: ${one.myNames.join(' / ')} vs ${one.oppNames.join(' / ')}`);
+  status(many ? `${out.length} battles logged · ${out.filter(e => e.result === 'W').length} won`
+              : `${one.result === 'W' ? '✓ Win' : one.result === 'L' ? '✕ Loss' : 'Battle'} vs ${one.oppNames.join(' / ')} logged`);
   return out;
 }
 
-window.Film = {start, stop, frame, finish, seen, locate, events, matchSpecies, shotCount: () => (S ? S.shots.length : 0)};
+window.Film = {start, stop, frame, finish, seen, locate, events, matchSpecies,
+               shotCount: () => allSegs().reduce((n, g) => n + g.shots.length, 0), segCount: () => goodSegs().length};
 })();

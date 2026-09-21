@@ -19,18 +19,35 @@ Only name Pokémon that appear in the summary. Do not invent stats, moves or mat
 When the summary carries real GO Battle League results ("battles" or "history": wins and losses per team, the opposing leads that
 cause trouble, the rating trend), weigh them above theory and say which advice follows from them.`;
 
+const SYSTEM_BATTLE = `You are a Pokémon GO PvP coach for a casual player, looking at ONE GO Battle League match the app read
+off the player's own recording. The JSON has both teams (the player's "my", the opponent's "opp"), the result, how many shields each
+side spent, how many Pokémon fainted, and a timeline of what happened: who was sent out when, each shield spent and each faint, in
+seconds from the start of the battle. The league and CP cap are named in the summary. The read is mechanical and can be incomplete —
+a name it could not read is simply missing, so never treat a gap as a Pokémon that was not there.
+
+Write markdown with exactly these four sections, under 160 words in total, no other text:
+**What happened** one or two sentences telling the story of the match from the timeline: the lead matchup, the switch, the shield trade.
+**Turning point** one sentence naming the moment it was decided, with its time from the timeline.
+**Do differently** up to 2 bullets, concrete and about THIS match: a different lead, holding or spending a shield, a switch made earlier
+or later. Say what to do, not what went wrong.
+**Matchup note** one sentence on how this team lines up against that opponent team in general, from the types and the app's numbers.
+Only name Pokémon that appear in the summary. Do not invent moves, damage numbers or matchups the summary does not give you.
+When the result is missing, say what the timeline shows and do not guess who won.`;
+
 export function makeCoach(apiKey) {
   if (!apiKey) return null;
   const client = new Anthropic({ apiKey });
-  return async function coach({ context }) {
-    const user = `Team, roster and meta summary (JSON):\n${context}`;
+  return async function coach({ context, mode }) {
+    const battle = mode === 'battle';
+    const user = battle ? `One GO Battle League match the app read from a recording (JSON):\n${context}`
+                        : `Team, roster and meta summary (JSON):\n${context}`;
     const msg = await client.beta.messages.create({
       model: 'claude-opus-5',
-      max_tokens: 1500,
+      max_tokens: battle ? 900 : 1500,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: SYSTEM_REVIEW,
+      system: battle ? SYSTEM_BATTLE : SYSTEM_REVIEW,
       messages: [{ role: 'user', content: user }],
     });
     if (msg.stop_reason === 'refusal') return { refused: true };

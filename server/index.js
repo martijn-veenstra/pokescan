@@ -16,6 +16,7 @@ const PORT = Number(process.env.PORT) || 8080;
 const PASSCODE = process.env.PASSCODE || '';
 const KINDS = new Set(['scans', 'roster', 'appr', 'battles']);
 const COACH_PER_USER_HOUR = Number(process.env.COACH_PER_USER_HOUR) || 10;
+const COACH_BATTLE_PER_HOUR = Number(process.env.COACH_BATTLE_PER_HOUR) || 5;   // battle reviews are one per match, so they get a smaller cap inside the per-account budget
 const VISION_PER_HOUR = Number(process.env.VISION_PER_HOUR) || 100, VISION_PER_USER_HOUR = Number(process.env.VISION_PER_USER_HOUR) || 20;
 const MAX_BYTES = 8 * 1024 * 1024;
 const COACH_PER_HOUR = Number(process.env.COACH_PER_HOUR) || 30;
@@ -101,7 +102,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   });
   // AI coach: the browser sends a compact roster/meta summary, the server asks Claude. Passcode-protected and rate-limited,
   // because every call costs money on the server owner's API key.
-  const asks = [], asksBy = new Map(), jobs = new Map();
+  const asks = [], asksBy = new Map(), battleAsksBy = new Map(), jobs = new Map();
   app.post('/api/coach', { preHandler: [auth, requirePro] }, async (req, reply) => {
     if (!coach) return reply.code(503).send({ error: 'coach_not_configured', message: 'Set ANTHROPIC_API_KEY on the server to enable the coach.' });
     const now = Date.now();
@@ -114,13 +115,19 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (!body.context || typeof body.context !== 'object') return reply.code(400).send({ error: 'missing_context' });
     const context = JSON.stringify(body.context);
     if (context.length > 60000) return reply.code(413).send({ error: 'context_too_large' });
-    if (body.mode && body.mode !== 'review') return reply.code(400).send({ error: 'unknown_mode', message: 'the coach only writes team reviews' });
+    const mode = body.mode || 'review';
+    if (mode !== 'review' && mode !== 'battle') return reply.code(400).send({ error: 'unknown_mode', message: 'the coach writes team reviews and battle reviews' });
+    if (mode === 'battle') {                       // a set is five matches: cap them inside the per-account budget
+      const bmine = (battleAsksBy.get(req.userId) || []).filter(t => t >= now - 3600e3);
+      if (bmine.length >= COACH_BATTLE_PER_HOUR) return reply.code(429).send({ error: 'rate_limited', message: `at most ${COACH_BATTLE_PER_HOUR} battle reviews per hour` });
+      bmine.push(now); battleAsksBy.set(req.userId, bmine);
+    }
     asks.push(now);
     // The model can take a minute or more; phones drop a fetch after ~60 s. So: answer with a job id at once, let the app poll.
     for (const [id, j] of jobs) if (now - j.t > 3600e3) jobs.delete(id);
     const id = randomUUID(), job = { status: 'running', t: now, userId: req.userId };
     jobs.set(id, job);
-    coach({ context }).then(out => {
+    coach({ context, mode }).then(out => {
       if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to answer' });
       else Object.assign(job, { status: 'done', text: out.text, model: out.model, usage: out.usage });
     }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the coach did not answer' }); });

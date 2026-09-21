@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { buildServer } from './index.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const fakeCoach = async ({ context }) => { await new Promise(r => setTimeout(r, 150)); return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria`, model: 'fake', usage: { in: 1, out: 1 } }; };
+const fakeCoach = async ({ context, mode }) => { await new Promise(r => setTimeout(r, 150));
+  if (mode === 'battle') return { text: `**What happened** You led and switched.\n\n**Turning point** At 0:24.\n\n**Do differently**\n- Hold a shield\n\n**Matchup note** context had ${Object.keys(JSON.parse(context)).join(',')}`, model: 'fake', usage: { in: 1, out: 1 } };
+  return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria`, model: 'fake', usage: { in: 1, out: 1 } }; };
 // fake Leek Duck: ScrapedDuck JSON plus one event page in Leek Duck's markup (GO Fest with rotating Mega raids)
 const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="raids">Raids</h2>
 <h3>Mega Raids · Saturday</h3><div class="pkmn-list-flex"><div class="pkmn-list-item"><div class="pkmn-list-img"><img src="x.png"></div><span class="pkmn-name">Mega Altaria</span><img class="shiny-icon" src="s.png"></div>
@@ -89,6 +91,23 @@ r = await app.inject({ method: 'GET', url: '/api/coach/' + jobId, headers: H });
 assert.equal(r.json().status, 'done');
 assert.ok(r.json().text.includes('**Verdict**'), 'review flows back through the job');
 assert.ok(r.json().text.includes('context had builder'), 'the context reaches the model');
+// a battle review is its own mode, with its own smaller cap
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { battle: { result: 'L' } }, mode: 'battle' } });
+assert.equal(r.statusCode, 202, 'the coach accepts a battle review');
+const bJob = r.json().jobId;
+await new Promise(res => setTimeout(res, 300));
+r = await app.inject({ method: 'GET', url: '/api/coach/' + bJob, headers: H });
+assert.equal(r.json().status, 'done');
+assert.ok(r.json().text.includes('**Turning point**'), 'the battle prompt answers in its own sections');
+assert.ok(r.json().text.includes('context had battle'), 'the battle context reaches the model');
+r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { battle: {} }, mode: 'film' } });
+assert.equal(r.statusCode, 400, 'an unknown mode is refused');
+{ // the cap: five an hour, then 429 (the passcode server counts every caller as one user)
+  let last;
+  for (let i = 0; i < 6; i++) last = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { battle: {} }, mode: 'battle' } });
+  assert.equal(last.statusCode, 429, 'battle reviews are capped per hour');
+  assert.match(last.json().message, /battle reviews per hour/);
+}
 r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: { builder: { slots: ['a', 'b', 'c'] } } } });
 assert.equal(r.statusCode, 202, 'mode defaults to review');
 r = await app.inject({ method: 'POST', url: '/api/coach', headers: H, payload: { context: {}, mode: 'builder' } });

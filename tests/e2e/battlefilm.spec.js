@@ -27,6 +27,12 @@ const HARNESS = () => {
     }
     return ctx;
   };
+  // between two battles there is no HUD, and the closing screen shows the verdict in big type
+  window.__gap = (word) => {
+    ctx.fillStyle = '#10182a'; ctx.fillRect(0, 0, W, H);
+    if (word) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 44px sans-serif'; ctx.fillText(word, 40, Math.round(H * 0.34)); }
+    return ctx;
+  };
   window.__ctx = () => ctx;
   window.__size = [W, H];
 };
@@ -84,13 +90,46 @@ test('Film reads a battle off the HUD: both cards, the pip counts, the timeline 
   expect(entry.filmData.events.length).toBeGreaterThan(0);     // the structured read is kept, not only the sentences
   expect(entry.filmData.samples).toBeGreaterThan(20);
 
-  // the log shows where it came from, and the timeline opens under the row
+  // the log says where it came from, and the row opens the battle's own page with the timeline on it
   await page.evaluate(() => Planner.renderBattles());
-  await expect(page.locator('#battles .team.row', { hasText: 'read from your recording' }).first()).toBeVisible();
-  const tog = page.locator('#battles .xmore:has-text("show the timeline")').first();
-  await expect(tog).toBeVisible();
-  await expect(page.locator('#battles .filmt').first()).toBeHidden();
-  await tog.click();
-  await expect(page.locator('#battles .filmt').first()).toBeVisible();
+  const row = page.locator('#battles .team.row', { hasText: 'read from your recording' }).first();
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/battle\//);
+  await expect(page.locator('#battle .filmt')).toBeVisible();
+  await expect(page.locator('#battle')).toContainText('Shields');
+  await expect(page.locator('#battle .back')).toContainText('Battle log');
+  expect(errors).toEqual([]);
+});
+
+test('a set recording splits on the end screens: one entry per battle', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('roster'); });
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(HARNESS);
+  const n = await page.evaluate(async () => {
+    const names = ['AZUMARILL', 'MEDICHAM', 'REGISTEEL', 'ALTARIA'];      // battle 1: my/opp, battle 2: my/opp
+    window.getWorker = async () => { let wl = '';
+      return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
+        recognize: async c => ({ data: { text: wl.includes('Z') ? (names.shift() || 'AZUMARILL') : (c.width > 300 ? 'VICTORY' : '1500') } }) }; };
+    Film.start(240);
+    let t = 0;
+    const hud = (mine, om, msh, osh, tag) => { Film.frame(window.__paint(mine, om, msh, osh, tag), ...window.__size, t); t += 0.5; };
+    const gap = word => { Film.frame(window.__gap(word), ...window.__size, t); t += 0.5; };
+    for (let i = 0; i < 14; i++) hud(3, 3, 2, 2, 'AZUMARILL');            // battle one
+    for (let i = 0; i < 8; i++) hud(3, 2, 1, 2, 'AZUMARILL');
+    for (let i = 0; i < 16; i++) gap(i > 2 && i < 10 ? 'VICTORY' : '');    // the end screen, then the wait for the next
+    for (let i = 0; i < 14; i++) hud(3, 3, 2, 2, 'REGISTEEL');            // battle two
+    for (let i = 0; i < 8; i++) hud(2, 3, 2, 1, 'REGISTEEL');
+    return Film.segCount();
+  });
+  expect(n, 'the gap between battles split the recording in two').toBe(2);
+  const logged = await page.evaluate(async () => { const out = await Film.finish({ lastModified: Date.now() }); return (out || []).map(e => ({ my: e.myNames, opp: e.oppNames, shields: e.shields, fainted: e.fainted, first: e.film[0] })); });
+  expect(logged).toHaveLength(2);
+  expect(logged[0].my).toContain('Azumarill');
+  expect(logged[1].my).toContain('Registeel');
+  expect(logged[0].fainted.opp).toBe(1);                                   // battle one: they lost one
+  expect(logged[1].fainted.me).toBe(1);                                    // battle two: you lost one
+  expect(logged[1].first, "the second battle's clock restarts, it does not continue the recording's").toMatch(/^0:0/);
+  expect(await page.evaluate(() => Planner.BATTLES.filter(b => b.src === 'film').length)).toBe(2);
   expect(errors).toEqual([]);
 });
