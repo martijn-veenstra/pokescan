@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.82';
+const APP_VERSION='9.83';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -869,6 +869,7 @@ async function scanVideo(file,trainer){
   // film study (Share anything): keep a dozen small snapshots spread over the recording plus the last seconds, in case it is a battle
   const snaps=[], snapAt=[]; { const n=Math.min(12,Math.max(4,Math.round(dur/15))); for(let i=0;i<n;i++) snapAt.push(dur*(i+0.5)/n); for(let s=4;s>=1;s--) if(dur-s>0) snapAt.push(dur-s); snapAt.sort((a,b)=>a-b); }
   let snapI=0, battleMode=false; const SN=document.createElement('canvas');
+  if(window.Film) Film.start(dur);                      // the on-device battle read watches every frame from here on
   const snapshot=(t)=>{ if(snapI>=snapAt.length||t<snapAt[snapI]) return; while(snapI<snapAt.length&&snapAt[snapI]<=t) snapI++;
     const s=Math.min(1,768/Math.max(cv.width,cv.height)); SN.width=Math.round(cv.width*s); SN.height=Math.round(cv.height*s); SN.getContext('2d').drawImage(cv,0,0,SN.width,SN.height);
     snaps.push({t:Math.round(t), image:SN.toDataURL('image/jpeg',0.7).split(',')[1], mediaType:'image/jpeg'}); };
@@ -876,6 +877,7 @@ async function scanVideo(file,trainer){
   const checkBattleMode=(t)=>{ if(!battleMode && dur>90 && t>30 && reads===0 && results.length===before){ battleMode=true; mode+='+battle'; gain('note','no status screens in the first 30 s: watching it as a battle recording'); status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · watching the battle…`); } return battleMode; };
   const analyse=async(t)=>{
     ctx.drawImage(vid,0,0); frames++; gain('frames'); snapshot(t);
+    if(window.Film) Film.frame(ctx,cv.width,cv.height,t);   // battleMode needs 90 s and 30 s in: this sees the short ones
     if(checkBattleMode(t)){ progress(Math.min(1,t/dur)); return false; }
     const vec=frameVec(cv);
     // two consecutive frames look alike: the swipe has stopped. The animated Pokémon model and video compression alone
@@ -938,7 +940,7 @@ async function scanVideo(file,trainer){
         if(t-lastT<1/3) return;
         busy=true; lastT=t;
         try{
-          if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); progress(Math.min(1,t/dur)); }   // no pause/play churn: the big file plays through smoothly
+          if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); if(window.Film) Film.frame(ctx,cv.width,cv.height,t); progress(Math.min(1,t/dur)); }   // no pause/play churn: the big file plays through smoothly
           else { vid.pause();                                      // hold the frame still while we look at it
             await analyse(t);
             if(!done){ await vid.play().catch(()=>{}); } }
@@ -968,8 +970,12 @@ async function scanVideo(file,trainer){
   gain('mode',mode);
   status(`Video done · ${results.length-before} new · ${reads} screens read`);
   vid.pause(); vid.removeAttribute('src'); vid.load(); URL.revokeObjectURL(url);
-  // no status screens in the whole recording: probably a battle. Share anything reads the sampled frames (Pro).
-  if(reads===0 && results.length===before && snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
+  // no status screens in the whole recording: it is a battle. The HUD read logs it on-device for free; Share anything
+  // then reads the sampled frames (Pro) and adds the commentary. The two are independent — neither gates the other.
+  if(reads===0 && results.length===before){
+    if(window.Film){ try{ if(Film.seen()) await Film.finish(file); }catch(e){ console.error(e); gain('note','the battle read failed: '+(e.message||e)); } Film.stop(); }
+    if(snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
+  } else if(window.Film) Film.stop();
 }
 
 async function handleScan(ctx,W,H,trainer,skipKey){

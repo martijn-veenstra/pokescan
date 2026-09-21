@@ -1320,6 +1320,15 @@ function renderBattles() {
   const el = $('battles'); if (!el) return;
   try { el.innerHTML = battlesInner(); } catch (e) { el.innerHTML = errorCard('Battle log', e); }
 }
+/* a battle read from a recording carries a minute-by-minute timeline: keep it out of the row, one tap away */
+function filmLine(b) {
+  const f = b.film && b.film.length ? b.film : null; if (!f) return '';
+  const sh = b.shields || {}, fa = b.fainted || {};
+  const bits = [sh.me != null ? `you used ${sh.me} shield${sh.me === 1 ? '' : 's'}` : '', sh.opp != null ? `they used ${sh.opp}` : '',
+    fa.me != null ? `${fa.me} of yours fainted` : '', fa.opp != null ? `${fa.opp} of theirs` : ''].filter(Boolean).join(' · ');
+  return `<div class="xm" hidden><div class="filmt">${bits ? `<div class="fsum">${esc(bits)}</div>` : ''}${f.map(l => `<div>${esc(l)}</div>`).join('')}</div></div>`
+       + `<div class="xmore dim" data-more="show the timeline · ${f.length} moments" onclick="Planner.showMore(this, event)">▸ show the timeline · ${f.length} moments</div>`;
+}
 function battlesInner() {
   if (!APP || !window.PVP) return '<div class="note">Loading PvPoke data…</div>';
   const m = M(), L = builderLeague(m), st = battleStats(LEAGUE.slug), ids = blTeamIds();
@@ -1360,7 +1369,7 @@ function battlesInner() {
   }
   // recent
   const recentB = st.all.slice().reverse().slice(0, 12);
-  if (recentB.length) h += `<div class="sec">Recent</div>` + recentB.map(b => `<div class="team row" style="cursor:default"><span class="sc" style="color:${b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)'}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : ''}</div></span>${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`).join('');
+  if (recentB.length) h += `<div class="sec">Recent</div>` + recentB.map(b => `<div class="team row" style="cursor:default"><span class="sc" style="color:${b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)'}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : b.src === 'film' ? ' · read from your recording' : ''}</div></span>${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>` + filmLine(b)).join('');
   h += `<div class="note">Everything here is yours: the log lives on this device and follows your account when sync is on. Team pages and the AI review use these records next to the meta numbers.</div>`;
   return h;
 }

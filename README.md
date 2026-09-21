@@ -168,6 +168,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   one and its explanation opens in place, one at a time, no re-render. The footer notes that used to carry
   those explanations were trimmed to what they still add, the data's provenance and the model's caveats.
   The scan cards, the team page's Members list and the battle log keep their own labels and get no header.
+- **A battle recording reads itself** (`battlefilm.js`): a GO Battle League recording has no status screens, so it
+  used to be kept only as a dozen JPEGs for the Pro vision endpoint. Everything a log entry needs is on screen in
+  every frame, in one band: the two HUD cards carry both active names, their CP, the red pokéballs for Pokémon left
+  and the pink hexagons for shields. Counting those pixels is free, so the battle is read on the phone and OCR is
+  spent only on the ~10 frames where a name changes. The entry lands in the battle log with both teams, the result
+  from the closing screen, shields and faints, and a minute-by-minute timeline that opens under its row. Pro vision
+  still runs on top and adds the film-study commentary — the two are independent.
 - **The loader**: the Pokéball that shakes while scans are read (a ring around it, a burst of stars when it lands)
   also runs on the AI review card, the app's other long wait. There is no percentage to show for a review, so the
   ring spins instead of filling and the heading counts the seconds; when the review arrives the ball finishes its

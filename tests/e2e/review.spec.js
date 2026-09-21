@@ -85,10 +85,15 @@ test('the review card runs the Pokéball loader: shaking with a live timer, caug
   const ball = page.locator('#builder .team.card.rvwait .pball.rv');
   await expect(ball).toHaveClass(/\bon\b/);
   await expect(ball.locator('svg .ball')).toHaveCount(1);
+  // the catch lasts 900 ms and then the card becomes the review, so polling for it is a race on a loaded machine:
+  // watch for the class instead, from before the job can resolve, and assert afterwards that it happened
+  await page.evaluate(() => { window.__caught = false;
+    new MutationObserver(() => { if (document.querySelector('.pball.rv.done')) window.__caught = true; })
+      .observe(document.body, {subtree: true, childList: true, attributes: true, attributeFilter: ['class']}); });
   await expect.poll(() => page.locator('#builder .rvsec').textContent()).toMatch(/[1-9]\d*s/);
   // it lands: the ball is caught first, then the card becomes the review
-  await expect(page.locator('#builder .team.card.rvwait .pball.rv.done')).toBeVisible();
   await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
+  expect(await page.evaluate(() => window.__caught), 'the ball was caught before the card turned into the review').toBe(true);
   await expect(page.locator('#builder .team.card.rvwait')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
