@@ -181,7 +181,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   **Last imports** — how many frames were sampled, whether the two HUD cards were found at all, how many battles
   and names came out — so a recording the reader cannot use explains itself instead of failing silently. Those
   entries live on the battle log, not in the Scans import log.
-- **A battle recording reads itself** (`battlefilm.js`): a GO Battle League recording has no status screens, so it
+- **A battle recording reads itself** (`battlefilm.js`, v2): a GO Battle League recording has no status screens, so it
   used to be kept only as a dozen JPEGs for the Pro vision endpoint. Everything a log entry needs is on screen in
   every frame, in one band: the two HUD cards carry both active names, their CP, the red pokéballs for Pokémon left
   and the pink hexagons for shields. Counting those pixels is free, so the battle is read on the phone and OCR is
@@ -189,6 +189,14 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   from the closing screen, shields and faints, and a minute-by-minute timeline that opens under its row. Pro vision
   still runs on top and adds the film-study commentary — the two are independent. A recording of a whole set is
   split on the end screens, so each battle in it becomes its own entry with its own result and its own clock.
+  The HUD is found by its **pokéballs and shield hexagons** — saturated red and pink that no GO background contains —
+  measured once from the three pokéballs a side and then frozen, because the HUD does not move during a battle. The
+  first version looked for two wide light bands instead, which matched white cloud in a midday sky and threw a
+  daylight battle away after its first Pokémon.
+- **The moves used** come off the game's own banners: the HUD is hidden exactly when something is being announced
+  ("Chesnaught used Frenzy Plant!", then "BLOCKED!"), so those frames are read for the move and snapped to that
+  species' real moveset. Each battle page lists what both sides threw and marks the shielded ones, and the moves
+  travel into the AI review so it can talk about the shield trade rather than guess at it.
 - **The loader**: the Pokéball that shakes while scans are read (a ring around it, a burst of stars when it lands)
   also runs on the AI review card, the app's other long wait. There is no percentage to show for a review, so the
   ring spins instead of filling and the heading counts the seconds; when the review arrives the ball finishes its

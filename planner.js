@@ -858,6 +858,7 @@ function battleContext(b) {
     myTeamName: b.team || undefined,
     shields: b.shields || undefined, fainted: b.fainted || undefined,
     timeline: (b.filmData && b.filmData.events ? b.filmData.events : []).map(e => ({at: e.t, what: e.what, left: e.to})),
+    movesUsed: ((b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [])).map(m => ({at: m.t, by: m.by === 'my' ? 'you' : 'them', name: m.species, move: m.move, shielded: !!m.blocked})),
     sentOut: (b.filmData && b.filmData.reads ? b.filmData.reads : []).map(r => ({at: r.t, side: r.side, name: nm(idByName(r.species) || '') || r.species, cp: r.cp})),
     seconds: b.filmData ? b.filmData.dur : undefined,
   };
@@ -1364,7 +1365,7 @@ function clearBattleLog() { BLOG.length = 0; localStorage.removeItem('blog'); re
 function filmWhy(f) {                           // the reader's own diagnostics, in words
   if (!f) return 'The recording was read, but the battle reader did not run on it.';
   if (f.entries) return `${f.entries} battle${f.entries === 1 ? '' : 's'} read.`;
-  if (!f.hud) return `No battle HUD found in ${f.frames || 0} sampled frames. The reader looks for the two name cards under the status bar — it needs a Great League battle recorded full-screen on this phone, not a cropped or rotated video.`;
+  if (!f.cal) return `No battle HUD found in ${f.frames || 0} sampled frames. The reader measures the two cards from the pokéballs and shield hexagons — it needs a Great League battle recorded full-screen on this phone, not a cropped or rotated video.`;
   if (!f.good) return `The battle cards were found but only briefly (${f.rows || 0} samples). A battle needs about four seconds of clear HUD to be read.`;
   if (!f.shots) return 'The battle cards were found but no name was legible in them.';
   return `Read ${f.good} battle${f.good === 1 ? '' : 's'} off the HUD, but could not match the Pokémon names (${f.shots} name crops tried).`;
@@ -1375,7 +1376,7 @@ function blogCard() {
     const when2 = new Date(e.t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
     const name = (e.file || '').length > 26 ? (e.file || '').slice(0, 13) + '…' + (e.file || '').slice(-10) : (e.file || '');
     const why = e.ok ? filmWhy(e.film) : '';
-    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${e.film.hud ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}` : '';
+    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${e.film.cal ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}${e.film.banners ? ` · ${e.film.banners} banners` : ''}` : '';
     return `<div class="il"><span class="t">${when2}</span><span><span class="f">${esc(name)}</span> <span class="dim">${e.size ? (e.size / 1e6).toFixed(0) + ' MB' : ''}${e.ms ? ` · ${(e.ms / 1000).toFixed(0)}s` : ''}</span>
       <br><span class="r ${e.ok && e.film && e.film.entries ? 'ok' : 'err'}">${e.ok && e.film && e.film.entries ? '✓ ' : '⚠ '}${esc(e.ok ? why : (e.msg || 'the import failed'))}</span>
       ${dg ? `<br><span class="d">${esc(dg)}</span>` : ''}${!e.ok && e.detail ? `<br><span class="d">${esc(e.detail)}</span>` : ''}</span></div>`;
@@ -1524,6 +1525,15 @@ function battleInner() {
     ${kv([['Shields', b.shields ? `you ${b.shields.me} · them ${b.shields.opp}` : '—'], ['Fainted', b.fainted ? `you ${b.fainted.me} · them ${b.fainted.opp}` : '—'],
          ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in']])}
     ${teamChips(b)}</div>`;
+  const mv = b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [];
+  if (mv.length) {
+    const side = who => mv.filter(m => m.by === who);
+    const list = rows => rows.length ? rows.map(m => `<span class="chip ${m.blocked ? 'warn' : ''}">${esc(m.move)}${m.blocked ? ' ✕' : ''}</span>`).join('') : '<span class="dim">none read</span>';
+    h += `<div class="sec">Moves used <small>${mv.length} read off the recording</small></div><div class="team card" style="cursor:default">${kv([
+      ['Yours', `<div class="chips">${list(side('my'))}</div>`],
+      ['Theirs', `<div class="chips">${list(side('opp'))}</div>`],
+    ])}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
+  }
   if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="team card" style="cursor:default"><div class="filmt">${b.film.map(l => `<div>${esc(l)}</div>`).join('')}</div></div>`;
   h += battleReviewCard(b);
   h += `<div class="note">Read from a recording on this phone, so it can be wrong: <a href="#" onclick="Planner.delBattleGo(${attr(b.id)});return false">delete this battle</a> and it leaves your record and the stats.</div>`;

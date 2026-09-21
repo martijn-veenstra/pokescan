@@ -3,19 +3,19 @@ import { openApp } from './helpers.js';
 
 /* No video fixture exists — and a recording is the user's to supply — so this drives Film's own API with synthetic
    HUD frames painted onto a canvas: two light cards under the status bar, red pokéballs for Pokémon left and pink
-   hexagons for shields, exactly the band locate() looks for. OCR is stubbed the way share.spec.js stubs vision. */
+   hexagons for shields, which is what calibrate() measures the cards from. OCR is stubbed the way share.spec.js stubs vision. */
 const HARNESS = () => {
   const W = 390, H = 844;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   // slot centres as a fraction of card width, mirrored for the opponent — the same geometry battlefilm.js uses
   const BALLS = [0.092, 0.225, 0.368], SHIELDS = [0.568, 0.686];
-  window.__paint = (myMon, oppMon, mySh, oppSh, tag) => {
-    ctx.fillStyle = '#1d3b6e'; ctx.fillRect(0, 0, W, H);                  // the battlefield behind the HUD
-    const cards = [{ x: 8, w: 178, mine: true }, { x: W - 8 - 178, w: 178, mine: false }];
+  window.__paint = (myMon, oppMon, mySh, oppSh, tag, keepBg) => {
+    if (!keepBg) { ctx.fillStyle = '#1d3b6e'; ctx.fillRect(0, 0, W, H); }   // the battlefield behind the HUD
+    const cards = [{ x: 8, w: 148, mine: true }, { x: W - 8 - 148, w: 148, mine: false }];
     const y = Math.round(H * 0.06), h = Math.round(H * 0.055);
     for (const c of cards) {
-      ctx.fillStyle = '#f2f2f2'; ctx.fillRect(c.x, y, c.w, h);            // the light card locate() hunts for
+      ctx.fillStyle = '#f2f2f2'; ctx.fillRect(c.x, y, c.w, h);            // the card behind the pips
       ctx.fillStyle = '#202020'; ctx.font = 'bold 13px sans-serif';       // a name, so the ink profile changes on a switch
       const label = c.mine ? (tag || 'AZUMARILL') : 'MEDICHAM';
       ctx.fillText(label, c.mine ? c.x + 5 : c.x + c.w - 5 - ctx.measureText(label).width, y + 15);
@@ -42,11 +42,12 @@ test('Film reads a battle off the HUD: both cards, the pip counts, the timeline 
   const errors = await openApp(page, '#/battles');
   await page.evaluate(HARNESS);
 
-  // locate() finds both cards in the band, and they mirror each other
-  const found = await page.evaluate(() => { const c = window.__paint(3, 3, 2, 2); const f = Film.locate(c, ...window.__size); return f && { myW: f.my.w, oppW: f.opp.w, sameRow: f.my.y === f.opp.y, apart: f.opp.x > f.my.x }; });
-  expect(found, 'locate() found the two HUD cards').toBeTruthy();
-  expect(found.sameRow && found.apart).toBe(true);
-  expect(Math.abs(found.myW - found.oppW)).toBeLessThanOrEqual(4);
+  // calibrate() measures both cards from the three pokéballs a side, and they mirror each other
+  const found = await page.evaluate(() => { const c = window.__paint(3, 3, 2, 2); const f = Film.calibrate(c, ...window.__size); return f && { w: f.w, row: f.row, myX: f.my.x, oppX: f.opp.x }; });
+  expect(found, 'calibrate() measured the HUD from the pips').toBeTruthy();
+  expect(found.oppX, 'the opponent card sits to the right of yours').toBeGreaterThan(found.myX);
+  expect(found.w, 'and the card width is about the painted 148px').toBeGreaterThan(130);
+  expect(found.w).toBeLessThan(165);
 
   // a fall in a count only becomes an event once it has held (HOLD samples), so one flickering frame is ignored
   const ev = await page.evaluate(() => Film.events([
@@ -67,9 +68,11 @@ test('Film reads a battle off the HUD: both cards, the pip counts, the timeline 
     // stubbed reader, like share.spec.js stubs vision: the letter whitelist gets a name, the digit one a CP.
     // Shots queue in frame order and each sample walks ['my','opp'], so the names come back in that order.
     window.__names = ['AZUMARILL', 'MEDICHAM'];
+    // three readers share one worker: names (letters), CP (digits) and the move banners (letters plus ' ,!').
+    // Only the name reader may take from the queue, or a banner read steals the next battle's name.
     window.getWorker = async () => { let wl = '';
       return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
-        recognize: async () => ({ data: { text: wl.includes('Z') ? (window.__names.shift() || 'AZUMARILL') : '1500' } }) }; };
+        recognize: async () => ({ data: { text: wl.includes('!') ? '' : wl.includes('Z') ? (window.__names.shift() || 'AZUMARILL') : '1500' } }) }; };
     Film.start(120);
     let t = 0;
     const step = (mine, om, msh, osh, tag) => { const c = window.__paint(mine, om, msh, osh, tag); Film.frame(c, ...window.__size, t); t += 0.5; };
@@ -114,7 +117,7 @@ test('a set recording splits on the end screens: one entry per battle', async ({
     const names = ['AZUMARILL', 'MEDICHAM', 'REGISTEEL', 'ALTARIA'];      // battle 1: my/opp, battle 2: my/opp
     window.getWorker = async () => { let wl = '';
       return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
-        recognize: async c => ({ data: { text: wl.includes('Z') ? (names.shift() || 'AZUMARILL') : (c.width > 300 ? 'VICTORY' : '1500') } }) }; };
+        recognize: async c => ({ data: { text: wl.includes('!') ? '' : wl.includes('Z') ? (names.shift() || 'AZUMARILL') : (c.width > 300 ? 'VICTORY' : '1500') } }) }; };
     Film.start(240);
     let t = 0;
     const hud = (mine, om, msh, osh, tag) => { Film.frame(window.__paint(mine, om, msh, osh, tag), ...window.__size, t); t += 0.5; };
@@ -135,5 +138,32 @@ test('a set recording splits on the end screens: one entry per battle', async ({
   expect(logged[1].fainted.me).toBe(1);                                    // battle two: you lost one
   expect(logged[1].first, "the second battle's clock restarts, it does not continue the recording's").toMatch(/^0:0/);
   expect(await page.evaluate(() => { Planner.saveDrafts(); return Planner.BATTLES.filter(b => b.src === 'film').length; }), 'both battles of the set reach the log together').toBe(2);
+  expect(errors).toEqual([]);
+});
+
+test('a daylight battle still calibrates: bright cloud above the cards no longer swallows the HUD', async ({ page }) => {
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(HARNESS);
+  const out = await page.evaluate(() => {
+    const [W, H] = window.__size, ctx = window.__ctx();
+    // v1 found the HUD by looking for two wide light bands, so a midday sky matched and every frame was discarded.
+    // Paint exactly that: near-white low-saturation cloud across the whole band the reader looks at.
+    const sky = () => {
+      ctx.fillStyle = '#eef2f5'; ctx.fillRect(0, 0, W, Math.round(H * 0.30));
+      ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(W * 0.3, H * 0.10, 70, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fdfdfe'; ctx.beginPath(); ctx.arc(W * 0.75, H * 0.16, 90, 0, 7); ctx.fill();
+    };
+    window.__names = ['AZUMARILL', 'MEDICHAM'];
+    window.getWorker = async () => { let wl = '';
+      return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
+        recognize: async () => ({ data: { text: wl.includes('!') ? '' : wl.includes('Z') ? (window.__names.shift() || 'AZUMARILL') : '1500' } }) }; };
+    Film.start(120);
+    let t = 0;
+    for (let i = 0; i < 20; i++) { ctx.fillStyle = '#1d3b6e'; ctx.fillRect(0, 0, W, H); sky(); window.__paint(3, 3, 2, 2, null, true); Film.frame(ctx, W, H, t); t += 0.5; }
+    return {report: JSON.parse(JSON.stringify(Film.report()))};
+  });
+  expect(out.report.cal, 'the pips are found through the cloud').toBe(true);
+  expect(out.report.rows, 'and the battle is sampled instead of thrown away').toBeGreaterThan(15);
+  expect(await page.evaluate(async () => { const o = await Film.finish({ lastModified: Date.now() }); return o && o.length; })).toBe(1);
   expect(errors).toEqual([]);
 });

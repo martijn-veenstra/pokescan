@@ -16,7 +16,7 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
     const BALLS = [0.092, 0.225, 0.368], SHIELDS = [0.568, 0.686];
     const paint = (myMon, oppMon, mySh, oppSh) => {
       g.fillStyle = '#1d3b6e'; g.fillRect(0, 0, W, H);
-      for (const c of [{ x: 8, w: 178, mine: true }, { x: W - 8 - 178, w: 178, mine: false }]) {
+      for (const c of [{ x: 8, w: 148, mine: true }, { x: W - 8 - 148, w: 148, mine: false }]) {
         const y = Math.round(H * 0.06), h = Math.round(H * 0.055);
         g.fillStyle = '#f2f2f2'; g.fillRect(c.x, y, c.w, h);
         g.fillStyle = '#202020'; g.font = 'bold 13px sans-serif';
@@ -39,8 +39,12 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
     await new Promise(done => {
       const iv = setInterval(() => {
         const el = (Date.now() - t0) / 1000;
-        paint(3, el > 5 ? 2 : 3, el > 3 ? 1 : 2, 2);
-        if (el > 8) { clearInterval(iv); rec.stop(); }
+        // 4.0–5.2 s: a charged move is being announced, so the game hides the HUD — which is exactly where the
+        // reader grabs the banner. Kept well under the 4 s gap that would split this into two battles.
+        if (el > 4 && el < 5.2) { g.fillStyle = '#0b1220'; g.fillRect(0, 0, W, H);
+          g.fillStyle = '#ffffff'; g.font = 'bold 22px sans-serif'; g.fillText('Chesnaught used Frenzy Plant!', 20, Math.round(H * 0.26)); }
+        else paint(3, el > 6 ? 2 : 3, el > 3 ? 1 : 2, 2);
+        if (el > 9) { clearInterval(iv); rec.stop(); }
       }, 80);
       rec.onstop = () => done();
     });
@@ -50,12 +54,12 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
     window.__names = ['AZUMARILL', 'MEDICHAM'];      // one queue for the whole read, not one per worker call
     window.getWorker = async () => { const names = window.__names; let wl = '';
       return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
-        recognize: async () => ({ data: { text: wl.includes('Z') ? (names.shift() || 'AZUMARILL') : '1500' } }) }; };
+        recognize: async () => ({ data: { text: wl.includes('!') ? 'CHESNAUGHT used FRENZY PLANT!' : wl.includes('Z') ? (names.shift() || 'AZUMARILL') : '1500' } }) }; };
     await importFilmFiles([file]);
     return { size: blob.size, report: Film.report(), blog: JSON.parse(localStorage.getItem('blog') || '[]') };
   });
   expect(res.size, 'the browser produced a real video file').toBeGreaterThan(1000);
-  expect(res.report, 'the reader found the HUD in the recording').toMatchObject({ hud: true });
+  expect(res.report, 'the reader calibrated the HUD off the pips in the recording').toMatchObject({ cal: true });
   expect(res.report.entries, 'and turned it into a battle').toBeGreaterThan(0);
   // it became a draft on the battle log, waiting to be saved
   await expect(page.locator('#battles .team.card.draft')).toBeVisible();
@@ -64,6 +68,11 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
   const drafted = await page.evaluate(() => JSON.parse(localStorage.getItem('bdraft') || '{}').entries[0]);
   expect(drafted.shields.me, 'the shield spent mid-recording was seen').toBe(1);
   expect(drafted.fainted.opp, 'and the Pokémon they lost').toBe(1);
+  // the moves: the banner frames while the HUD is hidden are read for "X used Y"
+  expect(drafted.moves.length, 'a move was read off a banner').toBeGreaterThan(0);
+  expect(drafted.moves[0]).toMatchObject({ species: 'Chesnaught', move: 'Frenzy Plant' });
+  expect(drafted.film.join('\n')).toMatch(/Chesnaught used Frenzy Plant/);
+  expect(drafted.filmData.moves.length).toBe(drafted.moves.length);
   // the import log lives here, not on the scans page
   await expect(page.locator('#battles .team.card.blog')).toContainText('1 battle read');
   expect(await page.evaluate(() => (document.getElementById('implog') || {}).innerHTML || ''), 'the scans log is untouched').toBe('');

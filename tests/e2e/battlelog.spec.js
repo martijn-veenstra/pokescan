@@ -12,7 +12,9 @@ const seed = () => {
     myNames: ['Azumarill', 'Medicham'], myLead: 'azumarill', lead: 'registeel',
     shields: { me: 2, opp: 1 }, fainted: { me: 3, opp: 1 },
     film: ['0:00 you sent Azumarill (1500)', '0:24 you shielded (1 left)', '1:02 you lost a Pokémon'],
-    filmData: { reads: [{ t: 0, side: 'my', species: 'AZUMARILL', cp: 1500 }], events: [{ t: 24, what: 'mySh', from: 2, to: 1 }], samples: 40, dur: 90 },
+    moves: [{ t: 22, by: 'opp', species: 'Registeel', move: 'Focus Blast', blocked: true }, { t: 40, by: 'my', species: 'Azumarill', move: 'Ice Beam', blocked: false }],
+    filmData: { reads: [{ t: 0, side: 'my', species: 'AZUMARILL', cp: 1500 }], events: [{ t: 24, what: 'mySh', from: 2, to: 1 }],
+                moves: [{ t: 22, by: 'opp', species: 'Registeel', move: 'Focus Blast', blocked: true }, { t: 40, by: 'my', species: 'Azumarill', move: 'Ice Beam', blocked: false }], samples: 40, dur: 90 },
   }]));
 };
 
@@ -45,6 +47,10 @@ test('the battle log imports recordings, attributes a team, and opens each battl
   await expect(b.locator('.filmt')).toContainText('0:24 you shielded');
   await expect(b).toContainText('you 2 · them 1');                      // shields
   await expect(b).toContainText('from your recording');
+  // the moves read off the banners, split by side, with the shielded one marked
+  await expect(b).toContainText('Moves used');
+  await expect(b.locator('.sec:has-text("Moves used") + .team.card')).toContainText('Ice Beam');
+  await expect(b.locator('.chip.warn', { hasText: 'Focus Blast' }), 'a shielded charged move is marked').toBeVisible();
 
   // and the team it was played with now lists it
   await page.evaluate(() => Planner.openTeam(['azumarill', 'medicham', 'altaria'], 'Rain'));
@@ -77,6 +83,10 @@ test('a battle review is asked for by hand, not spent automatically', async ({ p
   expect(posts[0].mode, 'the battle review uses its own server mode').toBe('battle');
   expect(posts[0].context.battle.result).toBe('L');
   expect(posts[0].context.battle.timeline[0]).toMatchObject({ at: 24, what: 'mySh' });
+  // and the moves travel with it, so the review can talk about the shield trade instead of guessing
+  expect(posts[0].context.battle.movesUsed).toEqual([
+    { at: 22, by: 'them', name: 'Registeel', move: 'Focus Blast', shielded: true },
+    { at: 40, by: 'you', name: 'Azumarill', move: 'Ice Beam', shielded: false }]);
   expect(posts[0].context.builder, 'a battle review does not carry the builder team').toBeUndefined();
   // all four sections are parsed, not dumped as one block
   await expect(b.locator('.rsec')).toHaveCount(4);
