@@ -94,6 +94,7 @@ test('Film reads a battle off the HUD: both cards, the pip counts, the timeline 
   expect(entry.shields.me).toBe(1);                            // one of two used
   expect(entry.fainted.opp).toBe(1);
   expect(entry.film.join('\n')).toMatch(/you shielded|they lost/);
+  expect(entry.filmData.events.filter(e => /Mon$/.test(e.what)).length, 'nothing fainted in this scripted battle but theirs').toBe(1);
   expect(entry.filmData.events.length).toBeGreaterThan(0);     // the structured read is kept, not only the sentences
   expect(entry.filmData.samples).toBeGreaterThan(20);
 
@@ -109,35 +110,36 @@ test('Film reads a battle off the HUD: both cards, the pip counts, the timeline 
   expect(errors).toEqual([]);
 });
 
-test('a set recording splits on the end screens: one entry per battle', async ({ page }) => {
-  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('roster'); });
+test('the counts decide where a battle ends, not a gap in the HUD', async ({ page }) => {
   const errors = await openApp(page, '#/battles');
-  await page.evaluate(HARNESS);
-  const n = await page.evaluate(async () => {
-    const names = ['AZUMARILL', 'MEDICHAM', 'REGISTEEL', 'ALTARIA'];      // battle 1: my/opp, battle 2: my/opp
-    window.getWorker = async () => { let wl = '';
-      return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
-        recognize: async c => ({ data: { text: wl.includes('!') ? '' : wl.includes('Z') ? (names.shift() || 'AZUMARILL') : (c.width > 300 ? 'VICTORY' : '1500') } }) }; };
-    Film.start(240);
-    let t = 0;
-    const hud = (mine, om, msh, osh, tag) => { Film.frame(window.__paint(mine, om, msh, osh, tag), ...window.__size, t); t += 0.5; };
-    const gap = word => { Film.frame(window.__gap(word), ...window.__size, t); t += 0.5; };
-    for (let i = 0; i < 14; i++) hud(3, 3, 2, 2, 'AZUMARILL');            // battle one
-    for (let i = 0; i < 8; i++) hud(3, 2, 1, 2, 'AZUMARILL');
-    for (let i = 0; i < 16; i++) gap(i > 2 && i < 10 ? 'VICTORY' : '');    // the end screen, then the wait for the next
-    for (let i = 0; i < 14; i++) hud(3, 3, 2, 2, 'REGISTEEL');            // battle two
-    for (let i = 0; i < 8; i++) hud(2, 3, 2, 1, 'REGISTEEL');
-    return Film.segCount();
+  const out = await page.evaluate(() => {
+    const row = (t, a, b, c, d) => ({ t, myMon: a, oppMon: b, mySh: c, oppSh: d });
+    // one real match: 3v3, then faints and shields fall and never come back. The HUD vanishes for a charged move
+    // somewhere in the middle, which used to cut this into several battles.
+    const one = [];
+    for (let t = 0; t < 60; t += 0.5) one.push(row(t, 3, 3, 2, 2));
+    for (let t = 66; t < 88; t += 0.5) one.push(row(t, 3, 2, 2, 2));       // a six second hole in the samples
+    for (let t = 88; t < 205; t += 0.5) one.push(row(t, 1, 1, 0, 0));
+    // a genuine set: each battle starts back at a full 3-a-side
+    const set = [];
+    for (let k = 0; k < 3; k++) { const base = k * 100;
+      for (let t = 0; t < 40; t += 0.5) set.push(row(base + t, 3, 3, 2, 2));
+      for (let t = 40; t < 80; t += 0.5) set.push(row(base + t, 2, 1, 1, 0)); }
+    // a pip occluded for a single sample must not split the battle, nor become a faint
+    const flick = [];
+    for (let t = 0; t < 40; t += 0.5) flick.push(row(t, 3, 3, 2, 2));
+    flick.push(row(40, 2, 3, 2, 2));
+    for (let t = 40.5; t < 80; t += 0.5) flick.push(row(t, 3, 3, 2, 2));
+    return { one: Film.splitRows(one).length, set: Film.splitRows(set).length,
+             flicker: Film.splitRows(flick).length, flickerEvents: Film.events(flick).length,
+             // a recording that starts mid-match reports only the falls it saw, not an assumed 3-a-side start
+             midStart: Film.events([row(0, 2, 2, 1, 1), row(1, 2, 2, 1, 1), row(2, 2, 2, 1, 1)]).length };
   });
-  expect(n, 'the gap between battles split the recording in two').toBe(2);
-  const logged = await page.evaluate(async () => { const out = await Film.finish({ lastModified: Date.now() }); return (out || []).map(e => ({ my: e.myNames, opp: e.oppNames, shields: e.shields, fainted: e.fainted, first: e.film[0] })); });
-  expect(logged).toHaveLength(2);
-  expect(logged[0].my).toContain('Azumarill');
-  expect(logged[1].my).toContain('Registeel');
-  expect(logged[0].fainted.opp).toBe(1);                                   // battle one: they lost one
-  expect(logged[1].fainted.me).toBe(1);                                    // battle two: you lost one
-  expect(logged[1].first, "the second battle's clock restarts, it does not continue the recording's").toMatch(/^0:0/);
-  expect(await page.evaluate(() => { Planner.saveDrafts(); return Planner.BATTLES.filter(b => b.src === 'film').length; }), 'both battles of the set reach the log together').toBe(2);
+  expect(out.one, 'one match with a six second HUD hole is one battle').toBe(1);
+  expect(out.set, 'three battles that each restart at 3-a-side are three').toBe(3);
+  expect(out.flicker, 'a one sample flicker splits nothing').toBe(1);
+  expect(out.flickerEvents, 'and is not a faint either').toBe(0);
+  expect(out.midStart, 'a recording that starts mid-match invents no faints or shields').toBe(0);
   expect(errors).toEqual([]);
 });
 

@@ -39,12 +39,12 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
     await new Promise(done => {
       const iv = setInterval(() => {
         const el = (Date.now() - t0) / 1000;
-        // 4.0–5.2 s: a charged move is being announced, so the game hides the HUD — which is exactly where the
-        // reader grabs the banner. Kept well under the 4 s gap that would split this into two battles.
-        if (el > 4 && el < 5.2) { g.fillStyle = '#0b1220'; g.fillRect(0, 0, W, H);
+        // 4–10 s: a charged move is being announced, so the game hides the HUD for six seconds — which is both
+        // where the banner comes from and the hole that used to cut one match into several battles.
+        if (el > 4 && el < 10) { g.fillStyle = '#0b1220'; g.fillRect(0, 0, W, H);
           g.fillStyle = '#ffffff'; g.font = 'bold 22px sans-serif'; g.fillText('Chesnaught used Frenzy Plant!', 20, Math.round(H * 0.26)); }
-        else paint(3, el > 6 ? 2 : 3, el > 3 ? 1 : 2, 2);
-        if (el > 9) { clearInterval(iv); rec.stop(); }
+        else paint(3, el > 10 ? 2 : 3, el > 3 ? 1 : 2, 2);
+        if (el > 16) { clearInterval(iv); rec.stop(); }
       }, 80);
       rec.onstop = () => done();
     });
@@ -60,7 +60,8 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
   });
   expect(res.size, 'the browser produced a real video file').toBeGreaterThan(1000);
   expect(res.report, 'the reader calibrated the HUD off the pips in the recording').toMatchObject({ cal: true });
-  expect(res.report.entries, 'and turned it into a battle').toBeGreaterThan(0);
+  expect(res.report.entries, 'and turned it into exactly one battle, despite the six second HUD hole').toBe(1);
+  expect(res.report.good, 'the splitter saw one battle in the row stream').toBe(1);
   // it became a draft on the battle log, waiting to be saved
   await expect(page.locator('#battles .team.card.draft')).toBeVisible();
   await expect(page.locator('#battles .team.card.draft')).toContainText('vs Medicham');
@@ -73,6 +74,9 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
   expect(drafted.moves[0]).toMatchObject({ species: 'Chesnaught', move: 'Frenzy Plant' });
   expect(drafted.film.join('\n')).toMatch(/Chesnaught used Frenzy Plant/);
   expect(drafted.filmData.moves.length).toBe(drafted.moves.length);
+  // recording time, as the reference parse shows it: the later events are not all at 0:00
+  const last = drafted.filmData.events[drafted.filmData.events.length - 1];
+  expect(last.t, 'the last event carries its real time in the recording').toBeGreaterThan(2);
   // the import log lives here, not on the scans page
   await expect(page.locator('#battles .team.card.blog')).toContainText('1 battle read');
   expect(await page.evaluate(() => (document.getElementById('implog') || {}).innerHTML || ''), 'the scans log is untouched').toBe('');

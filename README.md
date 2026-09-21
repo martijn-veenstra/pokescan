@@ -188,7 +188,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   spent only on the ~10 frames where a name changes. The entry lands in the battle log with both teams, the result
   from the closing screen, shields and faints, and a minute-by-minute timeline that opens under its row. Pro vision
   still runs on top and adds the film-study commentary — the two are independent. A recording of a whole set is
-  split on the end screens, so each battle in it becomes its own entry with its own result and its own clock.
+  split into one entry per battle — on the **counts**, not on a gap in the HUD. Pokémon left and shields left only
+  ever fall during a match, so a return to a full three-a-side is the one certain sign the next battle has begun; a
+  gap is not, because the HUD is hidden during every charged-move animation. Timeline stamps are recording time.
   The HUD is found by its **pokéballs and shield hexagons** — saturated red and pink that no GO background contains —
   measured once from the three pokéballs a side and then frozen, because the HUD does not move during a battle. The
   first version looked for two wide light bands instead, which matched white cloud in a midday sky and threw a

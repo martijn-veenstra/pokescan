@@ -1332,7 +1332,7 @@ function draftCard() {
     const col = e.result === 'W' ? 'var(--green)' : e.result === 'L' ? '#F59A8B' : 'var(--dim)';
     const opp = (e.opp && e.opp.length ? e.opp.map(nm) : e.oppNames || []).join(' / ') || 'not read';
     const mine = (e.myIds && e.myIds.length ? e.myIds.map(nm) : e.myNames || []).join(' / ') || 'not read';
-    const bits = [e.shields ? `shields ${e.shields.me}–${e.shields.opp}` : '', e.fainted ? `fainted ${e.fainted.me}–${e.fainted.opp}` : '', e.filmData && e.filmData.dur ? e.filmData.dur + ' s' : ''].filter(Boolean).join(' · ');
+    const bits = [e.shields ? `shields ${e.shields.me}–${e.shields.opp}` : '', e.fainted ? `fainted ${e.fainted.me}–${e.fainted.opp}` : '', e.moves && e.moves.length ? `${e.moves.length} moves` : '', e.filmData && e.filmData.dur ? e.filmData.dur + ' s' : ''].filter(Boolean).join(' · ');
     return `<div class="dcase"><div class="drow"><span class="sc" style="color:${col}">${e.result || '·'}</span><span class="tx"><span class="nm">vs ${esc(opp)}</span><div class="dt">you played ${esc(mine)}${bits ? ' · ' + bits : ''}</div></span></div>`
       + (e.film && e.film.length ? fold([`<div class="filmt">${e.film.map(l => `<div>${esc(l)}</div>`).join('')}</div>`], 0, {label: () => 'show the timeline'}) : '') + `</div>`;
   };
@@ -1365,7 +1365,8 @@ function clearBattleLog() { BLOG.length = 0; localStorage.removeItem('blog'); re
 function filmWhy(f) {                           // the reader's own diagnostics, in words
   if (!f) return 'The recording was read, but the battle reader did not run on it.';
   if (f.entries) return `${f.entries} battle${f.entries === 1 ? '' : 's'} read.`;
-  if (!f.cal) return `No battle HUD found in ${f.frames || 0} sampled frames. The reader measures the two cards from the pokéballs and shield hexagons — it needs a Great League battle recorded full-screen on this phone, not a cropped or rotated video.`;
+  const cal = f.cal !== undefined ? f.cal : f.hud;   // entries logged before 9.87 called it hud
+  if (!cal) return `No battle HUD found in ${f.frames || 0} sampled frames. The reader measures the two cards from the pokéballs and shield hexagons — it needs a Great League battle recorded full-screen on this phone, not a cropped or rotated video.`;
   if (!f.good) return `The battle cards were found but only briefly (${f.rows || 0} samples). A battle needs about four seconds of clear HUD to be read.`;
   if (!f.shots) return 'The battle cards were found but no name was legible in them.';
   return `Read ${f.good} battle${f.good === 1 ? '' : 's'} off the HUD, but could not match the Pokémon names (${f.shots} name crops tried).`;
@@ -1376,7 +1377,7 @@ function blogCard() {
     const when2 = new Date(e.t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
     const name = (e.file || '').length > 26 ? (e.file || '').slice(0, 13) + '…' + (e.file || '').slice(-10) : (e.file || '');
     const why = e.ok ? filmWhy(e.film) : '';
-    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${e.film.cal ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}${e.film.banners ? ` · ${e.film.banners} banners` : ''}` : '';
+    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${(e.film.cal !== undefined ? e.film.cal : e.film.hud) ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}${e.film.banners ? ` · ${e.film.banners} banners` : ''}` : '';
     return `<div class="il"><span class="t">${when2}</span><span><span class="f">${esc(name)}</span> <span class="dim">${e.size ? (e.size / 1e6).toFixed(0) + ' MB' : ''}${e.ms ? ` · ${(e.ms / 1000).toFixed(0)}s` : ''}</span>
       <br><span class="r ${e.ok && e.film && e.film.entries ? 'ok' : 'err'}">${e.ok && e.film && e.film.entries ? '✓ ' : '⚠ '}${esc(e.ok ? why : (e.msg || 'the import failed'))}</span>
       ${dg ? `<br><span class="d">${esc(dg)}</span>` : ''}${!e.ok && e.detail ? `<br><span class="d">${esc(e.detail)}</span>` : ''}</span></div>`;

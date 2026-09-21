@@ -28,10 +28,8 @@
 const SAMPLE_MIN = 0.45;        // s of video time between samples
 const HOLD = 3;                 // samples a lower count must persist before it counts as a real change
 const NAME_CHANGE = 0.34;       // ink-profile distance that means a different name is in the card
-const MAX_OCR = 20, MAX_BANNERS = 26;              // per battle
-const MAX_OCR_ALL = 80, MAX_BANNERS_ALL = 60;      // and across the recording, however many battles it holds
-const GAP = 4;                  // s without a HUD that ends a battle: a set recording holds several
-const MIN_ROWS = 8;             // samples a segment needs before it counts as a battle at all
+const MAX_OCR = 30, MAX_BANNERS = 60;              // across the recording; one match is easily 50 banners
+const MIN_ROWS = 8;             // samples a battle needs before it counts as one at all
 const MISS_MAX = 12;            // calibrate() reads a fifth of the screen: after this many misses, try every 8th sample
 const MISS_EVERY = 8;
 
@@ -121,20 +119,17 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 
 /* ---------- per frame ---------- */
 function start(dur) {
-  S = {dur, cal: null, pending: null, segs: [], cur: null, lastT: -9, gapT: -9, frames: 0, miss: 0, shots: 0, banners: 0};
+  S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
+       last: {my: null, opp: null}, lastT: -9, gapT: -9, frames: 0, miss: 0};
 }
 function stop() { LAST = report(); S = null; }     // scanVideo failed or finished: drop the queued crops, keep the diagnostics
-const newSeg = t => ({rows: [], shots: [], banners: [], ends: [], last: {my: null, opp: null}, t0: t, lastHud: t});
-const allSegs = () => S ? S.segs.concat(S.cur ? [S.cur] : []) : [];
-const goodSegs = () => allSegs().filter(g => g.rows.length >= MIN_ROWS);
-const seen = () => goodSegs().length > 0;
+const seen = () => !!(S && S.rows.length >= MIN_ROWS);
 let LAST = null;                                   // the last read's diagnostics, so a failed import can say why
 function report() {
   if (!S) return LAST;
-  const segs = allSegs();
-  return {frames: S.frames, cal: !!S.cal, miss: S.miss, segs: segs.length, good: goodSegs().length,
-          rows: segs.reduce((n, g) => n + g.rows.length, 0), shots: segs.reduce((n, g) => n + g.shots.length, 0),
-          banners: segs.reduce((n, g) => n + g.banners.length, 0), entries: 0, dur: Math.round(S.dur)};
+  return {frames: S.frames, cal: !!S.cal, miss: S.miss, rows: S.rows.length, shots: S.shots.length,
+          banners: S.banners.length, good: S.rows.length >= MIN_ROWS ? splitRows(S.rows).length : 0,
+          entries: 0, dur: Math.round(S.dur)};
 }
 
 function frame(ctx, W, H, t) {
@@ -153,36 +148,29 @@ function frame(ctx, W, H, t) {
   const myMon = count(ctx, S.cal.my, BALLS, isRed, true, row, w);
   const oppMon = count(ctx, S.cal.opp, BALLS, isRed, false, row, w);
   if (myMon < 1 || oppMon < 1) return offCard(ctx, W, H, t);   // a charged-move animation, a switch sheet, the end
-  // a set recording holds several battles and the HUD is gone between them: a gap that long ends the battle, and the
-  // frames caught during it (the VICTORY / DEFEAT screen) belong to the segment that just closed
-  if (S.cur && t - S.cur.lastHud > GAP) { S.segs.push(S.cur); S.cur = null; }
-  if (!S.cur) S.cur = newSeg(t);
-  const g = S.cur; g.lastHud = t;
-  g.rows.push({t, myMon, oppMon,
+  S.rows.push({t, myMon, oppMon,
     mySh: count(ctx, S.cal.my, SHIELDS, isPink, true, row, w),
     oppSh: count(ctx, S.cal.opp, SHIELDS, isPink, false, row, w)});
   for (const side of ['my', 'opp']) {
     const c = S.cal[side], mine = side === 'my', nr = rect(c, 0.02, 0.60, mine, row, w), p = profile(ctx, nr);
     if (p.ink < 40) continue;
-    if (profileDist(p, g.last[side]) > NAME_CHANGE && g.shots.length < MAX_OCR && S.shots < MAX_OCR_ALL) {
-      g.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
-      S.shots++;
-    }
-    g.last[side] = p;
+    if (profileDist(p, S.last[side]) > NAME_CHANGE && S.shots.length < MAX_OCR)
+      S.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
+    S.last[side] = p;
   }
 }
 
 // The HUD is hidden exactly when something is being announced: a charged move, a switch-in, a shield. Those
 // frames are useless for counting, which makes them the free place to grab the banner — no detector needed.
 function offCard(ctx, W, H, t) {
-  const g = S && S.cur; if (!g) return;           // nothing open yet: the recording has not reached a battle
-  // v2 kept end screens only after halfway, which in a set recording is after four battles have already ended:
-  // they are kept per battle instead, capped, so each segment reads its own result
-  g.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
-  if (g.ends.length > 4) g.ends.shift();
-  if (t - S.gapT < 1.2 || g.banners.length >= MAX_BANNERS || S.banners >= MAX_BANNERS_ALL) return;
-  S.gapT = t; S.banners++;
-  g.banners.push({t, img: grab(ctx, [0, Math.round(H * 0.20), W, Math.round(H * 0.28)], 0.8)});
+  if (!S || !S.cal) return;                        // nothing to attribute these frames to yet
+  // v2 kept end screens only after halfway through the recording, which in a set is after four battles have already
+  // ended: they are kept throughout and assigned to the battle they follow, so every battle reads its own result
+  S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
+  if (S.ends.length > 24) S.ends.shift();
+  if (t - S.gapT < 1.2 || S.banners.length >= MAX_BANNERS) return;
+  S.gapT = t;
+  S.banners.push({t, img: grab(ctx, [0, Math.round(H * 0.20), W, Math.round(H * 0.28)], 0.8)});
 }
 
 /* ---------- reading the queued crops ---------- */
@@ -226,8 +214,12 @@ function movesFor(species) {                               // this species' own 
 }
 
 /* ---------- assembling the log ---------- */
-function events(rows) {                                    // counts only ever fall; a fall must hold to be real
-  const cur = {myMon: 3, oppMon: 3, mySh: 2, oppSh: 2}, run = {}, out = [];
+/* counts only ever fall inside a battle; a fall must hold to be real. The baseline is what the first sample actually
+   showed — assuming a fresh 3-a-side made a recording that starts mid-match report faints and shields it never saw. */
+function events(rows) {
+  const f = rows[0] || {};
+  const cur = {myMon: f.myMon !== undefined ? f.myMon : 3, oppMon: f.oppMon !== undefined ? f.oppMon : 3,
+               mySh: f.mySh !== undefined ? f.mySh : 2, oppSh: f.oppSh !== undefined ? f.oppSh : 2}, run = {}, out = [];
   for (const r of rows) for (const k of Object.keys(cur)) {
     const v = r[k];
     if (v >= cur[k]) { run[k] = null; continue; }
@@ -252,6 +244,36 @@ const LABEL = {mySh: 'you shielded', oppSh: 'they shielded', myMon: 'you lost a 
 const FILM_MAX = 80;                                       // BATTLES syncs whole: keep each timeline bounded
 
 /* one segment of the recording — one battle — into a log entry, or null when its names could not be read */
+/* One recording holds one battle unless the counts go back UP: Pokémon left and shields left only ever fall during
+   a match, so a return to a full 3-a-side is the one certain sign the next battle has started. A gap in the HUD is
+   not — the HUD is hidden during every charged-move animation, which is exactly where the banners come from.
+   Returns index ranges into rows, one per battle. */
+function splitRows(rows) {
+  const out = [];
+  let i0 = 0, fell = false, up = 0;
+  const low = {myMon: rows[0] ? rows[0].myMon : 3, oppMon: rows[0] ? rows[0].oppMon : 3};
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    // a confirmed fall: the same lower count for HOLD samples in a row, the rule events() uses
+    for (const k of ['myMon', 'oppMon']) {
+      if (r[k] < low[k]) {
+        let n = 0; for (let j = i; j < rows.length && j < i + HOLD; j++) if (rows[j][k] === r[k]) n++;
+        if (n >= HOLD) { low[k] = r[k]; fell = true; }
+      }
+    }
+    if (fell && r.myMon === 3 && r.oppMon === 3) {
+      up++;
+      if (up >= HOLD) {                              // a full 3v3 that holds, after something had already fallen
+        const start = i - up + 1;
+        if (start - i0 >= MIN_ROWS) out.push([i0, start - 1]);
+        i0 = start; fell = false; up = 0; low.myMon = 3; low.oppMon = 3;
+      }
+    } else up = 0;
+  }
+  if (rows.length - i0 >= MIN_ROWS) out.push([i0, rows.length - 1]);
+  return out.length ? out : [[0, rows.length - 1]];
+}
+
 async function readSeg(g, file, onStep) {
   const P = window.Planner, reads = [];
   for (const sh of g.shots) {
@@ -292,16 +314,15 @@ async function readSeg(g, file, onStep) {
 
   const nameOf = r => title(r.species), id = n => (P && P.idByName ? P.idByName(n) : null);
   const myIds = my.map(r => id(nameOf(r))).filter(Boolean), oppIds = opp.map(r => id(nameOf(r))).filter(Boolean);
-  const rel = t => Math.max(0, t - g.t0);                  // each battle's clock starts at 0:00, not the recording's
   const film = [];
-  for (const r of reads) film.push({t: rel(r.t), text: `${clock(rel(r.t))} ${r.side === 'my' ? 'you sent' : 'they sent'} ${nameOf(r)}${r.cp ? ' (' + r.cp + ')' : ''}`});
-  for (const e of ev) film.push({t: rel(e.t), text: `${clock(rel(e.t))} ${LABEL[e.what]}${/Sh$/.test(e.what) ? ` (${e.to} left)` : ''}`});
-  for (const m of moves) film.push({t: rel(m.t), text: `${clock(rel(m.t))} ${m.species} used ${m.move}${m.blocked ? ' — blocked' : ''}`});
+  for (const r of reads) film.push({t: r.t, text: `${clock(r.t)} ${r.side === 'my' ? 'you sent' : 'they sent'} ${nameOf(r)}${r.cp ? ' (' + r.cp + ')' : ''}`});
+  for (const e of ev) film.push({t: e.t, text: `${clock(e.t)} ${LABEL[e.what]}${/Sh$/.test(e.what) ? ` (${e.to} left)` : ''}`});
+  for (const m of moves) film.push({t: m.t, text: `${clock(m.t)} ${m.species} used ${m.move}${m.blocked ? ' — blocked' : ''}`});
   film.sort((a, b) => a.t - b.t);
-  const relMoves = moves.map(m => ({t: Math.round(rel(m.t) * 10) / 10, by: m.by, species: m.species, move: m.move, blocked: m.blocked}));
+  const relMoves = moves.map(m => ({t: Math.round(m.t * 10) / 10, by: m.by, species: m.species, move: m.move, blocked: m.blocked}));
 
   return {
-    t: ((file && file.lastModified) || Date.now()) + Math.round(g.t0 * 1000),   // battles in a set keep their order
+    t: ((file && file.lastModified) || Date.now()) + Math.round((g.rows[0] ? g.rows[0].t : 0) * 1000),  // battles in a set keep their order
     result,
     ids: myIds.length === 3 ? myIds : null,                 // a complete trio, which the stats need
     myIds,                                                  // everything the read resolved: this is what matches a saved party
@@ -317,20 +338,32 @@ async function readSeg(g, file, onStep) {
     film: film.slice(0, FILM_MAX).map(f => f.text),
     // everything the read found, kept as data and not only as sentences: the AI review and any later screen can use it
     filmData: {
-      reads: reads.map(r => ({t: Math.round(rel(r.t) * 10) / 10, side: r.side, species: r.species, cp: r.cp})),
-      events: ev.map(e => ({t: Math.round(rel(e.t) * 10) / 10, what: e.what, from: e.from, to: e.to})),
+      reads: reads.map(r => ({t: Math.round(r.t * 10) / 10, side: r.side, species: r.species, cp: r.cp})),
+      events: ev.map(e => ({t: Math.round(e.t * 10) / 10, what: e.what, from: e.from, to: e.to})),
       moves: relMoves,
-      samples: g.rows.length, dur: Math.round(g.lastHud - g.t0)
+      samples: g.rows.length, dur: Math.round(g.rows[g.rows.length - 1].t - g.rows[0].t)
     },
     src: 'film'
   };
 }
 
 /* every battle the recording holds, oldest first, handed to the battle log as drafts. Null when none could be read. */
+/* the shots, banners and end frames that belong to one battle: by timestamp, with the end frames that follow it
+   (the VICTORY / DEFEAT screen comes after the last HUD sample of the battle it belongs to) */
+function sliceFor(rows, i0, i1, nextT) {
+  const t0 = rows[i0].t, t1 = rows[i1].t, hi = nextT === undefined ? Infinity : nextT;
+  return {rows: rows.slice(i0, i1 + 1),
+          shots: S.shots.filter(x => x.t >= t0 && x.t <= t1),
+          banners: S.banners.filter(x => x.t >= t0 && x.t < hi),
+          ends: S.ends.filter(x => x.t > t1 && x.t < hi)};
+}
+
 async function finish(file) {
   LAST = report();
   if (!seen()) { S = null; return null; }
-  const segs = goodSegs(), P = window.Planner;
+  const ranges = splitRows(S.rows);
+  const segs = ranges.map(([i0, i1], k) => sliceFor(S.rows, i0, i1, ranges[k + 1] ? S.rows[ranges[k + 1][0]].t : undefined));
+  const P = window.Planner;
   status(segs.length > 1 ? `Reading ${segs.length} battles from the recording…` : 'Reading the battle from the recording…');
   const total = segs.reduce((n, g) => n + g.shots.length + g.banners.length + g.ends.length, 0);
   let done = 0;
@@ -354,5 +387,6 @@ async function finish(file) {
 }
 
 window.Film = {start, stop, frame, finish, seen, report, calibrate, events, matchSpecies, movesFor,
-               shotCount: () => allSegs().reduce((n, g) => n + g.shots.length, 0), segCount: () => goodSegs().length};
+               shotCount: () => (S ? S.shots.length : 0), splitRows,
+               segCount: () => (S && S.rows.length >= MIN_ROWS ? splitRows(S.rows).length : 0)};
 })();
