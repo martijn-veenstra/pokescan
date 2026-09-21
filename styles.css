@@ -486,3 +486,10 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .draft .drow .tx{flex:1;min-width:0}
 .draft .drow .nm{display:block;font-size:13.5px;color:var(--ink)}
 .draft .filmt{margin:6px 0 2px}
+/* what the last battle imports did, on the battle log page */
+.team.card.blog .il{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:12px;line-height:1.45}
+.team.card.blog .il:first-of-type{border-top:0}
+.team.card.blog .il .t{color:var(--dim);flex:none;font-variant-numeric:tabular-nums}
+.team.card.blog .il .f{color:var(--ink)}
+.team.card.blog .il .r.ok{color:#7FE3B6}.team.card.blog .il .r.err{color:#F59A8B}
+.team.card.blog .il .d{color:var(--dim);font-size:11px}

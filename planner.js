@@ -1350,9 +1350,37 @@ function logRating(v, extra) {
   saveBattles(); renderBattles(); status(`Rating ${rating} saved`);
 }
 function delBattle(id) { BATTLES = BATTLES.filter(b => b.id !== id); saveBattles(); renderBattles(); }
-function importFilm(files) {                    // a recording picked on the battle log page: the scans pipeline reads it
-  if (!files || !files.length || typeof importFiles !== 'function') return;
-  importFiles([...files]).then(() => renderBattles());
+function importFilm(files) {                    // a recording picked on the battle log page: same pipeline, but its log lands here
+  if (!files || !files.length || typeof importFilmFiles !== 'function') return;
+  importFilmFiles([...files]).then(() => renderBattles());
+}
+/* what the battle log shows after an import — including, when nothing came out, why */
+const BLOG = JSON.parse(localStorage.getItem('blog') || '[]');
+function logBattleImport(e) {
+  BLOG.unshift(Object.assign({t: Date.now()}, e)); BLOG.splice(8);
+  localStorage.setItem('blog', JSON.stringify(BLOG)); renderBattles();
+}
+function clearBattleLog() { BLOG.length = 0; localStorage.removeItem('blog'); renderBattles(); }
+function filmWhy(f) {                           // the reader's own diagnostics, in words
+  if (!f) return 'The recording was read, but the battle reader did not run on it.';
+  if (f.entries) return `${f.entries} battle${f.entries === 1 ? '' : 's'} read.`;
+  if (!f.hud) return `No battle HUD found in ${f.frames || 0} sampled frames. The reader looks for the two name cards under the status bar — it needs a Great League battle recorded full-screen on this phone, not a cropped or rotated video.`;
+  if (!f.good) return `The battle cards were found but only briefly (${f.rows || 0} samples). A battle needs about four seconds of clear HUD to be read.`;
+  if (!f.shots) return 'The battle cards were found but no name was legible in them.';
+  return `Read ${f.good} battle${f.good === 1 ? '' : 's'} off the HUD, but could not match the Pokémon names (${f.shots} name crops tried).`;
+}
+function blogCard() {
+  if (!BLOG.length) return '';
+  const rows = BLOG.map(e => {
+    const when2 = new Date(e.t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+    const name = (e.file || '').length > 26 ? (e.file || '').slice(0, 13) + '…' + (e.file || '').slice(-10) : (e.file || '');
+    const why = e.ok ? filmWhy(e.film) : '';
+    const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${e.film.hud ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}` : '';
+    return `<div class="il"><span class="t">${when2}</span><span><span class="f">${esc(name)}</span> <span class="dim">${e.size ? (e.size / 1e6).toFixed(0) + ' MB' : ''}${e.ms ? ` · ${(e.ms / 1000).toFixed(0)}s` : ''}</span>
+      <br><span class="r ${e.ok && e.film && e.film.entries ? 'ok' : 'err'}">${e.ok && e.film && e.film.entries ? '✓ ' : '⚠ '}${esc(e.ok ? why : (e.msg || 'the import failed'))}</span>
+      ${dg ? `<br><span class="d">${esc(dg)}</span>` : ''}${!e.ok && e.detail ? `<br><span class="d">${esc(e.detail)}</span>` : ''}</span></div>`;
+  }).join('');
+  return `<div class="team card blog" style="cursor:default"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>Last imports</span><a href="#" class="dim" style="font-size:12px" onclick="Planner.clearBattleLog();return false">clear</a></div>${rows}</div>`;
 }
 async function importBattle(files) {
   if (!files || !files.length || typeof readBattle !== 'function') return;
@@ -1421,6 +1449,7 @@ function battlesInner() {
   // the battle log is where a recording belongs: same pipeline as Scans & import, which keeps working too
   h += `<button class="btn" onclick="document.getElementById('vfile').click()">＋ Import a battle recording <span style="display:block;font-weight:500;font-size:12px;opacity:.75">read on this phone · a whole set becomes one entry per battle</span></button>`;
   h += draftCard();                              // a read waiting to be saved sits at the top until it is
+  h += blogCard();                               // and what the last imports did, so a failed read says why
   // rating
   const pts = st.ratings.slice(-40).map(b => b.rating);
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>Rating <small>${esc(LEAGUE.title)}</small></span>${st.ratings.length ? ctxMenu([['Delete last rating', `Planner.delBattle(${attr(st.now.id)})`, true]]) : ''}</div>
@@ -2471,7 +2500,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, importBattle, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

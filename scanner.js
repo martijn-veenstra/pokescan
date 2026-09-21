@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.85';
+const APP_VERSION='9.86';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -725,6 +725,15 @@ function migrateScans(){                          // v9.22 and earlier filled a 
 try{ render(); }catch(e){ showErr('render failed: '+e.message); }
 
 $('file').addEventListener('change', async e=>{ const files=[...e.target.files]; e.target.value=''; await importFiles(files); });
+let BATTLE_IMPORT=false, FILM_REPORT=null;         // an import started from the battle log: its log entry belongs there
+function importFilmFiles(files){                   // called by the battle log's own import button
+  BATTLE_IMPORT=true; FILM_REPORT=null;
+  return importFiles(files).finally(()=>{ BATTLE_IMPORT=false; FILM_REPORT=null; });
+}
+function noteImport(e){                            // route the entry to whichever log the player is actually looking at
+  if(BATTLE_IMPORT && window.Planner && Planner.logBattleImport){ Planner.logBattleImport(Object.assign({film:FILM_REPORT}, e)); return; }
+  logImport(e);
+}
 async function importFiles(files){                 // the import pipeline: also fed by files shared to the app (Share.drainInbox)
   if(!files||!files.length) return;
   const trainer=parseInt($('trainer').value)||40;
@@ -739,14 +748,14 @@ async function importFiles(files){                 // the import pipeline: also 
       if(isVid) await scanVideo(f,trainer);
       else batchKey=await scanImage(f,trainer,batchKey);
       ok++;
-      logImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:true, msg:gainSummary(GAIN)});
+      noteImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:true, msg:gainSummary(GAIN)});
     }catch(err){
       showErr(`${f.name}: ${err&&err.message||err}`);
-      logImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:false, msg:(err&&err.message)||String(err), detail:[err&&err.detail, GAIN&&(GAIN.reads||GAIN.frames)?gainSummary(GAIN):''].filter(Boolean).join(' · ')});
+      noteImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:false, msg:(err&&err.message)||String(err), detail:[err&&err.detail, GAIN&&(GAIN.reads||GAIN.frames)?gainSummary(GAIN):''].filter(Boolean).join(' · ')});
       await new Promise(r=>setTimeout(r,1500));
     }
   }
-  { const folded=dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
+  { const folded=BATTLE_IMPORT?0:dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
   const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
   { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
@@ -874,7 +883,7 @@ async function scanVideo(file,trainer){
     const s=Math.min(1,768/Math.max(cv.width,cv.height)); SN.width=Math.round(cv.width*s); SN.height=Math.round(cv.height*s); SN.getContext('2d').drawImage(cv,0,0,SN.width,SN.height);
     snaps.push({t:Math.round(t), image:SN.toDataURL('image/jpeg',0.7).split(',')[1], mediaType:'image/jpeg'}); };
   // a long recording with no status screen in its first half minute is a battle: stop pausing for text and only keep the snapshots
-  const checkBattleMode=(t)=>{ if(!battleMode && dur>90 && t>30 && reads===0 && results.length===before){ battleMode=true; mode+='+battle'; gain('note','no status screens in the first 30 s: watching it as a battle recording'); status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · watching the battle…`); } return battleMode; };
+  const checkBattleMode=(t)=>{ if(!battleMode && ((window.Film&&Film.seen()) || (dur>90 && t>30 && reads===0 && results.length===before))){ battleMode=true; mode+='+battle'; gain('note',(window.Film&&Film.seen())?'the battle HUD is on screen: watching it as a battle recording':'no status screens in the first 30 s: watching it as a battle recording'); status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · watching the battle…`); } return battleMode; };
   const analyse=async(t)=>{
     ctx.drawImage(vid,0,0); frames++; gain('frames'); snapshot(t);
     if(window.Film) Film.frame(ctx,cv.width,cv.height,t);   // battleMode needs 90 s and 30 s in: this sees the short ones
@@ -970,12 +979,15 @@ async function scanVideo(file,trainer){
   gain('mode',mode);
   status(`Video done · ${results.length-before} new · ${reads} screens read`);
   vid.pause(); vid.removeAttribute('src'); vid.load(); URL.revokeObjectURL(url);
-  // no status screens in the whole recording: it is a battle. The HUD read logs it on-device for free; Share anything
-  // then reads the sampled frames (Pro) and adds the commentary. The two are independent — neither gates the other.
-  if(reads===0 && results.length===before){
-    if(window.Film){ try{ if(Film.seen()) await Film.finish(file); }catch(e){ console.error(e); gain('note','the battle read failed: '+(e.message||e)); } Film.stop(); }
-    if(snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
-  } else if(window.Film) Film.stop();
+  // The HUD read stands on its own: a battle recording usually makes the status-screen reader misfire a few times
+  // (an attacks screen, a "BATTLE" banner), so gating this on reads===0 meant a real recording never got read at all.
+  if(window.Film){
+    try{ if(Film.seen()) await Film.finish(file); }
+    catch(e){ console.error(e); gain('note','the battle read failed: '+(e.message||e)); }
+    FILM_REPORT=Film.report(); Film.stop();
+  }
+  // Pro commentary on top, only for a recording the scanner made nothing of: it is the fallback, not the reader
+  if(reads===0 && results.length===before && snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
 }
 
 async function handleScan(ctx,W,H,trainer,skipKey){

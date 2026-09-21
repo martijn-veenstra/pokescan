@@ -30,6 +30,14 @@ const MIN_ROWS = 8;             // samples a segment needs before it counts as a
 const MAX_OCR_ALL = 80;         // name reads across the whole recording, however many battles it holds
 
 let S = null;
+let LAST = null;                // the last read's diagnostics, kept after S is dropped so the log can say what happened
+function report() {
+  if (!S) return LAST;
+  const segs = allSegs();
+  return {frames: S.frames, hud: !!S.hud, miss: S.miss, segs: segs.length, good: goodSegs().length,
+          rows: segs.reduce((n, g) => n + g.rows.length, 0), shots: segs.reduce((n, g) => n + g.shots.length, 0),
+          entries: 0, dur: Math.round(S.dur)};
+}
 
 /* ---------- geometry: find the two HUD cards, then work in fractions of a card ---------- */
 // slot centres as a fraction of card width, player side; the opponent card is an exact mirror
@@ -138,7 +146,7 @@ function grab(ctx, r, scale) {                            // upscaled greyscale 
 function start(dur) {
   S = {dur, hud: null, row: 0, segs: [], cur: null, lastT: -9, frames: 0, miss: 0, shots: 0};
 }
-function stop() { S = null; }          // scanVideo failed or finished: let the queued crops go
+function stop() { LAST = report(); S = null; }   // scanVideo failed or finished: let the queued crops go, keep the diagnostics
 const newSeg = t => ({rows: [], shots: [], ends: [], last: {my: null, opp: null}, t0: t, lastHud: t});
 const allSegs = () => S ? S.segs.concat(S.cur ? [S.cur] : []) : [];
 const goodSegs = () => allSegs().filter(g => g.rows.length >= MIN_ROWS);
@@ -304,6 +312,7 @@ async function readSeg(g, file, t0, onShot) {
 
 /* every battle the recording holds, logged oldest first. Returns the entries, or null when none could be read. */
 async function finish(file) {
+  LAST = report();
   if (!seen()) { S = null; return null; }
   const segs = goodSegs(), P = window.Planner;
   status(segs.length > 1 ? `Reading ${segs.length} battles from the recording…` : 'Reading the battle from the recording…');
@@ -318,6 +327,7 @@ async function finish(file) {
     out.push(e);
   }
   S = null;
+  if (LAST) LAST.entries = out.length;
   if (!out.length) return null;
   if (P && P.draftBattles) P.draftBattles(out);      // nothing is logged yet: the page shows the read and the player saves it
   const one = out[0], many = out.length > 1;
@@ -328,6 +338,6 @@ async function finish(file) {
   return out;
 }
 
-window.Film = {start, stop, frame, finish, seen, locate, events, matchSpecies,
+window.Film = {start, stop, frame, finish, seen, report, locate, events, matchSpecies,
                shotCount: () => allSegs().reduce((n, g) => n + g.shots.length, 0), segCount: () => goodSegs().length};
 })();

@@ -177,6 +177,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   Each battle page can ask for an **AI review** of that one match (Pro, on request, at most 5 an hour per account
   via `COACH_BATTLE_PER_HOUR`): Claude reads the timeline and answers in four sections — what happened, the turning
   point, what to do differently, and how the two teams line up.
+- **When a read finds nothing, the battle log says why**: every import from that page leaves an entry under
+  **Last imports** — how many frames were sampled, whether the two HUD cards were found at all, how many battles
+  and names came out — so a recording the reader cannot use explains itself instead of failing silently. Those
+  entries live on the battle log, not in the Scans import log.
 - **A battle recording reads itself** (`battlefilm.js`): a GO Battle League recording has no status screens, so it
   used to be kept only as a dozen JPEGs for the Pro vision endpoint. Everything a log entry needs is on screen in
   every frame, in one band: the two HUD cards carry both active names, their CP, the red pokéballs for Pokémon left
