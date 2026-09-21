@@ -819,11 +819,25 @@ async function autoReview(ids) {
   if (BCOACH.reviews[key] || BCOACH.reviewBusy[key] || BCOACH.reviewFailed[key]) return;
   BCOACH.reviewBusy[key] = true;
   const paint = () => { const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); if (v === 'teams') renderTeams(); };
+  // the card's Pokéball shakes while we wait; the heading counts the seconds so a slow review still looks alive
+  const t0 = Date.now(), tick = setInterval(() => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    document.querySelectorAll('.rvsec').forEach(el => { el.textContent = s + 's'; });
+  }, 1000);
+  let caught = false;
   try {
     const m = M(), L = builderLeague(m), ctx = builderContext(m, L, ids);
     const text = await Sync.coach(ctx);
-    BCOACH.reviews[key] = {t: Date.now(), text, slots: ids.slice()}; saveBCoach();
+    BCOACH.reviews[key] = {t: Date.now(), text, slots: ids.slice()}; saveBCoach(); caught = true;
   } catch (e) { BCOACH.reviewFailed[key] = (e && e.message) || 'no answer'; }
+  clearInterval(tick);
+  // it landed: let the ball finish its catch before the card turns into the review. Only a ball on the page the player
+  // is actually looking at ('.view.on') earns the pause — a card waiting in a hidden view must not stall the repaint.
+  const balls = caught ? document.querySelectorAll('.view.on .pball.rv.on') : [];
+  if (balls.length) {
+    balls.forEach(b => { b.classList.remove('on'); b.classList.add('done'); });
+    await new Promise(r => setTimeout(r, 900));
+  }
   delete BCOACH.reviewBusy[key]; paint();
 }
 function refreshReview(ids) { const key = reviewKey(ids); delete BCOACH.reviews[key]; delete BCOACH.reviewFailed[key]; saveBCoach(); autoReview(ids); const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); }
@@ -833,9 +847,11 @@ function reviewCard(ids, auto) {                // the card; auto = ask Claude b
   const key = reviewKey(ids), rv = BCOACH.reviews[key], busy = BCOACH.reviewBusy[key], failed = BCOACH.reviewFailed[key];
   if (!rv && auto && !busy && !failed) setTimeout(() => autoReview(ids), 0);
   const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>AI review <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
-  if (busy || (!rv && auto && !failed)) return `<div class="team card" style="cursor:default">${head('thinking, 20 to 90 seconds')}<div class="dt">Claude is judging this team: roles, weak spots and swaps from your roster.</div></div>`;
-  if (!rv && failed) return `<div class="team card" style="cursor:default">${head('not available')}<div class="dt">⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a></div></div>`;
-  if (!rv) return `<div class="team card" style="cursor:default">${head('')}<div class="dt"><a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Get an AI review</a> of this team: roles, weak spots and swaps from your roster.</div></div>`;
+  // the scan importer's Pokéball, on the app's other long wait: shaking while Claude thinks, caught when it lands, dropped when it fails
+  const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
+  if (busy || (!rv && auto && !failed)) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is judging this team: roles, weak spots and swaps from your roster. Usually 20 to 90 seconds.');
+  if (!rv && failed) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a>`);
+  if (!rv) return wait('', '', `<a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Get an AI review</a> of this team: roles, weak spots and swaps from your roster.`);
   const sec = parseReview(rv.text), order = ['Verdict', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
   // the Order section's first line is a lineup: one tap applies it to the saved party or the builder slots when it differs
   const perm = sec.Order ? orderFromReview(sec.Order, ids) : null, party = perm ? savedName(ids, null) : null;

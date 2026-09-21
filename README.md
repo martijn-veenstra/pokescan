@@ -168,6 +168,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   one and its explanation opens in place, one at a time, no re-render. The footer notes that used to carry
   those explanations were trimmed to what they still add, the data's provenance and the model's caveats.
   The scan cards, the team page's Members list and the battle log keep their own labels and get no header.
+- **The loader**: the Pokéball that shakes while scans are read (a ring around it, a burst of stars when it lands)
+  also runs on the AI review card, the app's other long wait. There is no percentage to show for a review, so the
+  ring spins instead of filling and the heading counts the seconds; when the review arrives the ball finishes its
+  catch before the card turns into the text. A failed review drops the ball.
 - **AI review** (server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, every complete
   team gets one structured review from Claude, cached per trio and league; the server rate-limits reviews.
 

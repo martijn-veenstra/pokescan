@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.81';
+const APP_VERSION='9.82';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -787,8 +787,8 @@ function pballSVG(){
   <circle class="rim" cx="32" cy="32" r="8.5"/><circle class="btn" cx="32" cy="32" r="5.5"/><circle class="dot" cx="32" cy="32" r="2.2"/><path class="shine" d="M15 24 A19 19 0 0 1 32 13"/></g>
   <g class="stars"><path class="star s1" d="${star}" transform="translate(11 9)"/><path class="star s2" d="${star}" transform="translate(53 7)"/><path class="star s3" d="${star}" transform="translate(58 44)"/></g></svg>`;
 }
-document.querySelectorAll('.pball').forEach(el=>{ el.innerHTML=pballSVG(); });
-function pballState(st){ document.querySelectorAll('.pball').forEach(el=>{ el.classList.remove('on','done','err'); if(st) el.classList.add(st); }); }
+document.querySelectorAll('.pball').forEach(el=>{ el.innerHTML=pballSVG(); });   // the static ones; a card that draws its own writes the SVG into its HTML
+function pballState(st){ document.querySelectorAll('.pball:not(.rv)').forEach(el=>{ el.classList.remove('on','done','err'); if(st) el.classList.add(st); }); }
 function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
   const f=$('impfloat'); if(!f) return;
   const scans=$('view-scans'), onScans=scans&&getComputedStyle(scans).display!=='none';

@@ -65,3 +65,30 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   await expect.poll(() => posts.length).toBe(3);
   expect(errors).toEqual([]);
 });
+
+test('the review card runs the Pokéball loader: shaking with a live timer, caught when the review lands', async ({ page }) => {
+  let polls = 0;
+  await page.route('**/api/**', route => {
+    const u = route.request().url(), m = route.request().method();
+    if (u.endsWith('/api/health')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, db: true, storage: 'memory', sync: true, coach: true, version: 'test' }) });
+    if (u.endsWith('/api/auth')) return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    // the server hands back a job, as it does for a real review: the card waits while we poll
+    if (u.endsWith('/api/coach') && m === 'POST') return route.fulfill({ status: 200, contentType: 'application/json', body: '{"jobId":"j1"}' });
+    if (u.includes('/api/coach/j1')) return route.fulfill({ status: 200, contentType: 'application/json', body: ++polls < 2 ? '{"status":"working"}' : JSON.stringify({ status: 'done', text: REVIEW }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"user":"default","state":{}}' });
+  });
+  await page.addInitScript(() => { localStorage.setItem('sync', JSON.stringify({ code: 'test', last: {}, base: {} })); localStorage.removeItem('bcoach'); });
+  const errors = await openApp(page, '#/builder');
+  await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
+  await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
+  // the ball shakes inside the card while Claude thinks, and the heading counts the seconds
+  const ball = page.locator('#builder .team.card.rvwait .pball.rv');
+  await expect(ball).toHaveClass(/\bon\b/);
+  await expect(ball.locator('svg .ball')).toHaveCount(1);
+  await expect.poll(() => page.locator('#builder .rvsec').textContent()).toMatch(/[1-9]\d*s/);
+  // it lands: the ball is caught first, then the card becomes the review
+  await expect(page.locator('#builder .team.card.rvwait .pball.rv.done')).toBeVisible();
+  await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
+  await expect(page.locator('#builder .team.card.rvwait')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
