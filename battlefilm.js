@@ -120,8 +120,10 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 /* ---------- per frame ---------- */
 function start(dur) {
   S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
-       last: {my: null, opp: null}, lastT: -9, gapT: -9, frames: 0, miss: 0};
+       last: {my: null, opp: null}, lastT: -9, gapT: -9, frames: 0, miss: 0, cur: null, run: {}};
 }
+// the loader card shows the read as it happens: hand each finding to scanner.js's feed, if it is listening
+const say = s => { try { if (window.filmEvent) window.filmEvent(s); } catch (e) {} };
 function stop() { LAST = report(); S = null; }     // scanVideo failed or finished: drop the queued crops, keep the diagnostics
 const seen = () => !!(S && S.rows.length >= MIN_ROWS);
 let LAST = null;                                   // the last read's diagnostics, so a failed import can say why
@@ -143,7 +145,7 @@ function frame(ctx, W, H, t) {
     if (S.miss >= MISS_MAX && S.frames % MISS_EVERY) return offCard(ctx, W, H, t);
     const c = calibrate(ctx, W, H);
     if (!c) { S.miss++; return offCard(ctx, W, H, t); }
-    if (S.pending && Math.abs(S.pending.my.x - c.my.x) < W * 0.01 && Math.abs(S.pending.row - c.row) < H * 0.01) { S.cal = c; S.miss = 0; }
+    if (S.pending && Math.abs(S.pending.my.x - c.my.x) < W * 0.01 && Math.abs(S.pending.row - c.row) < H * 0.01) { S.cal = c; S.miss = 0; say(`${clock(t)} battle HUD found — reading the cards`); }
     else { S.pending = c; return offCard(ctx, W, H, t); }
   }
   const row = S.cal.row, w = S.cal.w;
@@ -153,12 +155,32 @@ function frame(ctx, W, H, t) {
   S.rows.push({t, myMon, oppMon,
     mySh: count(ctx, S.cal.my, SHIELDS, isPink, true, row, w),
     oppSh: count(ctx, S.cal.opp, SHIELDS, isPink, false, row, w)});
+  live(S.rows[S.rows.length - 1]);
   for (const side of ['my', 'opp']) {
     const c = S.cal[side], mine = side === 'my', nr = rect(c, 0.02, 0.60, mine, row, w), p = profile(ctx, nr);
     if (p.ink < 40) continue;
-    if (profileDist(p, S.last[side]) > NAME_CHANGE && S.shots.length < MAX_OCR)
+    if (profileDist(p, S.last[side]) > NAME_CHANGE && S.shots.length < MAX_OCR) {
       S.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
+      say(`${clock(t)} a new name on ${mine ? 'your' : 'their'} card, queued to read`);
+    }
     S.last[side] = p;
+  }
+}
+
+/* The counts as they arrive, under the same HOLD rule events() applies afterwards, so the loader can report a fall
+   the moment it is certain instead of only once the whole recording has been read. Reporting only: the entry is
+   still built from the full row stream in events(), which is what a later re-read has to agree with. */
+function live(r) {
+  if (!S.cur) { S.cur = {myMon: r.myMon, oppMon: r.oppMon, mySh: r.mySh, oppSh: r.oppSh}; S.run = {}; return; }
+  for (const k of Object.keys(S.cur)) {
+    const v = r[k];
+    if (v >= S.cur[k]) { S.run[k] = null; continue; }
+    const p = S.run[k];
+    S.run[k] = (p && p.v === v) ? {v, n: p.n + 1} : {v, n: 1};
+    if (S.run[k].n >= HOLD) {
+      S.cur[k] = v; S.run[k] = null;
+      say(`${clock(r.t)} ${LABEL[k]}${/Sh$/.test(k) ? ` (${v} left)` : ''}`);
+    }
   }
 }
 
@@ -173,6 +195,7 @@ function offCard(ctx, W, H, t) {
   if (t - S.gapT < 1.2 || S.banners.length >= MAX_BANNERS) return;
   S.gapT = t;
   S.banners.push({t, img: grab(ctx, [0, Math.round(H * 0.20), W, Math.round(H * 0.28)], 0.8)});
+  if (S.banners.length % 5 === 0) say(`${clock(t)} ${S.banners.length} announcements grabbed to read for moves`);
 }
 
 /* ---------- reading the queued crops ---------- */
@@ -367,6 +390,7 @@ async function finish(file) {
   const segs = ranges.map(([i0, i1], k) => sliceFor(S.rows, i0, i1, ranges[k + 1] ? S.rows[ranges[k + 1][0]].t : undefined));
   const P = window.Planner;
   status(segs.length > 1 ? `Reading ${segs.length} battles from the recording…` : 'Reading the battle from the recording…');
+  say(segs.length > 1 ? `${segs.length} battles in the recording — reading the names and moves` : 'reading the names and moves');
   const total = segs.reduce((n, g) => n + g.shots.length + g.banners.length + g.ends.length, 0);
   let done = 0;
   const onStep = () => progress(done++ / Math.max(1, total));
@@ -381,6 +405,7 @@ async function finish(file) {
   if (!out.length) return null;
   if (P && P.draftBattles) P.draftBattles(out);      // nothing is logged yet: the page shows the read and the player saves it
   const one = out[0], many = out.length > 1, nm2 = out.reduce((n, e) => n + (e.moves ? e.moves.length : 0), 0);
+  for (const e of out) say(`read: ${e.myNames.join(' / ')} vs ${e.oppNames.join(' / ')}${e.result ? ' · ' + (e.result === 'W' ? 'win' : e.result === 'L' ? 'loss' : 'draw') : ''}`);
   gain('note', many ? `${out.length} battles read from the recording, waiting to be saved · ${nm2} moves`
                     : `battle read from the recording: ${one.myNames.join(' / ')} vs ${one.oppNames.join(' / ')} · ${nm2} moves`);
   status(many ? `${out.length} battles read · check the team and save them`

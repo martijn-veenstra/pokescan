@@ -33,7 +33,15 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
 #panel{display:none;background:var(--card);border:1px solid var(--line);
  border-radius:16px;padding:4px 14px 12px;margin:8px 0}
 #panel.open{display:block!important}
-#prog{display:none;align-items:center;gap:12px;margin:12px 0}
+#prog{display:none;flex-direction:column;gap:8px;margin:12px 0}
+.prow{display:flex;align-items:center;gap:12px}
+/* the importing card: a cancel cross in every state, and an expand button along the bottom that shows what the read has found so far */
+.pcx{flex:none;width:30px;height:30px;padding:0;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--dim);font-size:14px;line-height:1;cursor:pointer}
+.pcx:active{background:var(--line)}
+.pex{width:100%;padding:5px 0;border:0;border-top:1px solid var(--line);background:transparent;color:var(--dim);font:inherit;font-size:11.5px;text-align:left;cursor:pointer}
+.pev{max-height:148px;overflow:auto;-webkit-overflow-scrolling:touch;font-size:11.5px;line-height:1.5;color:var(--dim)}
+.pev[hidden]{display:none}.pev .ev{padding:1px 0;border-bottom:1px solid var(--line)}.pev .ev:last-child{border-bottom:0}
+.pev .ev.none{opacity:.7;border-bottom:0}
 #implog{margin:6px 0 4px}#implog .hd{font-size:12px;color:var(--dim);cursor:pointer;display:flex;justify-content:space-between}#implog .hd a{color:var(--dim)}
 .il{display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:12px;color:var(--dim);padding:6px 0;border-top:1px solid var(--line);line-height:1.45}
 .il .t{font-variant-numeric:tabular-nums}.il .r.ok{color:#7FE3B6}.il .r.err{color:#F59A8B}.il .f{color:var(--ink)}.il .d{font-family:ui-monospace,monospace;font-size:11px;word-break:break-word}
@@ -371,7 +379,7 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .notown .btn{margin:0;align-self:flex-start;color:var(--ink)}
 .rq{display:contents}.rq[hidden]{display:none}
 /* import loader on any page but Scans (an update or add-a-scan started from a Pokémon page) */
-#impfloat{position:fixed;left:14px;right:14px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:29;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#impfloat{position:fixed;left:14px;right:14px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:29;display:flex;flex-direction:column;align-items:stretch;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 #impfloat[hidden]{display:none}#fstat{font-size:12.5px;color:var(--dim);flex:1;min-width:0}#impfloat .pball{width:48px;height:48px}
 #impfloat:not([hidden])+#toast{bottom:calc(140px + env(safe-area-inset-bottom))}   /* a toast during an import sits above the loader */
 

@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.89';
+const APP_VERSION='9.90';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -679,7 +679,16 @@ const SCANLOG=(()=>{ try{ return JSON.parse(localStorage.getItem('scanlog')||'[]
 let GAIN=null, showLog=false;                 // the import log starts collapsed; the header toggles it for this visit
 function gainStart(){ GAIN={new:[],moves:[],appr:[],profile:null,reads:0,frames:0,mode:'',note:[]}; }
 let UPDATE=null;                                   // key of the card an import is meant to update (set from its page); its own key follows the update
-function gain(kind,v){ if(!GAIN) return; if(kind==='reads'||kind==='frames') GAIN[kind]++; else if(Array.isArray(GAIN[kind])) GAIN[kind].push(v); else GAIN[kind]=v; }
+const evtLabel=r=>typeof r==='string'?r:`${r.species} ${r.cp??'?'}`;
+function gain(kind,v){
+  if(!GAIN) return;
+  if(kind==='reads'||kind==='frames') GAIN[kind]++; else if(Array.isArray(GAIN[kind])) GAIN[kind].push(v); else GAIN[kind]=v;
+  if(kind==='note') evt(v);                      // the loader's feed shows the same findings, while they happen
+  else if(kind==='new') evt('found '+evtLabel(v));
+  else if(kind==='appr') evt('appraisal read for '+v);
+  else if(kind==='moves') evt('moves read for '+v);
+  else if(kind==='profile') evt('trainer profile '+v);
+}
 function logImport(e){
   SCANLOG.unshift(Object.assign({t:Date.now()},e)); if(SCANLOG.length>40) SCANLOG.length=40;
   try{ localStorage.setItem('scanlog',JSON.stringify(SCANLOG)); }catch(err){}
@@ -738,18 +747,25 @@ async function importFiles(files){                 // the import pipeline: also 
   if(!files||!files.length) return;
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
-  progBox(true); progress(0); status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
+  CANCEL=false; EVT=[]; progBox(true); progress(0); renderEvents();
+  status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
   let ok=0, batchKey=null; const before=results.length;
   UPDATE=window.Planner&&Planner.updateKey?Planner.updateKey():null; if(UPDATE) batchKey=UPDATE;
   if(window.Planner) Planner.beforeImport();
   for(const f of files){
+    if(CANCEL) break;
     const t0=Date.now(), isVid=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name); gainStart();
+    evt(`reading ${f.name}`);
     try{
       if(isVid) await scanVideo(f,trainer);
       else batchKey=await scanImage(f,trainer,batchKey);
       ok++;
       noteImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:true, msg:gainSummary(GAIN)});
     }catch(err){
+      if(err&&err.abort){                        // stopped from the card: keep the record of how far it got, then leave the rest alone
+        noteImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:false, msg:'stopped before it finished', detail:GAIN?gainSummary(GAIN):''});
+        break;
+      }
       showErr(`${f.name}: ${err&&err.message||err}`);
       noteImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:false, msg:(err&&err.message)||String(err), detail:[err&&err.detail, GAIN&&(GAIN.reads||GAIN.frames)?gainSummary(GAIN):''].filter(Boolean).join(' · ')});
       await new Promise(r=>setTimeout(r,1500));
@@ -758,10 +774,12 @@ async function importFiles(files){                 // the import pipeline: also 
   { const folded=BATTLE_IMPORT?0:dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
   const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
-  { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
-  progress(1); pballState(ok?'done':'err');       // the ball stops shaking: caught (stars) or not
+  if(CANCEL) status(`Stopped · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
+  else { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
+  progress(1); pballState(CANCEL?'err':ok?'done':'err');   // the ball stops shaking: caught (stars) or not
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
-  setTimeout(()=>{ if(!$('stat').textContent.startsWith('⚠')) progBox(false); else { IMPORTING=false; syncFloat(); } },2500);
+  CANCEL=false;
+  setTimeout(endCard,2500);
 }
 $('trainer').value=localStorage.getItem('trainer')||'40';
 $('bb').checked=localStorage.getItem('bb')==='1';
@@ -781,10 +799,49 @@ $('pfile').addEventListener('change', async e=>{
 });
 function del(i){ results.splice(i,1); save(); render(); }
 
-let IMPORTING=false;
+let IMPORTING=false, STICKY=false;                 // STICKY: the import is over but the card stays up — it failed, or the events are open
 function status(s){ $('stat').textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
 function progBox(on){                            // the Pokéball loader and status line: in the Scans page, and floating above the bottom bar on any other page
-  IMPORTING=on; $('prog').style.display=on?'flex':'none'; pballState(on?'on':''); syncFloat();
+  IMPORTING=on; if(on) STICKY=false;
+  $('prog').style.display=(on||STICKY)?'flex':'none'; pballState(on?'on':''); syncFloat();
+}
+/* ---------- the loader's own feed: what this import has found so far, behind an expand button ----------
+   The import log only appears once a file is finished, which is no help while a three-minute recording is being
+   read. Every note the pipeline already makes — and, for a recording, each fall and shield the battle reader
+   confirms — is pushed here as it happens, so the card can show the read live and be stopped at any point. */
+let EVT=[], evtOpen=false;
+function evt(text){
+  if(!text) return;
+  const t=String(text), last=EVT[EVT.length-1];
+  if(last&&last.text===t) return;                // the same note twice in a row says nothing
+  EVT.push({t:Date.now(), text:t}); if(EVT.length>200) EVT.shift();
+  renderEvents();
+}
+window.filmEvent=evt;                            // battlefilm.js reports the battle as it reads it
+function fillEvents(el){
+  el.textContent='';
+  if(!EVT.length){ const d=document.createElement('div'); d.className='ev none'; d.textContent='nothing read yet'; el.appendChild(d); return; }
+  for(const e of EVT){ const d=document.createElement('div'); d.className='ev'; d.textContent=e.text; el.appendChild(d); }
+}
+function renderEvents(){
+  const label=`${evtOpen?'▾':'▸'} ${EVT.length} event${EVT.length===1?'':'s'} recorded`;
+  for(const pre of ['p','f']){
+    const b=$(pre+'evx'), l=$(pre+'evl'); if(!b||!l) continue;
+    b.textContent=label; b.setAttribute('aria-expanded', evtOpen?'true':'false');
+    l.hidden=!evtOpen;
+    if(evtOpen){ const bottom=l.scrollTop+l.clientHeight>=l.scrollHeight-4; fillEvents(l); if(bottom) l.scrollTop=l.scrollHeight; }
+  }
+}
+function toggleEvents(){ evtOpen=!evtOpen; renderEvents(); syncFloat(); }
+function endCard(){                              // the import is over: put the card away, unless it failed or the events are being read
+  if(evtOpen||$('stat').textContent.startsWith('⚠')){ IMPORTING=false; STICKY=true; syncFloat(); }
+  else { STICKY=false; progBox(false); }
+}
+let CANCEL=false;                                // the ✕ on the card: stop the import wherever it is
+const abort=()=>{ const e=new Error('cancelled'); e.abort=true; return e; };
+function cancelImport(){
+  if(!IMPORTING){ evtOpen=false; STICKY=false; progBox(false); renderEvents(); return; }   // a finished or failed card: dismiss it
+  CANCEL=true; evt('stopped by you'); status('Stopping the import…');
 }
 /* the loader: a Pokéball that shakes like a catch while files are read, a ring around it that fills with progress, a
    button that pulses; on completion the ball stills, the button turns green and three stars burst. Pure SVG + CSS. */
@@ -801,7 +858,7 @@ function pballState(st){ document.querySelectorAll('.pball:not(.rv)').forEach(el
 function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
   const f=$('impfloat'); if(!f) return;
   const scans=$('view-scans'), onScans=scans&&getComputedStyle(scans).display!=='none';
-  f.hidden=!(IMPORTING&&!onScans);
+  f.hidden=!((IMPORTING||STICKY)&&!onScans);
 }
 window.addEventListener('hashchange', ()=>setTimeout(syncFloat,0));   // after the router has switched the view
 let TOAST_T=null;
@@ -928,16 +985,20 @@ async function scanVideo(file,trainer){
     status('Tap ▶ below to start reading the recording');
     const st=$('stat'); const btn=document.createElement('button'); btn.className='btn'; btn.style.margin='8px 0 0'; btn.textContent='▶ Start reading the recording';
     st.appendChild(btn);
-    played=await new Promise(res=>{ const to=setTimeout(()=>res(false),60000); btn.onclick=async()=>{ clearTimeout(to); try{ await vid.play(); res(!vid.paused); }catch(e){ playErr=(e&&e.name)||String(e); res(false); } }; });
+    played=await new Promise(res=>{ const to=setTimeout(()=>res(false),60000);
+      const poll=setInterval(()=>{ if(CANCEL){ clearInterval(poll); clearTimeout(to); res(false); } },200);   // the ✕ works while we wait for the tap too
+      btn.onclick=async()=>{ clearTimeout(to); clearInterval(poll); try{ await vid.play(); res(!vid.paused); }catch(e){ playErr=(e&&e.name)||String(e); res(false); } }; });
     btn.remove(); if(played) mode='tap';
   }
+  let aborted=false;
   if(played){
-    await new Promise((resolve,reject)=>{
+    try{ await new Promise((resolve,reject)=>{
       let lastT=-1, busy=false, done=false, lastProgressAt=Date.now(), lastSeen=-1, nudged=0;
       const finish=err=>{ if(done) return; done=true; clearInterval(iv); vid.onended=null; vid.onerror=null; err?reject(err):resolve(); };
       vid.onended=()=>finish(); vid.onerror=()=>finish(fail('the video stopped playing (decode error)'));
       const iv=setInterval(async()=>{
         if(done||busy) return;
+        if(CANCEL) return finish(abort());
         const t=vid.currentTime;
         if(t!==lastSeen){ lastSeen=t; lastProgressAt=Date.now(); }
         else if(Date.now()-lastProgressAt>6000){
@@ -958,17 +1019,17 @@ async function scanVideo(file,trainer){
         }catch(e){ finish(e); return; }
         busy=false;
       },80);
-    });
+    }); }catch(e){ if(e&&e.abort) aborted=true; else throw e; }
   } else {
     mode='seek'; const step=1/3; let skipped=0;
-    for(let t=0.2; t<dur; t+=step){
+    for(let t=0.2; t<dur && !CANCEL; t+=step){
       const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{clearTimeout(to);r(true);}; vid.currentTime=t; });
       if(!seeked){ skipped++; if(skipped>15) throw fail(`the video could neither play (${playErr||'refused'}) nor seek in this browser`); continue; }
       await analyse(t);
     }
   }
   // the ending decides a battle: when playback gave up early, seek for the missing snapshots (the last seconds above all)
-  if(snapI<snapAt.length && (stalledAt!==null || snaps.length>=3)){
+  if(!aborted && !CANCEL && snapI<snapAt.length && (stalledAt!==null || snaps.length>=3)){
     vid.pause(); let got=0;
     for(const t of snapAt.slice(snapI)){
       const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),3000); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
@@ -979,9 +1040,9 @@ async function scanVideo(file,trainer){
     if(got) gain('note',`${got} closing frame${got===1?'':'s'} fetched by seeking`);
   }
   // playback gave up part way: keep reading the battle by seeking, or the entry covers only what played
-  if(stalledAt!==null && window.Film && Film.seen()){
+  if(!aborted && !CANCEL && stalledAt!==null && window.Film && Film.seen()){
     const STEP=0.6, CAP=400; let n=0, fail2=0;
-    for(let t=stalledAt+STEP; t<dur && n<CAP; t+=STEP){
+    for(let t=stalledAt+STEP; t<dur && n<CAP && !CANCEL; t+=STEP){
       const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
       if(!seeked){ if(++fail2>=3) break; continue; }
       fail2=0; ctx.drawImage(vid,0,0); frames++; n++;
@@ -992,15 +1053,20 @@ async function scanVideo(file,trainer){
     if(n) gain('note',`${n} more frames of the battle fetched by seeking after the stall`);
   }
   gain('mode',mode);
-  status(`Video done · ${results.length-before} new · ${reads} screens read`);
+  aborted=aborted||CANCEL;
+  status(aborted?`Video stopped at ${Math.round(vid.currentTime)}s · ${reads} screens read`
+                :`Video done · ${results.length-before} new · ${reads} screens read`);
   vid.pause(); vid.removeAttribute('src'); vid.load(); URL.revokeObjectURL(url);
   // The HUD read stands on its own: a battle recording usually makes the status-screen reader misfire a few times
   // (an attacks screen, a "BATTLE" banner), so gating this on reads===0 meant a real recording never got read at all.
   if(window.Film){
-    try{ if(Film.seen()) await Film.finish(file); }
-    catch(e){ console.error(e); gain('note','the battle read failed: '+(e.message||e)); }
+    if(!aborted){
+      try{ if(Film.seen()) await Film.finish(file); }
+      catch(e){ console.error(e); gain('note','the battle read failed: '+(e.message||e)); }
+    }
     FILM_REPORT=Film.report(); Film.stop();
   }
+  if(aborted) throw abort();                              // nothing else runs on a recording the player stopped
   // Pro commentary on top, only for a recording the scanner made nothing of: it is the fallback, not the reader
   if(reads===0 && results.length===before && snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
 }

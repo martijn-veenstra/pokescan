@@ -49,6 +49,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   The import loader is a Pokéball: it shakes like a catch while files are read, a ring around it fills with progress and on
   completion it stills with a green button and three stars (red and tilted when a file failed). An import started from a
   Pokémon page shows the same loader floating above the bottom bar.
+- **The importing card can be opened, and stopped**: a ✕ sits on the card in every state — while a file is being read it
+  stops the import where it is (mid-recording included, with nothing drafted from a stopped read), and once the import
+  has ended it dismisses the card. Along the bottom an expand button counts what the read has found so far and opens
+  the list: every note the pipeline makes, and for a recording each fall and shield the battle reader confirms, as it
+  happens rather than only in the import log afterwards. A card whose list is open stays up instead of fading away.
 - **How to get** (Pokémon page): concrete routes instead of a bare schedule lookup: catch it (Leek Duck raids, eggs,
   research, events), evolve a pre-evolution (candy cost from the game master in `data/evo.json`, the safe catch CP so it
   stays league-legal, the pre-evolution's own sources, your own copies that would fit), and for Shadow Pokémon the Team
