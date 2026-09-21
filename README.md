@@ -161,6 +161,12 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   list sits on each Pokémon page and as a hint on catch suggestions. On the PokeScan server, `GET /api/sources`
   additionally reads the Leek Duck event pages of GO Fest, Raid Day and seasonal events (whose raid bosses and
   spawns ScrapedDuck does not publish) and merges those lists in; the GitHub Pages copy only has the JSON feed.
+- **Page titles and column help**: every top-level page opens with its own title and a one-line subtitle, so a
+  page reached from the drawer says what it is without a lit tab. Above each list of rows (Saved teams, Meta
+  teams, Rankings, Raids) and above the Best IVs table sits a column header whose labels each carry an ⓘ: tap
+  one and its explanation opens in place, one at a time, no re-render. The footer notes that used to carry
+  those explanations were trimmed to what they still add, the data's provenance and the model's caveats.
+  The scan cards, the team page's Members list and the battle log keep their own labels and get no header.
 - **AI review** (server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, every complete
   team gets one structured review from Claude, cached per trio and league; the server rate-limits reviews.
 
