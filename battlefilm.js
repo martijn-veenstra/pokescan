@@ -315,16 +315,16 @@ async function finish(file) {
     let e = null;
     try { e = await readSeg(g, file, g.t0, onShot); } catch (err) { console.error(err); }
     if (!e) continue;
-    if (P && P.addBattle) P.addBattle(e);
     out.push(e);
   }
   S = null;
   if (!out.length) return null;
+  if (P && P.draftBattles) P.draftBattles(out);      // nothing is logged yet: the page shows the read and the player saves it
   const one = out[0], many = out.length > 1;
-  gain('note', many ? `${out.length} battles read from the recording`
+  gain('note', many ? `${out.length} battles read from the recording, waiting to be saved`
                     : `battle read from the recording: ${one.myNames.join(' / ')} vs ${one.oppNames.join(' / ')}`);
-  status(many ? `${out.length} battles logged · ${out.filter(e => e.result === 'W').length} won`
-              : `${one.result === 'W' ? '✓ Win' : one.result === 'L' ? '✕ Loss' : 'Battle'} vs ${one.oppNames.join(' / ')} logged`);
+  status(many ? `${out.length} battles read · check the team and save them`
+              : `${one.result === 'W' ? '✓ Win' : one.result === 'L' ? '✕ Loss' : 'Battle'} vs ${one.oppNames.join(' / ')} read · check the team and save it`);
   return out;
 }
 

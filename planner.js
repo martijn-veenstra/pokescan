@@ -1291,10 +1291,8 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
-/* ---------- Battle log: GO Battle League results by hand (three taps) or from end-of-set screenshots; rating over time ---------- */
+/* ---------- Battle log: battles read off your own recordings, plus the rating over time from end-of-set screenshots ---------- */
 let BATTLES = JSON.parse(localStorage.getItem('battles') || '[]');
-const BL = Object.assign({team: 'builder', lead: null, q: ''}, JSON.parse(localStorage.getItem('bl') || '{}'));
-const saveBL = () => localStorage.setItem('bl', JSON.stringify(BL));
 const saveBattles = () => { BATTLES.sort((a, b) => a.t - b.t); localStorage.setItem('battles', JSON.stringify(BATTLES)); if (window.Sync) Sync.touch('battles'); };
 function mergeBattles(list) {                 // sync: append entries this device has not seen (by id)
   const have = new Set(BATTLES.map(b => b.id)); let n = 0;
@@ -1303,11 +1301,48 @@ function mergeBattles(list) {                 // sync: append entries this devic
   return n > 0;
 }
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-function blTeamIds() { if (BL.team !== 'builder' && ROSTER.tagged[BL.team]) return ROSTER.tagged[BL.team].slice(); return UI.build.slots.filter(Boolean); }
-function logBattle(result) {
-  const ids = blTeamIds(); if (ids.length !== 3) { status('Pick a team of three first'); return; }
-  BATTLES.push({id: newId(), t: Date.now(), league: LEAGUE.slug, team: BL.team === 'builder' ? null : BL.team, ids, lead: BL.lead || null, result, src: 'tap'});
-  BL.lead = null; saveBL(); saveBattles(); renderBattles(); status(result === 'W' ? 'Win logged' : 'Loss logged');
+/* a recording is read into drafts, not into the log: the page shows what it found, you pick the team, then you save.
+   Kept in localStorage so walking away from the page does not throw the read away. */
+let DRAFT = JSON.parse(localStorage.getItem('bdraft') || 'null');
+const saveDraft = () => DRAFT ? localStorage.setItem('bdraft', JSON.stringify(DRAFT)) : localStorage.removeItem('bdraft');
+function draftBattles(list) {
+  if (!list || !list.length) return;
+  const entries = list.map(e => Object.assign({id: newId(), league: LEAGUE.slug}, e));
+  const seenIds = [...new Set([].concat(...entries.map(e => e.myIds || e.ids || [])))];
+  DRAFT = {entries, team: matchParty(seenIds), t: Date.now()};   // a set is played with one team, so one pick covers them all
+  saveDraft(); renderBattles();
+  if (onView() !== 'battles') nav('#/battles');
+}
+function draftTeam(name) { if (!DRAFT) return; DRAFT.team = DRAFT.team === name ? null : name; saveDraft(); renderBattles(); }
+function discardDrafts() { DRAFT = null; saveDraft(); renderBattles(); }
+function saveDrafts() {
+  if (!DRAFT || !DRAFT.entries.length) return;
+  const team = DRAFT.team, ids = team && ROSTER.tagged[team] ? ROSTER.tagged[team].slice() : null;
+  const n = DRAFT.entries.length;
+  for (const e of DRAFT.entries) addBattle(Object.assign({}, e, ids ? {team, ids} : {}));
+  DRAFT = null; saveDraft(); renderBattles();
+  if (typeof toast === 'function') toast(`✓ ${n} battle${n === 1 ? '' : 's'} saved${team ? ' for ' + team : ''}`);
+}
+function draftCard() {
+  if (!DRAFT || !DRAFT.entries.length) return '';
+  const es = DRAFT.entries, names = Object.keys(ROSTER.tagged);
+  const won = es.filter(e => e.result === 'W').length, lost = es.filter(e => e.result === 'L').length;
+  const one = e => {
+    const col = e.result === 'W' ? 'var(--green)' : e.result === 'L' ? '#F59A8B' : 'var(--dim)';
+    const opp = (e.opp && e.opp.length ? e.opp.map(nm) : e.oppNames || []).join(' / ') || 'not read';
+    const mine = (e.myIds && e.myIds.length ? e.myIds.map(nm) : e.myNames || []).join(' / ') || 'not read';
+    const bits = [e.shields ? `shields ${e.shields.me}–${e.shields.opp}` : '', e.fainted ? `fainted ${e.fainted.me}–${e.fainted.opp}` : '', e.filmData && e.filmData.dur ? e.filmData.dur + ' s' : ''].filter(Boolean).join(' · ');
+    return `<div class="dcase"><div class="drow"><span class="sc" style="color:${col}">${e.result || '·'}</span><span class="tx"><span class="nm">vs ${esc(opp)}</span><div class="dt">you played ${esc(mine)}${bits ? ' · ' + bits : ''}</div></span></div>`
+      + (e.film && e.film.length ? fold([`<div class="filmt">${e.film.map(l => `<div>${esc(l)}</div>`).join('')}</div>`], 0, {label: () => 'show the timeline'}) : '') + `</div>`;
+  };
+  return `<div class="team card draft" style="cursor:default">
+    <div class="sec" style="margin:0 0 2px">Read from your recording <small>${es.length === 1 ? 'one battle' : `${es.length} battles · ${won}-${lost}`}</small></div>
+    <div class="dt" style="margin-bottom:6px">Nothing is in your log yet. Check the team you played, then save.</div>
+    ${es.map(one).join('')}
+    ${names.length ? `<div class="tchips bteam" style="margin-top:8px"><span class="lb">You played</span>${names.map(n => `<span class="chip ${DRAFT.team === n ? 'ok sel' : ''}" onclick="Planner.draftTeam(${attr(n)})">${esc(n)}</span>`).join('')}</div>`
+      : `<div class="dt">No saved parties yet — save one in the Builder and it can be picked here.</div>`}
+    ${DRAFT.team ? '' : `<div class="dt" style="margin-top:4px">Pick the party you ran, or save without one.</div>`}
+    <div class="wl" style="margin-top:8px"><button class="win" onclick="Planner.saveDrafts()">Save ${es.length === 1 ? 'this battle' : es.length + ' battles'}</button><button onclick="Planner.discardDrafts()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Discard</button></div></div>`;
 }
 function logRating(v, extra) {
   const rating = parseInt(v); if (!(rating > 0 && rating < 5000)) { status('Rating must be a number like 2150'); return; }
@@ -1327,8 +1362,7 @@ async function importBattle(files) {
       status('Reading ' + f.name + '…');
       const r = await readBattle(f);
       if (!r) { status(`${f.name}: no rating or set result found; log it by hand`); continue; }
-      const ids = blTeamIds();
-      BATTLES.push({id: newId(), t: f.lastModified || Date.now(), league: LEAGUE.slug, rating: r.rating, delta: r.delta, set: r.wins !== undefined ? {w: r.wins, l: r.losses} : undefined, team: BL.team === 'builder' ? null : BL.team, ids: ids.length === 3 ? ids : undefined, src: 'ocr'});
+      BATTLES.push({id: newId(), t: f.lastModified || Date.now(), league: LEAGUE.slug, rating: r.rating, delta: r.delta, set: r.wins !== undefined ? {w: r.wins, l: r.losses} : undefined, src: 'ocr'});
       n++; status(`${f.name}: ${r.rating ? 'rating ' + r.rating : ''}${r.wins !== undefined ? ` · ${r.wins}/5 wins` : ''}`);
     } catch (e) { status(`${f.name}: ${e.message || e}`); }
   }
@@ -1382,31 +1416,17 @@ function renderBattles() {
 }
 function battlesInner() {
   if (!APP || !window.PVP) return '<div class="note">Loading PvPoke data…</div>';
-  const m = M(), L = builderLeague(m), st = battleStats(LEAGUE.slug), ids = blTeamIds();
+  const m = M(), st = battleStats(LEAGUE.slug);
   let h = '';
   // the battle log is where a recording belongs: same pipeline as Scans & import, which keeps working too
   h += `<button class="btn" onclick="document.getElementById('vfile').click()">＋ Import a battle recording <span style="display:block;font-weight:500;font-size:12px;opacity:.75">read on this phone · a whole set becomes one entry per battle</span></button>`;
+  h += draftCard();                              // a read waiting to be saved sits at the top until it is
   // rating
   const pts = st.ratings.slice(-40).map(b => b.rating);
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>Rating <small>${esc(LEAGUE.title)}</small></span>${st.ratings.length ? ctxMenu([['Delete last rating', `Planner.delBattle(${attr(st.now.id)})`, true]]) : ''}</div>
     ${st.now ? `<div style="display:flex;align-items:baseline;gap:10px"><span class="big" style="font-family:Sora,sans-serif;font-weight:800;font-size:30px;color:var(--green)">${st.now.rating}</span><span class="dim" style="font-size:12px">${when(st.now.t)}${(() => { const wk = st.ratings.filter(b => b.t < st.now.t - WEEK).pop(); return wk ? ` · ${st.now.rating - wk.rating >= 0 ? '+' : ''}${st.now.rating - wk.rating} vs a week ago` : ''; })()}</span></div>${sparkline(pts)}` : '<div class="dt">No rating yet. After a set, type the rating the game shows or import the end-of-set screenshot.</div>'}
     <div class="add" style="margin:8px 0 0"><input id="blrating" type="number" inputmode="numeric" placeholder="rating after your set" style="flex:1;min-width:120px"><button onclick="Planner.logRating(document.getElementById('blrating').value)">Save</button><button onclick="document.getElementById('bfile').click()" style="background:var(--card);color:var(--ink);border:1px solid var(--line)">Screenshot…</button></div>
     <div class="dt" style="margin-top:6px">Screenshot: the end-of-set screen (x/5 and rating) or the post-battle rating screen. Whatever is legible is saved; the rest you can tap in below.</div></div>`;
-  // log a battle, by hand
-  let log = '';
-  const teams = [['builder', 'Builder']].concat(Object.keys(ROSTER.tagged).map(n => [n, n]));
-  log += `<div class="sec">Log a battle <small>team · their lead · result</small></div>`;
-  log += `<div class="tchips">${teams.map(([k, l]) => `<span class="chip ${BL.team === k ? 'ok' : ''}" onclick="Planner.blTeam(${attr(k)})">${esc(l)}</span>`).join('')}</div>`;
-  if (ids.length !== 3) log += `<div class="note">Pick a saved party, or fill the builder with the three you run.</div>`;
-  else {
-    const pool = L.pool(), q = BL.q.toLowerCase(), hits = q ? pool.filter(o => nm(o).toLowerCase().includes(q) || o.includes(q)).slice(0, 8) : [];
-    const recent = []; for (const b of BATTLES.slice().reverse()) if (b.lead && !recent.includes(b.lead) && APP.pokemon[b.lead]) { recent.push(b.lead); if (recent.length >= 8) break; }
-    log += `<div class="team" style="cursor:default"><div class="dt" style="margin-bottom:4px">${ids.map(nm).map(esc).join(' / ')}</div>
-      <div class="add" style="margin:4px 0"><input id="blq" placeholder="their lead (optional): search…" value="${esc(BL.q)}" oninput="Planner.blSearch(this.value)"></div>
-      ${hits.length ? `<div class="tchips">${hits.map(o => `<span class="chip ${BL.lead === o ? 'ok' : ''}" onclick="Planner.blLead('${o}')">${esc(nm(o))}</span>`).join('')}</div>` : recent.length ? `<div class="tchips">${recent.map(o => `<span class="chip ${BL.lead === o ? 'ok' : ''}" onclick="Planner.blLead('${o}')">${esc(nm(o))}</span>`).join('')}</div>` : ''}
-      ${BL.lead ? `<div class="dt" style="margin:4px 0">Their lead: <b style="color:var(--ink)">${esc(nm(BL.lead))}</b> <a href="#" class="dim" onclick="Planner.blLead(null);return false">clear</a></div>` : ''}
-      <div class="wl"><button class="win" onclick="Planner.logBattle('W')">Win</button><button class="loss" onclick="Planner.logBattle('L')">Loss</button></div></div>`;
-  }
   // the aggregate stats, folded away so they stop pushing the log itself off the screen
   let stats = '';
   if (st.fights.length) {
@@ -1426,8 +1446,7 @@ function battlesInner() {
   const recentB = st.all.slice().reverse().slice(0, 20);
   if (recentB.length) h += `<div class="sec">Battles <small>tap one for the timeline and a review</small></div>`
     + recentB.map(b => battleRow(b)).join('');
-  else h += `<div class="empty"><b>No battles yet.</b><br>Import a recording above, or log one by hand below.</div>`;
-  h += log;
+  else if (!DRAFT) h += `<div class="empty"><b>No battles yet.</b><br>Record a Great League battle on your phone and import it above: the app reads both teams, the shields and the result off the recording.</div>`;
   if (stats) h += fold([stats], 0, {label: () => `show your record · ${rec(st.total)}`});
   h += `<div class="note">Everything here is yours: the log lives on this device and follows your account when sync is on. Team pages and the AI review use these records next to the meta numbers.</div>`;
   return h;
@@ -1491,9 +1510,6 @@ function battleRow(b, noChips) {                // one line per battle; a film e
   // asked only where it is still missing, so an attributed log stays quiet
   return row + (!noChips && b.src === 'film' && !b.team ? teamChips(b) : '');
 }
-function blTeam(k) { BL.team = k; saveBL(); renderBattles(); }
-function blLead(id) { BL.lead = id; BL.q = ''; saveBL(); renderBattles(); }
-function blSearch(v) { BL.q = v; saveBL(); const pos = $('blq') && $('blq').selectionStart; renderBattles(); const q = $('blq'); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 
 /* ---------- Matchups page: your team against one opponent per shield scenario, and "their lead is X" ---------- */
 const MU = Object.assign({team: 'builder', opp: null, mode: 'matchup', q: '', recent: []}, JSON.parse(localStorage.getItem('mu') || '{}'));
@@ -1638,7 +1654,7 @@ function startSteps(m, best) {
     {k: 'three', title: `Three Pokémon under ${LEAGUE.cp} CP`, sub: best ? 'Today builds your first team' : `${Math.min(3, underCap)} of 3 · Today builds your first team`, done: !!best, go: "Planner.nav('#/scans')"},
     {k: 'level', title: 'Set your trainer level', sub: 'power-up costs and the level cap depend on it', done: !!localStorage.getItem('tname') || (localStorage.getItem('trainer') || '40') !== '40', go: 'toggleProfile()'},
     {k: 'party', title: 'Save your in-game party', sub: 'name a trio in the Builder; Today then checks the team you actually run', done: Object.values(ROSTER.tagged).some(v => v.length === 3), go: "Planner.nav('#/builder')"},
-    {k: 'battle', title: 'Log a battle', sub: 'three taps after a GO Battle League match', done: BATTLES.length > 0, go: "Planner.nav('#/battles')"},
+    {k: 'battle', title: 'Log a battle', sub: 'record one match and import it: the app reads both teams and the result', done: BATTLES.length > 0, go: "Planner.nav('#/battles')"},
   ];
   if (window.Sync && Sync.available() && hl.auth === 'clerk') steps.push({k: 'signin', title: 'Sign in', sub: 'scans and teams follow you to every device', done: Sync.signedIn(), go: 'Sync.toggle()'});
   return steps;
@@ -2455,7 +2471,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, importBattle, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

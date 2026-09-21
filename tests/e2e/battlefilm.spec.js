@@ -79,8 +79,12 @@ test('Film reads a battle off the HUD: both cards, the pip counts, the timeline 
   });
   expect(await page.evaluate(() => Film.seen())).toBe(true);
   expect(await page.evaluate(() => Film.shotCount()), 'a name crop was queued for each side').toBeGreaterThanOrEqual(2);
-  const entry = await page.evaluate(async () => { await Film.finish({ lastModified: Date.now() }); return Planner.BATTLES[Planner.BATTLES.length - 1] || null; });
-  expect(entry, 'the battle was logged').toBeTruthy();
+  // the read becomes a draft, not a log entry: saving it is the player's move
+  const draftLen = await page.evaluate(async () => { const out = await Film.finish({ lastModified: Date.now() }); return (out || []).length; });
+  expect(draftLen).toBe(1);
+  expect(await page.evaluate(() => Planner.BATTLES.length), 'nothing is logged until saved').toBe(0);
+  const entry = await page.evaluate(() => { Planner.saveDrafts(); return Planner.BATTLES[Planner.BATTLES.length - 1] || null; });
+  expect(entry, 'saving puts it in the log').toBeTruthy();
   expect(entry.src).toBe('film');
   expect(entry.myNames.length).toBeGreaterThan(0);
   expect(entry.oppNames).toContain('Medicham');
@@ -130,6 +134,6 @@ test('a set recording splits on the end screens: one entry per battle', async ({
   expect(logged[0].fainted.opp).toBe(1);                                   // battle one: they lost one
   expect(logged[1].fainted.me).toBe(1);                                    // battle two: you lost one
   expect(logged[1].first, "the second battle's clock restarts, it does not continue the recording's").toMatch(/^0:0/);
-  expect(await page.evaluate(() => Planner.BATTLES.filter(b => b.src === 'film').length)).toBe(2);
+  expect(await page.evaluate(() => { Planner.saveDrafts(); return Planner.BATTLES.filter(b => b.src === 'film').length; }), 'both battles of the set reach the log together').toBe(2);
   expect(errors).toEqual([]);
 });

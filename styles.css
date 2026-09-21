@@ -477,3 +477,12 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .tchips.bteam{margin:8px 0 0;align-items:center}
 .tchips.bteam .lb{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin-right:2px}
 .tchips.bteam .chip.sug{border-color:var(--green);color:var(--green)}
+/* a recording that has been read but not yet saved: the summary, the team pick, then Save */
+.team.card.draft{border-color:rgba(72,213,151,.45)}
+.draft .dcase{border-top:1px solid var(--line);padding:8px 0 2px;margin-top:6px}
+.draft .dcase:first-of-type{border-top:0}
+.draft .drow{display:flex;align-items:center;gap:10px}
+.draft .drow .sc{font-family:Sora,sans-serif;font-weight:800;font-size:17px;min-width:20px}
+.draft .drow .tx{flex:1;min-width:0}
+.draft .drow .nm{display:block;font-size:13.5px;color:var(--ink)}
+.draft .filmt{margin:6px 0 2px}

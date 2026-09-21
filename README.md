@@ -58,10 +58,12 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   and other stones, lure modules, buddy kilometres and hearts, day or night, gender, trade evolutions and the quest
   evolutions (catch or defeat N of a type, Excellent Throws…), plus Eevee's chance branches and nickname trick. Today's
   "Evolve your X" item, the Pokémon page and the scan card's evolution preview carry the short form.
-- **Battle log** (menu): log GO Battle League battles in three taps (team, their lead, win or loss), type the rating
-  after a set or import the end-of-set / rating screenshot (best effort OCR), and see your rating over time, results
-  per team, per opposing lead ("trouble") and per member. Team pages show the team's real record; the AI review gets
-  the history next to the meta numbers. The log syncs with your account like scans.
+- **Battle log** (menu): the home of battle recordings. Import one and the app reads it on the phone (see below),
+  shows what it found — both teams, the result, shields and faints, the timeline — and asks which saved party you
+  played, guessing the closest match from the Pokémon it read. Nothing is logged until you press Save, and a pending
+  read survives leaving the page. A whole set saves in one go under one party. Each logged battle opens its own page
+  with the full timeline and an optional AI review; the rating is typed in or read from an end-of-set screenshot, and
+  your record, the leads that trouble you and what you face sit behind a fold.
 - **Raids → Pick a boss**: the bosses in raids right now (Leek Duck) or any Pokémon by name; the page shows its
   weaknesses, ranks **your own scans** against it (real level, IVs and scanned moves; unscanned moves use the best
   possible set and say so) by DPS³ × TDO, and lists the best attackers in the game for its weak types.

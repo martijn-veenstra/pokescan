@@ -87,3 +87,50 @@ test('a battle review is asked for by hand, not spent automatically', async ({ p
   expect(posts).toHaveLength(1);
   expect(errors).toEqual([]);
 });
+
+test('a read recording is a draft first: summary, team pick, then Save puts it in the log', async ({ page }) => {
+  // seed once, not again on the reload below — the reload is what proves a pending read survives leaving the page
+  await page.addInitScript(() => {
+    localStorage.setItem('roster', JSON.stringify({ tagged: { Rain: ['azumarill', 'medicham', 'altaria'] }, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] }));
+    if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.removeItem('battles'); localStorage.removeItem('bdraft'); }
+  });
+  const errors = await openApp(page, '#/battles');
+  // the by-hand widget is gone: importing is how a battle gets logged
+  await expect(page.locator('#battles')).not.toContainText('Log a battle');
+  await expect(page.locator('#battles .wl .win')).toHaveCount(0);
+
+  // two battles read off a recording arrive as one draft
+  await page.evaluate(() => Planner.draftBattles([
+    { result: 'L', myIds: ['azumarill', 'medicham'], myNames: ['Azumarill', 'Medicham'], opp: ['registeel'], oppNames: ['Registeel'],
+      shields: { me: 2, opp: 1 }, fainted: { me: 3, opp: 1 }, film: ['0:00 you sent Azumarill (1500)'], filmData: { dur: 90, events: [], reads: [] }, src: 'film', t: Date.now() },
+    { result: 'W', myIds: ['azumarill', 'altaria'], myNames: ['Azumarill', 'Altaria'], opp: ['tinkaton'], oppNames: ['Tinkaton'],
+      shields: { me: 1, opp: 2 }, fainted: { me: 1, opp: 3 }, film: ['0:00 you sent Azumarill (1500)'], filmData: { dur: 80, events: [], reads: [] }, src: 'film', t: Date.now() },
+  ]));
+  const card = page.locator('#battles .team.card.draft');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('2 battles · 1-1');
+  await expect(card).toContainText('vs Registeel');
+  await expect(card).toContainText('shields 2–1');
+  expect(await page.evaluate(() => Planner.BATTLES.length), 'a draft is not in the log').toBe(0);
+
+  // the party is guessed from what the recording read, and one pick covers the whole set
+  await expect(card.locator('.chip.ok')).toContainText('Rain');
+  await card.locator('.chip:has-text("Rain")').click();                 // toggle off
+  await expect(page.locator('#battles .team.card.draft .chip.ok')).toHaveCount(0);
+  await page.locator('#battles .team.card.draft .chip:has-text("Rain")').click();
+
+  await page.locator('#battles .team.card.draft .wl .win').click();
+  await expect(page.locator('#battles .team.card.draft')).toHaveCount(0);
+  const saved = await page.evaluate(() => Planner.BATTLES.map(b => ({ r: b.result, team: b.team, ids: b.ids })));
+  expect(saved).toHaveLength(2);
+  expect(saved.every(b => b.team === 'Rain' && b.ids.length === 3), 'the pick is applied to every battle of the set').toBe(true);
+  // and it survives a reload while it waits
+  await page.evaluate(() => Planner.draftBattles([{ result: 'W', myIds: ['azumarill'], myNames: ['Azumarill'], opp: ['jellicent'], oppNames: ['Jellicent'], film: [], filmData: { dur: 60, events: [], reads: [] }, src: 'film', t: Date.now() }]));
+  await page.reload();
+  await page.waitForFunction(() => window.Planner && APP);
+  await expect(page.locator('#battles .team.card.draft')).toContainText('vs Jellicent');
+  await page.locator('#battles .team.card.draft button:has-text("Discard")').click();
+  await expect(page.locator('#battles .team.card.draft')).toHaveCount(0);
+  expect(await page.evaluate(() => Planner.BATTLES.length)).toBe(2);
+  expect(errors).toEqual([]);
+});
