@@ -9,8 +9,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   catch or evolve. Everything else (bench power-ups, catches for a hypothetical team, what to park) sits
   behind "N more ideas", so dust goes to the team first. Then your saved parties as one line each, where
   to get wanted Pokémon.
-- **Saved teams** (menu): the recommended team, your in-game parties (add one by name and three species, or save
-  one from the builder), a second team with no overlap, and more buildable trios, one line each with score
+- **Saved teams** (menu): the recommended team, your in-game parties (saved from the builder), a second team with no overlap, and more buildable trios, one line each with score
   and weak-spot counts. Every team opens its own page: roles with the moves used for scoring, members with
   status, the to-dos for its members, the meta Pokémon that beat two or all three (with who to swap to),
   one-member swaps from your roster, the coverage grid (wins / even / loses, faded cells are estimated),
@@ -107,6 +106,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   reached from the Scans list and from "your copy" links.
 - **Name a team in the builder**: the slots are Lead, Swap and Closer; with all three filled a name field and Save team sit under the moves; the party
   then shows up under Saved teams, on Today and in the battle log, and the builder is cleared for the next team (the toast opens the saved one).
+  This is where a party is created: the builder knows the moves, the roles, the score and the review, so Saved teams only lists them. A team page's
+  ⋮ can also save the trio it shows.
 - **Getting started and milestones**: a checklist on Today ticks itself off as you import a status screen, an
   appraisal, the attacks, reach three Pokémon under the cap, set your level, save a party, log a battle and sign
   in; each step opens the place to do it. Milestones (scans, exact IVs, attack sets, battles, parties, imports)

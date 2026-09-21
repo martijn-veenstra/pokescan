@@ -469,7 +469,7 @@ function renderTodayInner(el) {
   const parties = Object.entries(ROSTER.tagged).filter(([, v]) => v.length === 3 && v.every(x => APP.pokemon[x]));
   h += `<div class="sec">Your in-game parties <small>tap one for weak spots and to-dos</small></div>`;
   h += parties.map(([name, v]) => teamRow(m, v, name)).join('');
-  h += `<div class="team row" onclick="Planner.nav('#/teams')"><span class="tx"><span class="nm">${parties.length ? 'All teams' : 'No parties saved yet'}</span><div class="dt">${parties.length ? 'second team, more from your roster, add a party' : 'add the three Pokémon of a battle party, or save one from the builder'}</div></span><span class="go">›</span></div>`;
+  h += `<div class="team row" onclick="Planner.nav('#/teams')"><span class="tx"><span class="nm">${parties.length ? 'All teams' : 'No parties saved yet'}</span><div class="dt">${parties.length ? 'second team, more from your roster' : 'build a trio in the Builder and name it'}</div></span><span class="go">›</span></div>`;
   h += wantedCard(m);
   h += `<div class="note">Heuristic, not a simulation: PvPoke's published matchups where available, type effectiveness and ranking score otherwise. Roles are a guess: the member with the fewest hard losses is the swap, the strongest remaining one closes.</div>`;
   el.innerHTML = h;
@@ -593,8 +593,7 @@ function renderTeamsInner(el) {
     h += `<div class="sec">Recommended <small>best of ${rep.todayAll.length >= 12 ? '12+' : rep.todayAll.length} buildable from your roster</small></div>` + colHead(teamCols(m)) + teamRow(m, ids, null, 'run this one');
   } else h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under ${LEAGUE.cp} CP, or add them by name in Roster.</div>`;
   h += `<div class="sec">Your in-game parties <small>as you built them in the game</small></div>`;
-  h += parties.length ? colHead(teamCols(m)) + parties.map(([name, v]) => teamRow(m, v, name)).join('') : `<div class="note">None yet. Add the three Pokémon of a battle party below, or build one under Meta › Builder and save it.</div>`;
-  h += `<div class="add"><input id="tagname" placeholder="name" style="min-width:70px;flex:.6"><input id="tag1" list="species" placeholder="1"><input id="tag2" list="species" placeholder="2"><input id="tag3" list="species" placeholder="3"><button onclick="Planner.addTag()">Add</button></div>`;
+  h += parties.length ? colHead(teamCols(m)) + parties.map(([name, v]) => teamRow(m, v, name)).join('') : `<div class="note">None yet. Build a trio in the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a>, give it a name, and it lands here.</div>`;
   if (best) {
     const ids = best.members.map(x => x.speciesId), second = secondTeam(m, ids);
     if (second) {
@@ -1495,7 +1494,7 @@ function startSteps(m, best) {
     {k: 'moves', title: 'Scan the attacks', sub: 'the moves decide the rank', done: results.some(r => r.moves && r.moves.length), go: "Planner.nav('#/scans')"},
     {k: 'three', title: `Three Pokémon under ${LEAGUE.cp} CP`, sub: best ? 'Today builds your first team' : `${Math.min(3, underCap)} of 3 · Today builds your first team`, done: !!best, go: "Planner.nav('#/scans')"},
     {k: 'level', title: 'Set your trainer level', sub: 'power-up costs and the level cap depend on it', done: !!localStorage.getItem('tname') || (localStorage.getItem('trainer') || '40') !== '40', go: 'toggleProfile()'},
-    {k: 'party', title: 'Save your in-game party', sub: 'Today checks the team you actually run', done: Object.values(ROSTER.tagged).some(v => v.length === 3), go: "Planner.nav('#/teams')"},
+    {k: 'party', title: 'Save your in-game party', sub: 'name a trio in the Builder; Today then checks the team you actually run', done: Object.values(ROSTER.tagged).some(v => v.length === 3), go: "Planner.nav('#/builder')"},
     {k: 'battle', title: 'Log a battle', sub: 'three taps after a GO Battle League match', done: BATTLES.length > 0, go: "Planner.nav('#/battles')"},
   ];
   if (window.Sync && Sync.available() && hl.auth === 'clerk') steps.push({k: 'signin', title: 'Sign in', sub: 'scans and teams follow you to every device', done: Sync.signedIn(), go: 'Sync.toggle()'});
@@ -2287,10 +2286,6 @@ function setMove(id, slot, val) {
   if (o && o.scan) { o.scan.moves = cur; o.scan.secondMove = cur.length >= 3; save(); render(); } else ROSTER.moves[id] = cur;
   saveRoster(); refresh();
 }
-function addTag() { const name = $('tagname').value.trim(), team = [1, 2, 3].map(i => $('tag' + i).value.trim().toLowerCase());
-  if (!name || team.some(t => !APP.pokemon[t])) { status(name ? 'Use species ids from the list for all three' : 'Give the party a name'); return; }
-  ROSTER.tagged[name] = team; saveRoster(); refresh(); openTeam(team, name); }
-function dropTag(name) { delete ROSTER.tagged[name]; saveRoster(); refresh(); }
 function exportRoster() { const ri = rosterInput();
   shareFile('roster-great.json', JSON.stringify({league: 'great', notes: 'Exported from PokeScan. Moves are the ones on the Pokemon; null means PvPoke recommended.',
     owned: ri.owned, pending: ri.pending, candidates: ri.candidates, tagged: ri.tagged}, null, 2), 'application/json'); }
@@ -2320,6 +2315,6 @@ function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option v
 window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logBattle, logRating, delBattle, importBattle, blTeam, blLead, blSearch, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
-                  pickName, setMove, setScanMove, addTag, dropTag, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+                  pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 route(); loadCups(); loadChanges(); loadEvo();
 })();

@@ -4,6 +4,13 @@ import { openApp } from './helpers.js';
 test('the builder names and saves a complete team as an in-game party', async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem('roster'));
   const errors = await openApp(page, '#/builder');
+  // Saved teams no longer carries the old by-name form: with no party yet it points at the builder instead
+  await page.evaluate(() => Planner.nav('#/teams'));
+  await expect(page.locator('#tagname')).toHaveCount(0);
+  await expect(page.locator('#teams .add')).toHaveCount(0);
+  await expect(page.locator('#teams .note a:has-text("Builder")')).toBeVisible();
+  await page.locator('#teams .note a:has-text("Builder")').click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/builder');
   await page.evaluate(() => Planner.tryTeam(['cramorant', 'quagsire', 'tinkaton']));
   const b = page.locator('#builder');
   await expect(b.locator('.role.slot .rl').nth(1)).toHaveText('Swap');
