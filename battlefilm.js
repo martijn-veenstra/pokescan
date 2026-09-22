@@ -39,7 +39,7 @@ const RE_READ = 20;             // s: read each card again anyway, so a switch t
 // budget on its first two switches, which is why an opponent's second and third Pokémon never made the log. Wait
 // for the profile to hold, then take exactly one crop of it.
 const NAME_HOLD = 2;
-const MAX_OCR = 44, MAX_BANNERS = 90;              // gaps in the HUD kept, across the recording; one match is easily 50
+const MAX_OCR = 44, MAX_BANNERS = 140;              // gaps in the HUD kept, across the recording; one match is easily 50
 /* v9.93 kept a single frame per gap — the one that scored best as text — and when that was the wrong frame, the move
    was gone. The v2 reader grabbed the fixed announcement band on a timer instead, and read moves this one missed. Both
    are kept now: the best-scoring line, and the band at the start of the gap and every second after, a few per gap.
@@ -61,7 +61,11 @@ const PIP_R = 0.042;            // pip box half-size, as a fraction of card widt
 let S = null;
 
 const isRed  = (r, g, b) => r > 150 && r - g > 70 && r - b > 60;                 // pokéball: a Pokémon still in
-const isPink = (r, g, b) => r > 140 && b > 140 && (r - g > 35 || b - g > 35);    // hexagon: a shield still up
+/* hexagon: a shield still up. Measured off a real recording, a live shield is a pale lavender (≈222,176,236) and a
+   spent one dark grey. The old test (red and blue both over 140, one of them 35 over green) also matched an evening
+   battlefield's purple sky (≈172,141,187) pixel for pixel — a thousand hits per row — so calibrate() locked onto a
+   row of sky and a whole battle came back "No battle HUD found". */
+const isPink = (r, g, b) => r > 185 && b > 220 && b - g > 20;
 
 /* ---------- geometry: measure the cards from the pips once, then freeze ---------- */
 function calibrate(ctx, W, H) {
@@ -69,9 +73,10 @@ function calibrate(ctx, W, H) {
   const d = ctx.getImageData(0, y0, W, bh).data;
   const at = (x, y) => { const i = (y * W + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
   let row = -1, rv = 5;
-  for (let y = 0; y < bh; y += 2) {                        // the row carrying the most pip colour
+  for (let y = 0; y < bh; y += 2) {                        // the row carrying the most pokéball red
+    // red only: no GO sky or ground is that red, while a pale sky can pass for shield lavender
     let v = 0;
-    for (let x = 0; x < W; x += 3) { const p = at(x, y); if (isRed(p[0], p[1], p[2]) || isPink(p[0], p[1], p[2])) v++; }
+    for (let x = 0; x < W; x += 3) { const p = at(x, y); if (isRed(p[0], p[1], p[2])) v++; }
     if (v > rv) { rv = v; row = y; }
   }
   if (row < 0) return null;
@@ -180,6 +185,7 @@ function frame(ctx, W, H, t) {
     if (S.pending && Math.abs(S.pending.my.x - c.my.x) < W * 0.01 && Math.abs(S.pending.row - c.row) < H * 0.01) { S.cal = c; S.miss = 0; say(`${clock(t)} battle HUD found — reading the cards`); }
     else { S.pending = c; return offCard(ctx, W, H, t); }
   }
+  watchPlate(ctx, W, H, t);
   const row = S.cal.row, w = S.cal.w;
   const myMon = count(ctx, S.cal.my, BALLS, isRed, true, row, w);
   const oppMon = count(ctx, S.cal.opp, BALLS, isRed, false, row, w);
@@ -236,22 +242,23 @@ let SCAN = null;
 /* The strongest line of type in the band: rows are scored by how many hard edges they carry that touch near-white
    (a stroke of the white lettering against the dark outline or overlay). Sky and cloud are smooth, a Pokémon model
    has soft shading: neither scores like a sentence does. Returns the line's centre as a fraction of H, and a score. */
-function textLine(ctx, W, H) {
-  const y0 = Math.round(H * BANNER[0]), bh = Math.round(H * (BANNER[1] - BANNER[0]));
+function textLine(ctx, W, H, band) {
+  const B = band || BANNER;
+  const y0 = Math.round(H * B[0]), bh = Math.round(H * (B[1] - B[0]));
   const sw = Math.min(SCAN_W, W), sh = Math.max(8, Math.round(bh * sw / W));
   if (!SCAN) SCAN = document.createElement('canvas');
   if (SCAN.width !== sw || SCAN.height !== sh) { SCAN.width = sw; SCAN.height = sh; }
   const g = SCAN.getContext('2d', {willReadFrequently: true});
   g.drawImage(ctx.canvas, 0, y0, W, bh, 0, 0, sw, sh);
-  const d = g.getImageData(0, 0, sw, sh).data, rows = new Float32Array(sh);
+  const d = g.getImageData(0, 0, sw, sh).data, rows = new Float32Array(sh), cx = new Float32Array(sh);
   for (let y = 0; y < sh; y++) {
-    let n = 0, pv = -1;
+    let n = 0, pv = -1, sx = 0;
     for (let x = 0; x < sw; x++) {
       const i = (y * sw + x) * 4, v = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10;
-      if (pv >= 0 && Math.abs(v - pv) > 80 && Math.max(v, pv) > 200) n++;
+      if (pv >= 0 && Math.abs(v - pv) > 80 && Math.max(v, pv) > 200) { n++; sx += x; }
       pv = v;
     }
-    rows[y] = n / sw;
+    rows[y] = n / sw; cx[y] = sx;
   }
   const win = Math.max(2, Math.round(LINE_H * H * sh / bh));
   let best = 0, at = -1, sum = 0;
@@ -260,7 +267,37 @@ function textLine(ctx, W, H) {
     if (y >= win - 1 && sum > best) { best = sum; at = y - win / 2 + 0.5; }
   }
   const score = best / win;
-  return at < 0 ? {score: 0, y: 0} : {score: score >= 0.025 ? score : 0, y: BANNER[0] + (at / sh) * (BANNER[1] - BANNER[0])};
+  if (at < 0) return {score: 0, y: 0, x: 0.5};
+  let n = 0, sx = 0;                                       // where along the line the strokes sit, as a fraction of W
+  for (let y = Math.max(0, Math.round(at - win / 2)); y < Math.min(sh, Math.round(at + win / 2)); y++) { n += rows[y] * sw; sx += cx[y]; }
+  return {score: score >= 0.025 ? score : 0, y: B[0] + (at / sh) * (B[1] - B[0]), x: n ? sx / n / sw : 0.5};
+}
+
+/* The announcement plate. Measured on a real recording (iPhone, 1170×2532): every sentence the game says — "Skeledirge
+   used Torch Song!", "Cramorant spits out its prey!", "Attack incoming!", "Get Ready!" — is plain white type on a
+   dark translucent rounded plate, centred, at about 0.32 of the screen height, up for one to two seconds. And it is up
+   while the HUD cards are still on screen as often as not: the reader looked for it only in gaps in the HUD, saw four
+   real gaps in a two-and-a-half-minute match, and read one move. So that spot is watched on every sample, each time
+   the plate appears is one episode, and each episode is read once, off its clearest frame. */
+const PLATE = [0.25, 0.40];
+const PLATE_GAP = 1.2;                                     // s without the plate that ends an episode
+function watchPlate(ctx, W, H, t) {
+  if (!S || S.plateT === t) return;
+  S.plateT = t;
+  const ln = textLine(ctx, W, H, PLATE), on = ln.score >= 0.03 && Math.abs(ln.x - 0.5) < 0.14;
+  const E = S.ep;
+  // an episode ends when the plate has been gone a while — or when the line on it changes length, which is the next
+  // sentence ("Attack incoming!" straight into "Weezing used Sludge Bomb!")
+  if (E && (t - E.last > PLATE_GAP || (on && E.prev && Math.abs(ln.score - E.prev) > 0.3 * Math.max(ln.score, E.prev)))) flushPlate();
+  if (!on) { if (S.ep) S.ep.prev = 0; return; }
+  if (!S.ep) S.ep = {t0: t, last: t, score: 0, t: t, img: null, prev: 0};
+  S.ep.last = t; S.ep.prev = ln.score;
+  if (ln.score > S.ep.score) { S.ep.score = ln.score; S.ep.t = t; S.ep.img = bannerCrop(ctx, W, H, ln.y); }
+}
+function flushPlate() {
+  const E = S && S.ep; if (!E) return;
+  S.ep = null;
+  if (E.img && S.banners.length < MAX_BANNERS) S.banners.push({t: E.t, img: jpeg(E.img), plate: true});
 }
 
 /* The crop OCR gets: full width, two lines tall around the line found, upscaled, in colour. It is turned into
@@ -324,6 +361,18 @@ function inkOf(src) {
   go.putImageData(od, 0, 0);
   return out;
 }
+/* The plate's type as black on white: near-white, unsaturated pixels are ink and everything else is paper. Measured on
+   the fifteen plates of a real match, this reads every sentence ("Skeledirge used Torch Song!") where the inverted
+   greyscale read two in three — the trees, sky and trainer around the plate turn into letters there. */
+function whiteInk(src) {
+  const w = src.width, h = src.height, id = src.getContext('2d', {willReadFrequently: true}).getImageData(0, 0, w, h), p = id.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i], g = p[i + 1], b = p[i + 2], v = (r * 3 + g * 6 + b) / 10;
+    p[i] = p[i + 1] = p[i + 2] = v > 200 && Math.max(r, g, b) - Math.min(r, g, b) < 60 ? 0 : 255; p[i + 3] = 255;
+  }
+  const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').putImageData(id, 0, 0);
+  return c;
+}
 function inverted(src) {                                    // white type on anything, as dark type: the second try
   const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
   const g = c.getContext('2d');
@@ -334,6 +383,7 @@ function inverted(src) {                                    // white type on any
 
 function offCard(ctx, W, H, t) {
   if (!S || !S.cal) return;                        // nothing to attribute these frames to yet
+  watchPlate(ctx, W, H, t);
   // v2 kept end screens only after halfway through the recording, which in a set is after four battles have already
   // ended: they are kept throughout and assigned to the battle they follow, so every battle reads its own result
   S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
@@ -412,12 +462,12 @@ const bare = s => String(s || '').replace(/[^A-Za-z]/g, '').toUpperCase();
    the banners are read both teams are known, so the species is matched against those six and the move against that
    species' own four or five. Lists that short make "the letters that survived, in order" evidence enough, as long
    as one candidate wins clearly. */
-function pick(raw, list) {
+function pick(raw, list, min) {
   const s = bare(raw);
   if (s.length < 3 || !list || !list.length) return null;
   const scored = list.map(x => { const t = bare(x); return {x, r: t ? lcs(s, t) / Math.max(s.length, t.length) : 0}; })
                      .sort((a, b) => b.r - a.r);
-  if (scored[0].r < 0.4) return null;
+  if (scored[0].r < (min || 0.4)) return null;
   if (scored[1] && scored[1].r > scored[0].r * 0.75) return null;   // two fit equally well: say nothing
   return scored[0].x;
 }
@@ -461,6 +511,8 @@ function events(rows) {
 }
 
 const verdict = txt => {                                   // the end screen is big, blurred type: match words loosely
+  if (/YOU\s*WIN|\bWIN\b/.test(txt)) return 'W';               // the result screen says YOU WIN! — too short for the loop below
+  if (/YOU\s*LOSE|\bLOSE\b/.test(txt)) return 'L';
   for (const w of txt.split(/[^A-Z]+/)) {
     if (w.length < 4) continue;
     if (lev(w, 'VICTORY') <= 2) return 'W';
@@ -526,6 +578,21 @@ function stintsOf(reads) {
 }
 // who was on that side at t: the last stint that had started by then
 const activeAt = (st, side, t) => { let cur = null; for (const x of st[side]) { if (x.t <= t) cur = x; else break; } return cur; };
+/* The other forms of a species, as keys title() and idByName() understand ("GALARIAN_WEEZING"). The species list is
+   keyed by base stats and holds only WEEZING — a Galarian Weezing has the same stats — so the forms come from the
+   app's own Pokémon, whose ids carry them (weezing_galarian). Shadows are left out: same moves, plus Frustration. */
+function formsOf(base) {
+  if (typeof APP !== 'object' || !APP || !APP.pokemon) return [];
+  const b = base.toLowerCase(), P = window.Planner, own = P && P.idByName ? P.idByName(title(base)) : null, out = [];
+  for (const [id, e] of Object.entries(APP.pokemon)) {
+    if (id === own || /shadow/.test(id) || !id.split('_').includes(b)) continue;
+    const m = /^(.+?) \((.+)\)$/.exec(e.name || '');
+    // a regional form reads the way people say it (Galarian Weezing), any other the way the app files it (Lycanroc Midday)
+    const key = !m ? id.toUpperCase() : (/^(Galarian|Alolan|Hisuian|Paldean)$/.test(m[2]) ? `${m[2]}_${m[1]}` : `${m[1]}_${m[2]}`).toUpperCase().replace(/[^A-Z_]+/g, '_');
+    if (!out.includes(key)) out.push(key);
+  }
+  return out;
+}
 const chargedFor = species => {
   const P = window.Planner, id = P && P.idByName ? P.idByName(title(species)) : null;
   const e = id && typeof APP === 'object' && APP && APP.pokemon ? APP.pokemon[id] : null;
@@ -541,8 +608,9 @@ function findIn(words, list) {
     let r = 0;
     // a fragment counts when nearly all of it is in the name and it covers at least half the name: "ne Edg" is Stone Edge
     for (let i = 0; i < words.length; i++) for (let k = 1; k <= 3 && i + k <= words.length; k++) {
-      const w = bare(words.slice(i, i + k).join('')), l = w.length >= 3 ? lcs(w, t) : 0;
-      if (l && l / w.length >= 0.8) r = Math.max(r, l / t.length);
+      // four letters at least: three ("rEt" in a line of noise) is Return by accident
+      const w = bare(words.slice(i, i + k).join('')), l = w.length >= 4 ? lcs(w, t) : 0;
+      if (l >= 4 && l / w.length >= 0.8) r = Math.max(r, l / t.length);
     }
     if (r > br) { second = br; br = r; best = x; } else if (r > second) second = r;
   }
@@ -586,7 +654,9 @@ async function readSeg(g, file, onStep) {
      field at that moment. Failing that, a charged move of one of those two anywhere in the words — the name part is
      the first thing a blurred banner loses. */
   const parse = (txt, t) => {
-    const words = txt.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter(Boolean);
+    // the announcement is one sentence ending in "!": whatever the background added after it is not part of the move
+    const sent = String(txt).split('!').find(x => x.split(/\s+/).some(isUsed)) || txt;
+    const words = sent.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter(Boolean);
     if (!words.length) return null;
     if (words.some(w => lev(w.toUpperCase(), 'BLOCKED') <= 2)) return {blocked: true};
     const act = ['my', 'opp'].map(sd => activeAt(st, sd, t + 1)).filter(Boolean).map(x => x.species);
@@ -598,12 +668,25 @@ async function readSeg(g, file, onStep) {
       const before = words.slice(0, j), what = words.slice(j + 1).join('');
       let sp = null;
       for (const who2 of [before.slice(-1).join(''), before.slice(-2).join(''), before.join('')]) {
-        sp = pick(who2, act) || pick(who2, onField) || matchSpecies(who2);
+        // A clean read of any species wins over a loose fit to the ones on the field: at 40% "WEEZING" fits
+        // SKELEDIRGE (E, E, I, G), and a Weezing that had not been read off its card yet became a Skeledirge. The loose
+        // letter-order fit is for the mangled reads only, and has to be a good one.
+        sp = closest(who2, act.concat(onField)) || matchSpecies(who2) || pick(who2, act, 0.6) || pick(who2, onField, 0.6);
         if (sp) break;
       }
       if (sp) {
         const own = movesFor(sp), list = own.length ? own : allMoveNames();
         const move = pick(what, list) || closest(what, list) || findIn(words.slice(j + 1), list);
+        // The card only says "Weezing" for a Galarian Weezing too. A move read cleanly that is not in this form's
+        // moveset but is in another form's ("Weezing used Sludge!") settles which Weezing it is — instead of snapping
+        // Sludge to the nearest thing Kanto Weezing knows, Sludge Bomb.
+        if (!move || bare(move) !== bare(what)) {
+          const base = sp.replace(/_SHADOW$/, '');
+          for (const f of formsOf(base)) {
+            const m = movesFor(f).find(x => bare(x) === bare(what) || (bare(what).length >= 4 && lcs(bare(what), bare(x)) / Math.max(bare(what).length, bare(x).length) >= 0.9));
+            if (m) return {species: f, move: m, base: sp};
+          }
+        }
         if (move) return {species: sp, move};
       }
     }
@@ -623,9 +706,12 @@ async function readSeg(g, file, onStep) {
     // and the best line inverted. The first that says something settles the gap.
     const best = b.img ? await toCanvas(b.img) : null;
     const tries = [];
+    // the plate is white type on a dark plate: inverted greyscale is dark type on light, which is what Tesseract wants
+    if (best && b.plate) tries.push({t: b.t, get: () => whiteInk(best)});
     if (best) tries.push({t: b.t, get: () => inkOf(best)});
+    if (best && b.plate) tries.push({t: b.t, get: () => inverted(best)});
     for (const x of b.timed || []) tries.push({t: x.t, get: () => toCanvas(x.url)});
-    if (best) tries.push({t: b.t, get: () => inverted(best)});
+    if (best && !b.plate) tries.push({t: b.t, get: () => inverted(best)});
     let got = null, at = b.t, raw = '';
     for (const tr of tries) {
       const img = await tr.get(); if (!img) continue;
@@ -637,6 +723,10 @@ async function readSeg(g, file, onStep) {
     }
     if (!got) { if (raw && unread.length < 12) unread.push(`${clock(b.t)} ${raw.slice(0, 60)}`); continue; }
     const sp = got.species, move = got.move;
+    if (got.base && got.base !== sp) {                     // the move said which form it is: that is who was on the card
+      for (const r of reads.concat(my, opp, st.my, st.opp)) if (r.species === got.base) r.species = sp;
+      for (const m of moves) if (m.species === title(got.base)) m.species = title(sp);
+    }
     if (moves.some(m => m.species === title(sp) && m.move === move && at - m.t < 4)) continue;
     moves.push({t: at, by: whose(sp, at), species: title(sp), move, blocked: false});
   }
@@ -676,7 +766,15 @@ async function readSeg(g, file, onStep) {
     if (m) { m.blocked = true; e.move = m.move; }
   }
 
-  const nameOf = r => title(r.species), id = n => (P && P.idByName ? P.idByName(n) : null);
+  const nameOf = r => title(r.species);
+  // The card says "Lycanroc", and the app only knows Lycanroc (Midday), (Dusk) and (Midnight): a bare name with no
+  // move to settle the form stands for its best-ranked form rather than dropping out of the team altogether
+  const id = n => {
+    const got = P && P.idByName ? P.idByName(n) : null;
+    if (got || !P || !P.idByName) return got;
+    const ids = formsOf(n.toUpperCase().replace(/[^A-Z]+/g, '_')).map(f => P.idByName(title(f))).filter(Boolean);
+    return ids.sort((a, b) => ((APP.pokemon[a] || {}).rank || 9e9) - ((APP.pokemon[b] || {}).rank || 9e9))[0] || null;
+  };
   const myIds = my.map(r => id(nameOf(r))).filter(Boolean), oppIds = opp.map(r => id(nameOf(r))).filter(Boolean);
   const whoseSide = side => side === 'my' ? 'your' : 'their';
   const faintOf = (side, t) => { const a = activeAt(st, side, t - 1.5); return a ? nameOf(a) : null; };   // on the field before the fall
@@ -743,12 +841,12 @@ function sliceFor(rows, i0, i1, nextT) {
   const t0 = rows[i0].t, t1 = rows[i1].t, hi = nextT === undefined ? Infinity : nextT;
   return {rows: rows.slice(i0, i1 + 1),
           shots: S.shots.filter(x => x.t >= t0 && x.t <= t1),
-          banners: S.banners.filter(x => x.t >= t0 && x.t < hi),
+          banners: S.banners.filter(x => x.t >= t0 && x.t < hi).sort((a, b) => a.t - b.t),
           ends: S.ends.filter(x => x.t > t1 && x.t < hi)};
 }
 
 async function finish(file) {
-  if (S) flushGap();                                 // a recording that ends mid-animation still has its last banner
+  if (S) { flushGap(); flushPlate(); }                // a recording that ends mid-animation still has its last banner
   LAST = report();
   if (!seen()) { S = null; return null; }
   const ranges = splitRows(S.rows);
@@ -778,7 +876,7 @@ async function finish(file) {
   return out;
 }
 
-window.Film = {start, stop, frame, finish, seen, report, calibrate, events, matchSpecies, movesFor, textLine, bannerCrop, inkOf,
+window.Film = {start, stop, frame, finish, seen, report, calibrate, events, matchSpecies, movesFor, textLine, bannerCrop, inkOf, whiteInk,
                shotCount: () => (S ? S.shots.length : 0), splitRows,
                segCount: () => (S && S.rows.length >= MIN_ROWS ? splitRows(S.rows).length : 0)};
 })();

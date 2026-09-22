@@ -206,6 +206,16 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **Read against a real recording** (v9.96, an evening battle on an iPhone, 1170×2532, that came back "No battle HUD
+  found"): the shield test (red and blue both over 140) also matched a purple evening sky pixel for pixel, so
+  calibration locked onto a row of sky. The HUD row is now found from pokéball red alone, and a live shield is the
+  pale lavender measured off the recording (≈222,176,236; a spent one is dark grey). The move announcements are a dark
+  plate with white type at ~0.32 of the screen height that is up **while the HUD is still on screen** as often as not,
+  so the gap-only reader saw four gaps in a whole match; that spot is now watched on every sample, each appearance
+  is read once off its clearest frame, and a plain white threshold reads all fifteen plates of that match exactly.
+  "YOU WIN!" counts as a win. A move only another form knows settles the form ("Weezing used Sludge!" is Galarian
+  Weezing), and a bare card name the app only knows by form ("Lycanroc") stands for its best-ranked form. Four frames
+  of that recording are fixtures (`tests/fixtures/film-*.jpg`) read with the real OCR in the e2e suite.
 - **The timeline reads like the match** (v9.94, after a daylight loss logged as "you sent Chesnaught" three times,
   no moves and "fainted: you 2"): the log is built from who was on the field when, not from each read of a card.
   A card re-read every 20 s only fills in a CP, so each Pokémon appears once per stint, and a new name is a send-out

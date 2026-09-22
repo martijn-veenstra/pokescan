@@ -64,7 +64,7 @@ test('the cross stops a recording part way through, and the log says it was stop
         const pip = (fx, n, i, col) => { if (i >= n) return; const f = c.mine ? fx : 1 - fx;
           g.fillStyle = col; g.beginPath(); g.arc(c.x + f * c.w, row, Math.round(0.042 * c.w), 0, 7); g.fill(); };
         BALLS.forEach((f, i) => pip(f, c.mine ? myMon : oppMon, i, '#e0322a'));
-        SHIELDS.forEach((f, i) => pip(f, c.mine ? mySh : oppSh, i, '#f062c8'));
+        SHIELDS.forEach((f, i) => pip(f, c.mine ? mySh : oppSh, i, '#e0b0ff'));
       }
     };
     paint(3, 3, 2, 2);

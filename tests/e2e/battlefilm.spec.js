@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { openApp, FIXTURES } from './helpers.js';
 
 /* No video fixture exists — and a recording is the user's to supply — so this drives Film's own API with synthetic
    HUD frames painted onto a canvas: two light cards under the status bar, red pokéballs for Pokémon left and pink
@@ -27,7 +29,7 @@ const HARNESS = () => {
       const pip = (fx, n, i, colour) => { if (i >= n) return; const f = c.mine ? fx : 1 - fx;
         ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(c.x + f * c.w, row, Math.round(0.042 * c.w), 0, 7); ctx.fill(); };
       BALLS.forEach((f, i) => pip(f, c.mine ? myMon : oppMon, i, '#e0322a'));
-      SHIELDS.forEach((f, i) => pip(f, c.mine ? mySh : oppSh, i, '#f062c8'));
+      SHIELDS.forEach((f, i) => pip(f, c.mine ? mySh : oppSh, i, '#e0b0ff'));
     }
     return ctx;
   };
@@ -210,7 +212,9 @@ test('a switch the cards never spelled out is still logged, from the move it ann
   expect(out.shots, 'and the switch adds exactly one more crop').toBe(3);
   expect(out.e, 'the battle was read').toBeTruthy();
   expect(out.e.oppNames, 'the Pokémon only its banner named still joins their team').toContain('Bastiodon');
-  expect(out.banners, 'one crop per gap in the HUD, not one per frame of it').toBe(1);
+  // one crop per gap in the HUD, not one per frame of it — plus the plate reader's own copy, since these words sit
+  // where the game's announcement plate is
+  expect(out.banners, 'one crop per gap in the HUD, not one per frame of it').toBeLessThanOrEqual(2);
   const mv = out.e.moves.find(m => /Bastiodon/i.test(m.species));
   expect(mv, 'and its move is kept').toBeTruthy();
   expect(mv.move, '"S dge" is still Stone Edge against the four moves Bastiodon has').toBe('Stone Edge');
@@ -268,7 +272,7 @@ test('the reported battle reads back like the recording: each switch once, the m
         const pip = (fx, n, i, col) => { if (i >= n) return; const f = c.mine ? fx : 1 - fx;
           ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c.x + f * c.w, row, Math.round(0.042 * c.w), 0, 7); ctx.fill(); };
         BALLS.forEach((f, i) => pip(f, c.mine ? myMon : oppMon, i, '#e0322a'));
-        SHIELDS.forEach((f, i) => pip(f, c.mine ? mySh : oppSh, i, '#f062c8'));
+        SHIELDS.forEach((f, i) => pip(f, c.mine ? mySh : oppSh, i, '#e0b0ff'));
       }
     };
     // the announcement: white type with a dark outline straight over the bright sky, no dark band behind it
@@ -410,5 +414,42 @@ test('a move is still read when the best-looking line in the gap is not the anno
   expect(out.seen.ink, 'the best line was tried first').toBeGreaterThan(0);
   expect(out.seen.band, 'then the fixed band').toBeGreaterThan(0);
   expect(out.moves.map(m => `${m.by} ${m.species} ${m.move}`)).toEqual(['opp Bastiodon Stone Edge']);
+  expect(errors).toEqual([]);
+});
+
+/* Real frames from a real recording (iPhone, 1170×2532, an evening battle), read with the real OCR — no stubs. What it
+   caught: the shield test also matched the purple evening sky, so calibration locked onto a row of sky and the whole
+   battle came back "No battle HUD found"; and the move announcements are a dark plate at ~0.32 H that is up while the
+   HUD is still on screen, which the gap-only banner reader never looked at. */
+test('a real evening recording: the HUD is found through a purple sky and the moves come off the plate', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('bdraft'); localStorage.removeItem('roster'); });
+  const errors = await openApp(page, '#/battles');
+  const fx = {};
+  for (const k of ['hud', 'torch', 'shadowball', 'sludge'])
+    fx[k] = 'data:image/jpeg;base64,' + fs.readFileSync(path.join(FIXTURES, `film-${k}.jpg`)).toString('base64');
+  const out = await page.evaluate(async fx => {
+    const img = {};
+    for (const k of Object.keys(fx)) { const im = new Image(); im.src = fx[k]; await im.decode(); img[k] = im; }
+    const cv = document.createElement('canvas'); cv.width = img.hud.width; cv.height = img.hud.height;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const show = k => { ctx.drawImage(img[k], 0, 0); return ctx; };
+    const cal = Film.calibrate(show('hud'), cv.width, cv.height);
+    Film.start(40);
+    let t = 0;
+    const run = (k, n) => { for (let i = 0; i < n; i++) { Film.frame(show(k), cv.width, cv.height, t); t += 0.5; } };
+    run('hud', 8); run('torch', 2); run('hud', 6); run('shadowball', 2); run('hud', 6); run('sludge', 2); run('hud', 6);
+    const e = ((await Film.finish({ lastModified: Date.now() })) || [])[0];
+    return { cal, H: cv.height, e: e && { moves: e.moves, oppNames: e.oppNames, myNames: e.myNames } };
+  }, fx);
+  expect(out.cal, 'the HUD is found through the purple sky').toBeTruthy();
+  expect(out.cal.row / out.H, 'on the pokéball row, not a row of sky').toBeLessThan(0.12);
+  expect(out.e, 'the battle was read').toBeTruthy();
+  expect(out.e.myNames).toContain('Cramorant');
+  expect(out.e.oppNames).toContain('Skeledirge');
+  const mv = out.e.moves.map(m => `${m.species} ${m.move}`);
+  expect(mv).toContain('Skeledirge Torch Song');
+  expect(mv).toContain('Skeledirge Shadow Ball');
+  expect(mv, 'Sludge is only in Galarian Weezing\'s moveset: that settles which Weezing it is').toContain('Galarian Weezing Sludge');
   expect(errors).toEqual([]);
 });
