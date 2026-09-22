@@ -1316,7 +1316,8 @@ function draftBattles(list) {
   saveDraft(); renderBattles();
   if (onView() !== 'battles') nav('#/battles');
 }
-function draftTeam(name) { if (!DRAFT) return; DRAFT.team = DRAFT.team === name ? null : name; saveDraft(); renderBattles(); }
+// picked in a sheet, where choosing the row that is already set means "yes, that one" — clearing is its own row
+function draftTeam(name) { if (!DRAFT) return; DRAFT.team = name || null; saveDraft(); renderBattles(); }
 function discardDrafts() { DRAFT = null; saveDraft(); renderBattles(); }
 function saveDrafts() {
   if (!DRAFT || !DRAFT.entries.length) return;
@@ -1342,7 +1343,9 @@ function draftCard() {
     <div class="sec" style="margin:0 0 2px">Read from your recording <small>${es.length === 1 ? 'one battle' : `${es.length} battles · ${won}-${lost}`}</small></div>
     <div class="dt" style="margin-bottom:6px">Nothing is in your log yet. Check the team you played, then save.</div>
     ${es.map(one).join('')}
-    ${names.length ? `<div class="tchips bteam" style="margin-top:8px"><span class="lb">You played</span>${names.map(n => `<span class="chip ${DRAFT.team === n ? 'ok sel' : ''}" onclick="Planner.draftTeam(${attr(n)})">${esc(n)}</span>`).join('')}</div>`
+    ${names.length ? `<div class="tchips bteam" style="margin-top:8px"><span class="lb">You played</span>${DRAFT.team
+        ? `<span class="tpick set" onclick="Planner.pickTeam(null)">${trio((ROSTER.tagged[DRAFT.team] || []).slice(0, 3))}<span class="nm">${esc(DRAFT.team)}</span><span class="go">change</span></span>`
+        : `<span class="tpick" onclick="Planner.pickTeam(null)"><span class="nm">not set</span><span class="go">choose ›</span></span>`}</div>`
       : `<div class="dt">No saved parties yet — save one in the Builder and it can be picked here.</div>`}
     ${DRAFT.team ? '' : `<div class="dt" style="margin-top:4px">Pick the party you ran, or save without one.</div>`}
     <div class="wl" style="margin-top:8px"><button class="win" onclick="Planner.saveDrafts()">Save ${es.length === 1 ? 'this battle' : es.length + ' battles'}</button><button onclick="Planner.discardDrafts()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Discard</button></div></div>`;
@@ -1525,12 +1528,45 @@ function setBattleTeam(id, name) {              // attributing a battle is what 
   if (name && ROSTER.tagged[name]) { b.team = name; b.ids = ROSTER.tagged[name].slice(); } else { b.team = null; }
   saveBattles(); renderBattles(); if (onView() === 'battle') renderBattle(); refresh();
 }
-function teamChips(b) {                         // pick the party you played with; the best match is offered first
-  const names = Object.keys(ROSTER.tagged);
-  if (!names.length) return '';
-  const guess = b.team || matchParty(b.myIds || b.ids || (b.myLead ? [b.myLead] : []));
-  const chip = n => `<span class="chip ${b.team === n ? 'ok sel' : n === guess && !b.team ? 'sug' : ''}" onclick="event.stopPropagation();Planner.setBattleTeam(${attr(b.id)},${attr(n)})">${esc(n)}${n === guess && !b.team ? ' ?' : ''}</span>`;
-  return `<div class="tchips bteam"><span class="lb">Played with</span>${names.map(chip).join('')}${b.team ? `<span class="chip" onclick="event.stopPropagation();Planner.setBattleTeam(${attr(b.id)},null)">clear</span>` : ''}</div>`;
+/* Which party a battle was played with. A chip per saved party became an unreadable row of bare names as soon as
+   there were more than two, and a name on its own does not say which trio it is. The card now carries one line
+   showing the party it was attributed to, and the choosing happens in a sheet where each party shows its Pokémon
+   and how much of it the recording actually saw. */
+function teamPick(b) {
+  if (!Object.keys(ROSTER.tagged).length) return '';
+  const call = `event.stopPropagation();Planner.pickTeam(${attr(b.id)})`;
+  if (b.team) {
+    const ids = (ROSTER.tagged[b.team] || []).slice(0, 3);
+    return `<span class="tpick set" onclick="${call}">${ids.length ? trio(ids) : ''}<span class="nm">${esc(b.team)}</span><span class="go">change</span></span>`;
+  }
+  const guess = matchParty(b.myIds || b.ids || (b.myLead ? [b.myLead] : []));
+  return `<span class="tpick" onclick="${call}"><span class="nm">${guess ? `${esc(guess)}?` : 'not set'}</span><span class="go">${guess ? 'confirm' : 'choose'} ›</span></span>`;
+}
+function teamChips(b) {                        // the same line, under a row in the log
+  const p = teamPick(b);
+  return p ? `<div class="tchips bteam"><span class="lb">Played with</span>${p}</div>` : '';
+}
+function pickTeam(id) {                        // id: a saved battle, or null for a draft that has not been saved yet
+  const b = id ? battleById(id) : null;
+  if ((id && !b) || (!id && !DRAFT)) return;
+  const read = b ? (((b.myIds && b.myIds.length ? b.myIds : b.ids) || []).filter(Boolean))
+                 : [...new Set(DRAFT.entries.reduce((a, e) => a.concat(e.myIds || []), []))];
+  // the reader's own names where it has them: an id it could not place still reads as a Pokémon, not as a key
+  const readNames = (b && b.myNames && b.myNames.length ? b.myNames : read.map(nm)).join(' / ');
+  const cur = b ? b.team : DRAFT.team;
+  const set = n => `${id ? `Planner.setBattleTeam(${attr(id)},${n})` : `Planner.draftTeam(${n})`};Planner.closeSheet()`;
+  const rows = Object.entries(ROSTER.tagged).map(([name, ids]) => ({name, ids, hit: ids.filter(x => read.includes(x)).length}))
+    .sort((a, c) => c.hit - a.hit || a.name.localeCompare(c.name));
+  const why = r => !read.length ? 'nothing was read to compare it with'
+    : r.hit === 0 ? 'none of what was read is in it'
+    : r.hit >= read.length ? 'every Pokémon the recording read is in it'
+    : `${r.hit} of the ${read.length} read ${r.hit === 1 ? 'is' : 'are'} in it`;
+  const best = rows[0] && rows[0].hit >= 2 && cur !== rows[0].name ? rows[0].name : null;
+  const list = rows.map(r => `<div class="prow ${cur === r.name ? 'on' : ''}" onclick="${set(attr(r.name))}">${trio(r.ids.slice(0, 3))}<span class="tx"><b>${esc(r.name)}</b><div class="dt">${esc(r.ids.map(nm).join(' / '))}</div><div class="dt why">${esc(why(r))}</div></span>${cur === r.name ? '<span class="tick">✓</span>' : r.name === best ? '<span class="sug">best match</span>' : ''}</div>`).join('');
+  $('sheet').innerHTML = `<div class="box"><h2><span>Which party did you play?</span><span class="x" onclick="Planner.closeSheet()">✕</span></h2>
+    <div class="dt" style="margin:-4px 0 10px">${readNames ? `Read on your side: ${esc(readNames)}.` : 'Nothing was read on your side.'} Attributing the battle is what makes your team page and the stats count it.</div>
+    <div class="plist">${list}<div class="prow ${cur ? '' : 'on'}" onclick="${set('null')}"><span class="tx"><b>Not recorded</b><div class="dt">leave it unattributed — it still shows in the log</div></span>${cur ? '' : '<span class="tick">✓</span>'}</div></div></div>`;
+  $('sheet').classList.add('open');
 }
 function renderBattle() {
   const el = $('battle'); if (!el) return;
@@ -1550,8 +1586,8 @@ function battleInner() {
     <span style="color:${col}">${res}</span><span style="display:flex;align-items:center;gap:6px"><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span>${ctxMenu([['Delete this battle', `Planner.delBattleGo(${attr(b.id)})`, true]])}</span></div>
     <div class="bvs">${side(b.ids, b.myNames, 'you')}<span class="vs">vs</span>${side(b.opp, b.oppNames, 'them')}</div>
     ${kv([['Shields', b.shields ? `you ${b.shields.me} · them ${b.shields.opp}` : '—'], ['Fainted', b.fainted ? `you ${b.fainted.me} · them ${b.fainted.opp}` : '—'],
-         ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in']])}
-    ${teamChips(b)}</div>`;
+         ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in'],
+         ['Played with', teamPick(b)]])}</div>`;
   const mv = b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [];
   if (mv.length) {
     const side = who => mv.filter(m => m.by === who);
@@ -2539,7 +2575,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

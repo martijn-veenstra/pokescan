@@ -27,12 +27,20 @@ test('the battle log imports recordings, attributes a team, and opens each battl
   await expect(btn).toBeVisible();
   expect(await page.locator('#vfile').getAttribute('accept')).toBe('video/*');
 
-  // a film battle with no party yet asks which one you played, and suggests the closest match
-  const chips = page.locator('#battles .tchips.bteam');
-  await expect(chips).toBeVisible();
-  await expect(chips.locator('.chip.sug')).toContainText('Rain');       // two of three members match
+  // a film battle with no party yet asks which one you played, and offers the closest match on the line itself
+  const pick = page.locator('#battles .tchips.bteam .tpick');
+  await expect(pick).toBeVisible();
+  await expect(pick, 'the closest match is named before the sheet is even opened').toContainText('Rain?');
   expect(await page.evaluate(() => Planner.matchParty(['azumarill', 'medicham']))).toBe('Rain');
-  await chips.locator('.chip:has-text("Rain")').click();
+  // the sheet shows each party as its Pokémon, and says how much of the read is in it
+  await pick.click();
+  await expect(page.locator('#sheet.open')).toBeVisible();
+  const row = page.locator('#sheet .prow', { hasText: 'Rain' });
+  await expect(row).toContainText('Azumarill / Medicham / Altaria');
+  await expect(row).toContainText('every Pokémon the recording read is in it');
+  await expect(row.locator('.sug'), 'and which one fits best').toContainText('best match');
+  await row.click();
+  await expect(page.locator('#sheet.open')).toHaveCount(0);             // choosing closes it
   // attributing it fills the trio, so the stats and the team page count it from here on
   expect(await page.evaluate(() => { const b = Planner.BATTLES.find(x => x.id === 'b1'); return [b.team, b.ids]; }))
     .toEqual(['Rain', ['azumarill', 'medicham', 'altaria']]);
@@ -126,10 +134,12 @@ test('a read recording is a draft first: summary, team pick, then Save puts it i
   expect(await page.evaluate(() => Planner.BATTLES.length), 'a draft is not in the log').toBe(0);
 
   // the party is guessed from what the recording read, and one pick covers the whole set
-  await expect(card.locator('.chip.ok')).toContainText('Rain');
-  await card.locator('.chip:has-text("Rain")').click();                 // toggle off
-  await expect(page.locator('#battles .team.card.draft .chip.ok')).toHaveCount(0);
-  await page.locator('#battles .team.card.draft .chip:has-text("Rain")').click();
+  await expect(card.locator('.tpick.set')).toContainText('Rain');
+  await card.locator('.tpick').click();
+  await page.locator('#sheet .prow', { hasText: 'Not recorded' }).click();   // and can be cleared
+  await expect(page.locator('#battles .team.card.draft .tpick.set')).toHaveCount(0);
+  await page.locator('#battles .team.card.draft .tpick').click();
+  await page.locator('#sheet .prow', { hasText: 'Rain' }).click();
 
   await page.locator('#battles .team.card.draft .wl .win').click();
   await expect(page.locator('#battles .team.card.draft')).toHaveCount(0);

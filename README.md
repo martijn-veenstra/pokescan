@@ -186,6 +186,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   way. The importer drops to real time on the first stall, and when playback gives up for good it carries on reading
   the battle by seeking, so a stall no longer truncates the entry silently. The log names the span it managed
   (`read 2–37s of 205s`) and says what is missing when the coverage is partial.
+- **Which party you played** is one line on the battle (and on a draft), not a chip per saved party: a row of bare
+  names became unreadable past two teams, and a name alone does not say which trio it is. Tapping it opens a sheet
+  where every party shows its Pokémon, how much of what the recording read is in it, and which fits best.
 - **Anything read from a recording can be deleted**: every row in the battle log carries a ⋮ with Delete (it used
   to be there only for rows with nothing to open, so a battle read from a recording could only be deleted from a
   link at the bottom of its own page), a battle's own page has the same on its card, and a deleted battle is held
@@ -195,6 +198,14 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   **Last imports** — how many frames were sampled, whether the two HUD cards were found at all, how many battles
   and names came out — so a recording the reader cannot use explains itself instead of failing silently. Those
   entries live on the battle log, not in the Scans import log.
+- **Reading the moves off the banners**: the game announces a charged move for a moment at the start of its
+  animation, so a crop taken on a timer mostly caught the animation and not the words — a three-minute match with
+  fifty gaps in the HUD yielded one move. Every frame of a gap is now scored for how much white type it carries over
+  a dark overlay and the best one is kept, so each gap costs the same single OCR but on the frame where the words
+  were up. The text itself is matched against what is known rather than against everything: the species against the
+  six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
+  survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
+  dropped it.
 - **Which Pokémon was on the card**: a switch is spotted by comparing the ink profile of the name, which is
   smoothed before it is compared and compared at a low distance — measured, two different names of similar length
   scored 0.27 against the old threshold of 0.34 and so registered as no change at all, which is how an opponent's

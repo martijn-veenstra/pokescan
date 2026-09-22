@@ -184,7 +184,8 @@ test('a switch the cards never spelled out is still logged, from the move it ann
     window.__names = ['AZUMARILL', 'MEDICHAM', 'xx'];
     window.getWorker = async () => { let wl = '';
       return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
-        recognize: async () => ({ data: { text: wl.includes('!') ? 'BASTIODON used STONE EDGE!' : wl.includes('Z') ? (window.__names.shift() || 'xx') : '1500' } }) }; };
+        // the announcement as a blurred banner really comes back: the species survives, the move barely does
+        recognize: async () => ({ data: { text: wl.includes('!') ? 'BASTIODON usec S dge' : wl.includes('Z') ? (window.__names.shift() || 'xx') : '1500' } }) }; };
     Film.start(120);
     let t = 0;
     const step = (mine, om, msh, osh, tag, otag, ocp, dx) => { const c = window.__paint(mine, om, msh, osh, tag, false, otag, ocp, dx); Film.frame(c, ...window.__size, t); t += 0.5; };
@@ -196,18 +197,24 @@ test('a switch the cards never spelled out is still logged, from the move it ann
     // their switch to a name of almost the same length — the case the old detector scored below its threshold and
     // missed entirely. One crop, and the stub reads it as rubbish
     for (let i = 0; i < 8; i++) step(3, 2, 2, 2, null, 'BASTIODON', 1402);
-    Film.frame(window.__gap(), ...window.__size, t); t += 0.5;         // the HUD hides: the move banner is announced
+    // the HUD hides for the animation; only the middle frame has the words up, and that is the one to read
+    Film.frame(window.__gap(), ...window.__size, t); t += 0.5;
+    Film.frame(window.__gap('BASTIODON used STONE EDGE'), ...window.__size, t); const bannerT = t; t += 0.5;
+    Film.frame(window.__gap(), ...window.__size, t); t += 0.5;
     for (let i = 0; i < 8; i++) step(3, 2, 1, 2, null, 'BASTIODON', 1402);
-    const shots = Film.shotCount();
+    const shots = Film.shotCount(), banners = Film.report().banners;
     const entries = await Film.finish({ lastModified: Date.now() });
-    return { shotsBefore, shots, e: entries && entries[0] };
+    return { shotsBefore, shots, banners, bannerT, e: entries && entries[0] };
   });
   expect(out.shotsBefore, 'a settled card is read once per side, however much the text jitters').toBe(2);
   expect(out.shots, 'and the switch adds exactly one more crop').toBe(3);
   expect(out.e, 'the battle was read').toBeTruthy();
   expect(out.e.oppNames, 'the Pokémon only its banner named still joins their team').toContain('Bastiodon');
+  expect(out.banners, 'one crop per gap in the HUD, not one per frame of it').toBe(1);
   const mv = out.e.moves.find(m => /Bastiodon/i.test(m.species));
   expect(mv, 'and its move is kept').toBeTruthy();
+  expect(mv.move, '"S dge" is still Stone Edge against the four moves Bastiodon has').toBe('Stone Edge');
+  expect(mv.t, 'the frame that was read is the one with the words on it').toBe(out.bannerT);
   expect(mv.by, 'attributed to the side whose name crop could not be read').toBe('opp');
   expect(out.e.film.join('\n')).toMatch(/they sent Bastiodon/);
   expect(errors).toEqual([]);

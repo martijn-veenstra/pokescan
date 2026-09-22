@@ -139,7 +139,7 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 function start(dur) {
   S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
        name: {my: {p: null, n: 0, shot: false, t: -99}, opp: {p: null, n: 0, shot: false, t: -99}},
-       lastT: -9, gapT: -9, frames: 0, miss: 0, cur: null, run: {}};
+       gap: {score: 0, t: 0, img: null}, lastT: -9, frames: 0, miss: 0, cur: null, run: {}};
 }
 // the loader card shows the read as it happens: hand each finding to scanner.js's feed, if it is listening
 const say = s => { try { if (window.filmEvent) window.filmEvent(s); } catch (e) {} };
@@ -171,6 +171,7 @@ function frame(ctx, W, H, t) {
   const myMon = count(ctx, S.cal.my, BALLS, isRed, true, row, w);
   const oppMon = count(ctx, S.cal.opp, BALLS, isRed, false, row, w);
   if (myMon < 1 || oppMon < 1) return offCard(ctx, W, H, t);   // a charged-move animation, a switch sheet, the end
+  flushGap();                                                  // the HUD is back: that gap's announcement is settled
   S.rows.push({t, myMon, oppMon,
     mySh: count(ctx, S.cal.my, SHIELDS, isPink, true, row, w),
     oppSh: count(ctx, S.cal.opp, SHIELDS, isPink, false, row, w)});
@@ -207,16 +208,39 @@ function live(r) {
 
 // The HUD is hidden exactly when something is being announced: a charged move, a switch-in, a shield. Those
 // frames are useless for counting, which makes them the free place to grab the banner — no detector needed.
+const BANNER = [0.20, 0.28];                       // the band the game announces a move in, as a fraction of the screen
+
+/* How much announcement a frame carries: the words are white type on a dark overlay, so a band that is mostly dark
+   with a few per cent of near-white pixels is the moment they are up. */
+function bannerScore(ctx, W, H) {
+  const d = ctx.getImageData(0, Math.round(H * BANNER[0]), W, Math.round(H * BANNER[1])).data;
+  let n = 0, white = 0, sum = 0;
+  for (let i = 0; i < d.length; i += 64) { n++; const v = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10; sum += v; if (v > 205) white++; }
+  if (!n) return 0;
+  const frac = white / n;
+  return (sum / n < 150 && frac > 0.008 && frac < 0.34) ? frac : 0;
+}
+
 function offCard(ctx, W, H, t) {
   if (!S || !S.cal) return;                        // nothing to attribute these frames to yet
   // v2 kept end screens only after halfway through the recording, which in a set is after four battles have already
   // ended: they are kept throughout and assigned to the battle they follow, so every battle reads its own result
   S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
   if (S.ends.length > 24) S.ends.shift();
-  if (t - S.gapT < 1.2 || S.banners.length >= MAX_BANNERS) return;
-  S.gapT = t;
-  S.banners.push({t, img: grab(ctx, [0, Math.round(H * 0.20), W, Math.round(H * 0.28)], 0.8)});
-  if (S.banners.length % 5 === 0) say(`${clock(t)} ${S.banners.length} announcements grabbed to read for moves`);
+  // The move is announced for a moment at the start of the animation, so a crop taken on a timer mostly catches the
+  // animation and not the words — which is why a three-minute match with fifty gaps in the HUD yielded one move.
+  // Every frame of a gap is scored and the best one kept, pushed when the HUD comes back: one OCR per gap, as
+  // before, but on the frame where the words were up.
+  const sc = bannerScore(ctx, W, H);
+  if (sc > S.gap.score) S.gap = {score: sc, t, img: grab(ctx, [0, Math.round(H * BANNER[0]), W, Math.round(H * BANNER[1])], Math.max(0.8, Math.min(2.5, 1100 / W)))};
+}
+function flushGap() {
+  if (!S || !S.gap.img) return;
+  if (S.banners.length < MAX_BANNERS) {
+    S.banners.push({t: S.gap.t, img: S.gap.img});
+    if (S.banners.length % 5 === 0) say(`${clock(S.gap.t)} ${S.banners.length} announcements grabbed to read for moves`);
+  }
+  S.gap = {score: 0, t: 0, img: null};
 }
 
 /* ---------- reading the queued crops ---------- */
@@ -247,7 +271,34 @@ function closest(raw, list) {                              // OCR text → the n
   }
   return bd <= Math.max(1, Math.round(s.length * 0.25)) ? best : null;
 }
+function lcs(a, b) {                                        // length of the longest run of letters kept in order
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = new Uint16Array(n + 1), cur = new Uint16Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    const sw = prev; prev = cur; cur = sw;
+  }
+  return prev[n];
+}
+const bare = s => String(s || '').replace(/[^A-Za-z]/g, '').toUpperCase();
+/* The announcement is large type over a moving battlefield, and it comes back from OCR as anything from
+   "CHESNAUGHT used FRENZY PLANT" to "S dge" for Stone Edge — far past what closest() will forgive. But by the time
+   the banners are read both teams are known, so the species is matched against those six and the move against that
+   species' own four or five. Lists that short make "the letters that survived, in order" evidence enough, as long
+   as one candidate wins clearly. */
+function pick(raw, list) {
+  const s = bare(raw);
+  if (s.length < 3 || !list || !list.length) return null;
+  const scored = list.map(x => { const t = bare(x); return {x, r: t ? lcs(s, t) / Math.max(s.length, t.length) : 0}; })
+                     .sort((a, b) => b.r - a.r);
+  if (scored[0].r < 0.4) return null;
+  if (scored[1] && scored[1].r > scored[0].r * 0.75) return null;   // two fit equally well: say nothing
+  return scored[0].x;
+}
 const matchSpecies = raw => closest(raw, SPECIES);
+const allMoveNames = () => (typeof APP === 'object' && APP && APP.moves ? Object.values(APP.moves).map(m => m.n) : []);
+const isUsed = w => { const u = w.toUpperCase(); return lev(u, 'USED') <= 1 || (u.length <= 6 && lcs(u, 'USED') >= 3); };
 // DATA.stats keys carry the form: MIMIKYU_BUSTED, GALARIAN_STUNFISK. idByName() strips punctuation and collapses
 // spaces, so "Mimikyu Busted" finds "Mimikyu (Busted)"; the raw key with its underscore finds nothing.
 const title = s => String(s).toLowerCase().split('_').filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -349,15 +400,25 @@ async function readSeg(g, file, onStep) {
     return side;
   };
 
+  const onField = my.concat(opp).map(x => x.species);
   const moves = [];                                        // "Chesnaught used Frenzy Plant!" then "BLOCKED!"
   for (const b of g.banners) {
     onStep();
     const txt = (await ocr(b.img, LETTERS + ' ,!', 6)).replace(/\s+/g, ' ').trim();
-    if (/BLOCKED/i.test(txt)) { const m = moves[moves.length - 1]; if (m && b.t - m.t < 6) m.blocked = true; continue; }
-    const hit = /([A-Za-z]{4,})\s+used\s+([A-Za-z][A-Za-z ]{2,})/.exec(txt);
-    if (!hit) continue;
-    const sp = matchSpecies(hit[1]); if (!sp) continue;
-    const move = closest(hit[2], movesFor(sp)) || hit[2].trim();
+    const words = txt.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter(Boolean);
+    if (words.some(w => lev(w.toUpperCase(), 'BLOCKED') <= 2)) {
+      const m = moves[moves.length - 1]; if (m && b.t - m.t < 6) m.blocked = true; continue;
+    }
+    // the joint the sentence turns on, loosely: "used" survives OCR as usec, uset, uec
+    let j = -1;
+    for (let i = 1; i < words.length - 1; i++) if (isUsed(words[i])) { j = i; break; }
+    if (j < 0) continue;                                   // not a move announcement: a switch, a shield, the timer
+    const who2 = words.slice(0, j).join(''), what = words.slice(j + 1).join('');
+    const sp = pick(who2, onField) || matchSpecies(who2);
+    if (!sp) continue;
+    const own = movesFor(sp);
+    const move = pick(what, own.length ? own : allMoveNames());
+    if (!move) continue;                                   // a move we cannot put a name to is not worth a chip
     if (moves.some(m => m.species === title(sp) && m.move === move && b.t - m.t < 4)) continue;
     moves.push({t: b.t, by: whose(sp, b.t), species: title(sp), move, blocked: false});
   }
@@ -418,6 +479,7 @@ function sliceFor(rows, i0, i1, nextT) {
 }
 
 async function finish(file) {
+  if (S) flushGap();                                 // a recording that ends mid-animation still has its last banner
   LAST = report();
   if (!seen()) { S = null; return null; }
   const ranges = splitRows(S.rows);
