@@ -190,6 +190,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   **Last imports** — how many frames were sampled, whether the two HUD cards were found at all, how many battles
   and names came out — so a recording the reader cannot use explains itself instead of failing silently. Those
   entries live on the battle log, not in the Scans import log.
+- **Which Pokémon was on the card**: a switch is spotted by comparing the ink profile of the name, which is
+  smoothed before it is compared and compared at a low distance — measured, two different names of similar length
+  scored 0.27 against the old threshold of 0.34 and so registered as no change at all, which is how an opponent's
+  second and third Pokémon stayed out of the log, while the same card nudged one pixel scored 0.25. Each settled
+  card is then read once rather than once per frame, so the OCR budget lasts the whole battle, and every card is
+  read again after 20 s in case a switch was still missed. A Pokémon that only its move banner ever named
+  (“Bastiodon used Stone Edge”) joins the side whose name crop could not be read nearest that banner.
 - **A battle recording reads itself** (`battlefilm.js`, v2): a GO Battle League recording has no status screens, so it
   used to be kept only as a dozen JPEGs for the Pro vision endpoint. Everything a log entry needs is on screen in
   every frame, in one band: the two HUD cards carry both active names, their CP, the red pokéballs for Pokémon left

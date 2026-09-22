@@ -469,12 +469,16 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .team.card.rvwait .rvtx{flex:1;min-width:0}
 .team.card.rvwait .sec{margin:0 0 2px!important}
 .pball.rv{width:44px;height:44px}
-/* pballSVG() writes the dash pair as an inline style for the importer's JS-driven progress, so these must out-rank it */
-.pball.rv .ring{stroke-dasharray:47 142!important;stroke-dashoffset:0!important;transition:none;animation:pbspin 1.4s linear infinite}
-.pball.rv.done .ring,.pball.rv.err .ring{animation:none;stroke-dasharray:188.5!important}
+/* pballSVG() writes the dash pair as an inline style for the importer's JS-driven progress, so these must out-rank it.
+   Only the thinking state spins: an idle card that is merely offering a review used to run the spinner for ever, which
+   reads as a review that never arrives. */
+.pball.rv .ring{stroke-dasharray:0 188.5!important;stroke-dashoffset:0!important;transition:none;animation:none}
+.pball.rv.on .ring{stroke-dasharray:47 142!important;animation:pbspin 1.4s linear infinite}
+.pball.rv.done .ring,.pball.rv.err .ring{stroke-dasharray:188.5!important;animation:none}
 @keyframes pbspin{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
 /* the timeline of a battle read from a recording, opened under its row in the log */
 .filmt{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:2px 0 6px;font-size:12px;line-height:1.6;color:var(--dim);font-variant-numeric:tabular-nums}
+.filmt.page{border-radius:14px;padding:10px 12px;margin:6px 0}   /* on a battle's own page it is the card, not a box inside one */
 .filmt .fsum{color:var(--ink);font-size:12.5px;margin-bottom:4px}
 /* one battle's own page: both trios, and the chip row that says which party you played */
 .bvs{display:flex;align-items:center;gap:10px;margin:2px 0 8px}

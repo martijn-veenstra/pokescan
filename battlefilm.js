@@ -27,7 +27,18 @@
 
 const SAMPLE_MIN = 0.45;        // s of video time between samples
 const HOLD = 3;                 // samples a lower count must persist before it counts as a real change
-const NAME_CHANGE = 0.34;       // ink-profile distance that means a different name is in the card
+/* The ink profile is smoothed before it is compared, and compared at a much lower distance, because measuring it
+   showed the old test could not do its job: two different names of similar length (MEDICHAM vs BASTIODON) scored
+   0.27 against a threshold of 0.34, so an opponent's switch registered as no change at all and their second and
+   third Pokémon never reached the log — while the same card nudged by one pixel scored 0.25, which is why the
+   threshold had to be that high. Smoothing collapses the jitter (0.07) without collapsing the difference (0.15). */
+const NAME_CHANGE = 0.09;       // smoothed ink-profile distance that means a different name is in the card
+const RE_READ = 20;             // s: read each card again anyway, so a switch the profile missed is caught within this
+// A switched-in card slides into place over about half a second, and every frame of that slide reads as another
+// name change. Grabbing each one filled the OCR queue with blurred halves of a name — a battle spent its whole
+// budget on its first two switches, which is why an opponent's second and third Pokémon never made the log. Wait
+// for the profile to hold, then take exactly one crop of it.
+const NAME_HOLD = 2;
 const MAX_OCR = 30, MAX_BANNERS = 60;              // across the recording; one match is easily 50 banners
 const MIN_ROWS = 8;             // samples a battle needs before it counts as one at all
 const MISS_MAX = 12;            // calibrate() reads a fifth of the screen: after this many misses, try every 8th sample
@@ -99,7 +110,14 @@ function profile(ctx, r) {                                 // 24-bin ink profile
     if (v < 150) { bins[Math.min(23, (x / r[2] * 24) | 0)]++; tot++; }
   }
   if (tot > 0) for (let i = 0; i < 24; i++) bins[i] /= tot;
-  return {bins, ink: tot};
+  return {bins: smooth(smooth(bins)), ink: tot};
+}
+// a 1px shift of the same text moves as much ink between neighbouring bins as a different word does; two passes of
+// a [1 2 1] blur leave the shape of the word and drop that
+function smooth(b) {
+  const o = new Float32Array(24);
+  for (let i = 0; i < 24; i++) o[i] = (b[Math.max(0, i - 1)] + 2 * b[i] + b[Math.min(23, i + 1)]) / 4;
+  return o;
 }
 function profileDist(a, b) {
   if (!a || !b) return 1;
@@ -120,7 +138,8 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 /* ---------- per frame ---------- */
 function start(dur) {
   S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
-       last: {my: null, opp: null}, lastT: -9, gapT: -9, frames: 0, miss: 0, cur: null, run: {}};
+       name: {my: {p: null, n: 0, shot: false, t: -99}, opp: {p: null, n: 0, shot: false, t: -99}},
+       lastT: -9, gapT: -9, frames: 0, miss: 0, cur: null, run: {}};
 }
 // the loader card shows the read as it happens: hand each finding to scanner.js's feed, if it is listening
 const say = s => { try { if (window.filmEvent) window.filmEvent(s); } catch (e) {} };
@@ -159,11 +178,13 @@ function frame(ctx, W, H, t) {
   for (const side of ['my', 'opp']) {
     const c = S.cal[side], mine = side === 'my', nr = rect(c, 0.02, 0.60, mine, row, w), p = profile(ctx, nr);
     if (p.ink < 40) continue;
-    if (profileDist(p, S.last[side]) > NAME_CHANGE && S.shots.length < MAX_OCR) {
-      S.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
-      say(`${clock(t)} a new name on ${mine ? 'your' : 'their'} card, queued to read`);
-    }
-    S.last[side] = p;
+    const st = S.name[side];
+    if (profileDist(p, st.p) > NAME_CHANGE) { st.p = p; st.n = 1; st.shot = false; }
+    else { st.n++; if (t - st.t >= RE_READ) st.shot = false; }
+    if (st.shot || st.n < NAME_HOLD || S.shots.length >= MAX_OCR) continue;
+    st.shot = true; st.t = t;
+    S.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
+    say(`${clock(t)} reading the name on ${mine ? 'your' : 'their'} card`);
   }
 }
 
@@ -264,7 +285,7 @@ const verdict = txt => {                                   // the end screen is 
   }
   return null;
 };
-const clock = t => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+const clock = t => { const s = Math.max(0, Math.round(t)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };   // round the whole thing, or 59.6 s prints as 0:60
 const LABEL = {mySh: 'you shielded', oppSh: 'they shielded', myMon: 'you lost a Pokémon', oppMon: 'they lost a Pokémon'};
 const FILM_MAX = 80;                                       // BATTLES syncs whole: keep each timeline bounded
 
@@ -300,11 +321,11 @@ function splitRows(rows) {
 }
 
 async function readSeg(g, file, onStep) {
-  const P = window.Planner, reads = [];
+  const P = window.Planner, reads = [], missed = [];       // missed: a name crop that was taken but could not be read
   for (const sh of g.shots) {
     onStep();
     const sp = matchSpecies(await ocr(sh.name, LETTERS, 7));
-    if (!sp) continue;
+    if (!sp) { missed.push({t: sh.t, side: sh.side}); continue; }
     const cp = parseInt((await ocr(sh.cp, '0123456789CP cp', 7)).replace(/\D/g, ''), 10) || null;
     reads.push({t: sh.t, side: sh.side, species: sp, cp});
   }
@@ -313,7 +334,20 @@ async function readSeg(g, file, onStep) {
     return out; };
   const my = teamOf('my'), opp = teamOf('opp');
   if (!my.length || !opp.length) return null;
-  const whose = sp => my.some(x => x.species === sp) ? 'my' : opp.some(x => x.species === sp) ? 'opp' : null;
+
+  /* A banner names a Pokémon the cards did not give up: "Bastiodon used Stone Edge" is proof it was on the field,
+     even where its own card was never legible. Which side it belongs to comes from the reader's own evidence — the
+     name crop it took and failed to read nearest that banner — and the Pokémon then joins that side's team. Without
+     this the move is dropped and the opponent's second and third Pokémon never reach the log at all. */
+  const known = sp => my.some(x => x.species === sp) ? 'my' : opp.some(x => x.species === sp) ? 'opp' : null;
+  const near = t => missed.slice().sort((a, b) => (Math.abs(t - a.t) + (a.t > t ? 60 : 0)) - (Math.abs(t - b.t) + (b.t > t ? 60 : 0)))[0];
+  const whose = (sp, t) => {
+    const had = known(sp); if (had) return had;
+    const m = near(t), side = m ? m.side : 'opp';          // nothing to go on: a name on neither card is theirs
+    const entry = {t: m ? m.t : t, side, species: sp, cp: null};
+    (side === 'my' ? my : opp).push(entry); reads.push(entry);
+    return side;
+  };
 
   const moves = [];                                        // "Chesnaught used Frenzy Plant!" then "BLOCKED!"
   for (const b of g.banners) {
@@ -325,7 +359,7 @@ async function readSeg(g, file, onStep) {
     const sp = matchSpecies(hit[1]); if (!sp) continue;
     const move = closest(hit[2], movesFor(sp)) || hit[2].trim();
     if (moves.some(m => m.species === title(sp) && m.move === move && b.t - m.t < 4)) continue;
-    moves.push({t: b.t, by: whose(sp), species: title(sp), move, blocked: false});
+    moves.push({t: b.t, by: whose(sp, b.t), species: title(sp), move, blocked: false});
   }
 
   const ev = events(g.rows), last = g.rows[g.rows.length - 1] || {};

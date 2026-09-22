@@ -76,6 +76,8 @@ test('a battle review is asked for by hand, not spent automatically', async ({ p
   const b = page.locator('#battle');
   await expect(b.locator('.rvwait')).toContainText('Review this battle');
   expect(posts, 'nothing is spent until asked').toHaveLength(0);
+  // a card that is merely offering a review must not run the thinking spinner: it reads as a review that never lands
+  expect(await b.locator('.pball.rv .ring').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 
   await b.locator('a:has-text("Review this battle")').click();
   await expect(b.locator('.team.card.review')).toContainText('You led Azumarill');
@@ -162,5 +164,34 @@ test('a truncated read says how little of the recording it managed, instead of l
   // a read that covered the battle says nothing extra
   const rows = log.locator('.il');
   await expect(rows.nth(0), 'the complete read is not flagged').not.toContainText('could be read');
+  expect(errors).toEqual([]);
+});
+
+test('a battle row carries the clock time, the timeline is not boxed twice, and an idle review does not spin', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('roster', JSON.stringify({ tagged: {}, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] }));
+    // 21 Sep 2026 at 19:42 — two battles the same evening are only told apart by the time
+    localStorage.setItem('battles', JSON.stringify([{
+      id: 'b9', t: new Date('2026-09-21T19:42:00').getTime(), league: 'great', result: 'W', src: 'film',
+      ids: null, myIds: ['azumarill'], myNames: ['Azumarill'], opp: ['registeel'], oppNames: ['Registeel'], lead: 'registeel',
+      shields: { me: 1, opp: 2 }, fainted: { me: 1, opp: 3 },
+      film: ['0:17 you sent Azumarill (1465)', '1:02 they lost a Pokémon'],
+      // a move read off a banner before the side could be worked out: it must still be shown, not silently dropped
+      moves: [{ t: 65, by: null, species: 'Bastiodon', move: 'Stone Edge', blocked: false }],
+      filmData: { reads: [], events: [], moves: [], samples: 40, dur: 181 },
+    }]));
+  });
+  const errors = await openApp(page, '#/battles');
+  await expect(page.locator('#battles .team.row .dt').first(), 'the log says when, to the minute').toContainText('21 sep 19:42');
+
+  await page.locator('#battles .team.row').first().click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/battle/b9');
+  await expect(page.locator('#battle .team.card .sec .dim').first()).toContainText('21 sep 19:42');
+  // the timeline is its own card, not a box drawn inside another one
+  await expect(page.locator('#battle .filmt')).toBeVisible();
+  await expect(page.locator('#battle .team.card .filmt'), 'no card inside a card').toHaveCount(0);
+  // a move with no side still appears, under its own row
+  await expect(page.locator('#battle')).toContainText('Side not read');
+  await expect(page.locator('#battle .chip', { hasText: 'Stone Edge' })).toBeVisible();
   expect(errors).toEqual([]);
 });

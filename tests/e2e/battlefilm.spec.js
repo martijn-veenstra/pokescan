@@ -10,15 +10,19 @@ const HARNESS = () => {
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   // slot centres as a fraction of card width, mirrored for the opponent — the same geometry battlefilm.js uses
   const BALLS = [0.092, 0.225, 0.368], SHIELDS = [0.568, 0.686];
-  window.__paint = (myMon, oppMon, mySh, oppSh, tag, keepBg) => {
+  window.__paint = (myMon, oppMon, mySh, oppSh, tag, keepBg, otag, ocp, dx) => {
     if (!keepBg) { ctx.fillStyle = '#1d3b6e'; ctx.fillRect(0, 0, W, H); }   // the battlefield behind the HUD
     const cards = [{ x: 8, w: 148, mine: true }, { x: W - 8 - 148, w: 148, mine: false }];
     const y = Math.round(H * 0.06), h = Math.round(H * 0.055);
     for (const c of cards) {
       ctx.fillStyle = '#f2f2f2'; ctx.fillRect(c.x, y, c.w, h);            // the card behind the pips
       ctx.fillStyle = '#202020'; ctx.font = 'bold 13px sans-serif';       // a name, so the ink profile changes on a switch
-      const label = c.mine ? (tag || 'AZUMARILL') : 'MEDICHAM';
-      ctx.fillText(label, c.mine ? c.x + 5 : c.x + c.w - 5 - ctx.measureText(label).width, y + 15);
+      const label = c.mine ? (tag || 'AZUMARILL') : (otag || 'MEDICHAM');
+      ctx.fillText(label, (c.mine ? c.x + 5 : c.x + c.w - 5 - ctx.measureText(label).width) + (dx || 0), y + 15);
+      // the CP sits at the far end of the same band, mirrored on their card: it is half of what tells two cards apart
+      ctx.font = 'bold 11px sans-serif';
+      const cp = String(c.mine ? 1500 : (ocp || 1476));
+      ctx.fillText(cp, c.mine ? c.x + c.w - 6 - ctx.measureText(cp).width : c.x + 6, y + 15);
       const row = y + Math.round(h * 0.72);
       const pip = (fx, n, i, colour) => { if (i >= n) return; const f = c.mine ? fx : 1 - fx;
         ctx.fillStyle = colour; ctx.beginPath(); ctx.arc(c.x + f * c.w, row, Math.round(0.042 * c.w), 0, 7); ctx.fill(); };
@@ -167,5 +171,55 @@ test('a daylight battle still calibrates: bright cloud above the cards no longer
   expect(out.report.cal, 'the pips are found through the cloud').toBe(true);
   expect(out.report.rows, 'and the battle is sampled instead of thrown away').toBeGreaterThan(15);
   expect(await page.evaluate(async () => { const o = await Film.finish({ lastModified: Date.now() }); return o && o.length; })).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('a switch the cards never spelled out is still logged, from the move it announced', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('bdraft'); localStorage.removeItem('roster'); });
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(HARNESS);
+  const out = await page.evaluate(async () => {
+    // the opponent's second Pokémon never comes back legible — the third name read is rubbish — but the game
+    // announces its charged move, which is the only place its name appears at all
+    window.__names = ['AZUMARILL', 'MEDICHAM', 'xx'];
+    window.getWorker = async () => { let wl = '';
+      return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
+        recognize: async () => ({ data: { text: wl.includes('!') ? 'BASTIODON used STONE EDGE!' : wl.includes('Z') ? (window.__names.shift() || 'xx') : '1500' } }) }; };
+    Film.start(120);
+    let t = 0;
+    const step = (mine, om, msh, osh, tag, otag, ocp, dx) => { const c = window.__paint(mine, om, msh, osh, tag, false, otag, ocp, dx); Film.frame(c, ...window.__size, t); t += 0.5; };
+    // the opening: both leads read once each. The text jitters by a pixel between frames, as a compressed
+    // recording's does — that must not read as a switch, or the OCR budget is gone before the battle starts
+    for (let i = 0; i < 12; i++) step(3, 3, 2, 2, null, null, null, i % 2);
+    for (let i = 0; i < 8; i++) step(3, 2, 2, 2, null, null, null, i % 2);   // they lose one
+    const shotsBefore = Film.shotCount();
+    // their switch to a name of almost the same length — the case the old detector scored below its threshold and
+    // missed entirely. One crop, and the stub reads it as rubbish
+    for (let i = 0; i < 8; i++) step(3, 2, 2, 2, null, 'BASTIODON', 1402);
+    Film.frame(window.__gap(), ...window.__size, t); t += 0.5;         // the HUD hides: the move banner is announced
+    for (let i = 0; i < 8; i++) step(3, 2, 1, 2, null, 'BASTIODON', 1402);
+    const shots = Film.shotCount();
+    const entries = await Film.finish({ lastModified: Date.now() });
+    return { shotsBefore, shots, e: entries && entries[0] };
+  });
+  expect(out.shotsBefore, 'a settled card is read once per side, however much the text jitters').toBe(2);
+  expect(out.shots, 'and the switch adds exactly one more crop').toBe(3);
+  expect(out.e, 'the battle was read').toBeTruthy();
+  expect(out.e.oppNames, 'the Pokémon only its banner named still joins their team').toContain('Bastiodon');
+  const mv = out.e.moves.find(m => /Bastiodon/i.test(m.species));
+  expect(mv, 'and its move is kept').toBeTruthy();
+  expect(mv.by, 'attributed to the side whose name crop could not be read').toBe('opp');
+  expect(out.e.film.join('\n')).toMatch(/they sent Bastiodon/);
+  expect(errors).toEqual([]);
+});
+
+test('the clock prints whole minutes, not 0:60', async ({ page }) => {
+  const errors = await openApp(page, '#/battles');
+  const lines = await page.evaluate(() => {
+    window.getWorker = async () => ({ setParameters: async () => {}, recognize: async () => ({ data: { text: '' } }) });
+    return Film.events([{ t: 58.4, myMon: 3, oppMon: 3, mySh: 2, oppSh: 2 }, { t: 59.4, myMon: 3, oppMon: 3, mySh: 2, oppSh: 1 },
+      { t: 59.6, myMon: 3, oppMon: 3, mySh: 2, oppSh: 1 }, { t: 59.8, myMon: 3, oppMon: 3, mySh: 2, oppSh: 1 }]).map(e => e.t);
+  });
+  expect(lines.length).toBe(1);
   expect(errors).toEqual([]);
 });

@@ -11,6 +11,8 @@ const saveBuild = () => localStorage.setItem('build', JSON.stringify(UI.build));
 const TYPES18 = ['normal', 'fire', 'water', 'grass', 'electric', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy'];
 const WEEK = 7 * 864e5;
 const when = t => new Date(t).toLocaleDateString('nl-NL', {day: 'numeric', month: 'short'});
+// a battle is one of several in an evening, so its row needs the clock time as well as the day
+const whenT = t => `${when(t)} ${new Date(t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'})}`;
 let dirty = true, model = null;
 const saveRoster = () => { localStorage.setItem('roster', JSON.stringify(ROSTER)); if (window.Sync) Sync.touch('roster'); };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -1526,7 +1528,7 @@ function battleInner() {
     return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${esc(use.join(' / ') || 'not read')}</div></div>`; };
   let h = `<div class="back" onclick="Planner.nav('#/battles')">‹ ${esc(PAGE_LABEL.battles)}</div>`;
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center">
-    <span style="color:${col}">${res}</span><span class="dim" style="font-size:12px;font-weight:400">${when(b.t)}</span></div>
+    <span style="color:${col}">${res}</span><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span></div>
     <div class="bvs">${side(b.ids, b.myNames, 'you')}<span class="vs">vs</span>${side(b.opp, b.oppNames, 'them')}</div>
     ${kv([['Shields', b.shields ? `you ${b.shields.me} · them ${b.shields.opp}` : '—'], ['Fainted', b.fainted ? `you ${b.fainted.me} · them ${b.fainted.opp}` : '—'],
          ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in']])}
@@ -1534,13 +1536,15 @@ function battleInner() {
   const mv = b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [];
   if (mv.length) {
     const side = who => mv.filter(m => m.by === who);
-    const list = rows => rows.length ? rows.map(m => `<span class="chip ${m.blocked ? 'warn' : ''}">${esc(m.move)}${m.blocked ? ' ✕' : ''}</span>`).join('') : '<span class="dim">none read</span>';
+    const chip = m => `<span class="chip ${m.blocked ? 'warn' : ''}">${esc(m.species ? m.species + ' · ' : '')}${esc(m.move)}${m.blocked ? ' ✕' : ''}</span>`;
+    const list = rows => rows.length ? rows.map(chip).join('') : '<span class="dim">none read</span>';
+    const loose = mv.filter(m => m.by !== 'my' && m.by !== 'opp');   // read before the side could be worked out
     h += `<div class="sec">Moves used <small>${mv.length} read off the recording</small></div><div class="team card" style="cursor:default">${kv([
       ['Yours', `<div class="chips">${list(side('my'))}</div>`],
       ['Theirs', `<div class="chips">${list(side('opp'))}</div>`],
-    ])}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
+    ].concat(loose.length ? [['Side not read', `<div class="chips">${loose.map(chip).join('')}</div>`]] : []))}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
   }
-  if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="team card" style="cursor:default"><div class="filmt">${b.film.map(l => `<div>${esc(l)}</div>`).join('')}</div></div>`;
+  if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="filmt page">${b.film.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
   h += battleReviewCard(b);
   h += `<div class="note">Read from a recording on this phone, so it can be wrong: <a href="#" onclick="Planner.delBattleGo(${attr(b.id)});return false">delete this battle</a> and it leaves your record and the stats.</div>`;
   return h;
@@ -1551,7 +1555,7 @@ function battleRow(b, noChips) {                // one line per battle; a film e
   const col = b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)';
   const open = b.result || b.opp ? ` onclick="Planner.openBattle(${attr(b.id)})" style="cursor:pointer"` : ' style="cursor:default"';
   const src = b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : b.src === 'film' ? ' · read from your recording' : '';
-  const row = `<div class="team row"${open}><span class="sc" style="color:${col}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${when(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${src}</div></span>${b.result || b.opp ? '<span class="go">›</span>' : ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`;
+  const row = `<div class="team row"${open}><span class="sc" style="color:${col}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${whenT(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${src}</div></span>${b.result || b.opp ? '<span class="go">›</span>' : ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`;
   // asked only where it is still missing, so an attributed log stays quiet
   return row + (!noChips && b.src === 'film' && !b.team ? teamChips(b) : '');
 }
