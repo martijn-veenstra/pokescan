@@ -39,10 +39,15 @@ const RE_READ = 20;             // s: read each card again anyway, so a switch t
 // budget on its first two switches, which is why an opponent's second and third Pokémon never made the log. Wait
 // for the profile to hold, then take exactly one crop of it.
 const NAME_HOLD = 2;
-const MAX_OCR = 30, MAX_BANNERS = 60;              // across the recording; one match is easily 50 banners
+const MAX_OCR = 44, MAX_BANNERS = 70;              // across the recording; one match is easily 50 banners
 const MIN_ROWS = 8;             // samples a battle needs before it counts as one at all
-const MISS_MAX = 12;            // calibrate() reads a fifth of the screen: after this many misses, try every 8th sample
-const MISS_EVERY = 8;
+/* calibrate() reads a fifth of the screen, so after this many misses it is tried on every other sample only. It used to
+   be every 8th: with two agreeing calibrations needed, a battle whose HUD came up 9 s in was first read at 0:17, after
+   the opponent's lead had already switched out — the log then opened on the wrong Pokémon. And once a candidate is
+   pending, the very next sample confirms it, whatever the back-off says. */
+const MISS_MAX = 12;
+const MISS_EVERY = 2;
+const TIMER = 225;              // s of battle: a GBL match that lasts this long ended on the clock, not on a faint
 
 // slot centres as a fraction of card width, player side; the opponent card is an exact mirror
 const BALLS = [0.092, 0.225, 0.368], SHIELDS = [0.568, 0.686];
@@ -138,7 +143,7 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 /* ---------- per frame ---------- */
 function start(dur) {
   S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
-       name: {my: {p: null, n: 0, shot: false, t: -99}, opp: {p: null, n: 0, shot: false, t: -99}},
+       name: {my: {p: null, n: 0, shot: false, t: -99, t0: 0, first: true}, opp: {p: null, n: 0, shot: false, t: -99, t0: 0, first: true}},
        gap: {score: 0, t: 0, img: null}, lastT: -9, frames: 0, miss: 0, cur: null, run: {}};
 }
 // the loader card shows the read as it happens: hand each finding to scanner.js's feed, if it is listening
@@ -161,7 +166,7 @@ function frame(ctx, W, H, t) {
   if (!S.cal) {                                            // two calibrations that agree, then it is frozen
     // an ordinary swipe recording never calibrates, and calibrate() reads a fifth of the screen: back off rather
     // than pay for it on every sample, but keep trying so a battle that starts late is still caught
-    if (S.miss >= MISS_MAX && S.frames % MISS_EVERY) return offCard(ctx, W, H, t);
+    if (!S.pending && S.miss >= MISS_MAX && S.frames % MISS_EVERY) return offCard(ctx, W, H, t);
     const c = calibrate(ctx, W, H);
     if (!c) { S.miss++; return offCard(ctx, W, H, t); }
     if (S.pending && Math.abs(S.pending.my.x - c.my.x) < W * 0.01 && Math.abs(S.pending.row - c.row) < H * 0.01) { S.cal = c; S.miss = 0; say(`${clock(t)} battle HUD found — reading the cards`); }
@@ -180,11 +185,14 @@ function frame(ctx, W, H, t) {
     const c = S.cal[side], mine = side === 'my', nr = rect(c, 0.02, 0.60, mine, row, w), p = profile(ctx, nr);
     if (p.ink < 40) continue;
     const st = S.name[side];
-    if (profileDist(p, st.p) > NAME_CHANGE) { st.p = p; st.n = 1; st.shot = false; }
+    // t0: when this name first showed. A switch is logged at that moment, not NAME_HOLD samples later; a periodic
+    // re-read is logged at its own time, since whatever it finds may have come in at any point since the last one
+    if (profileDist(p, st.p) > NAME_CHANGE) { st.p = p; st.n = 1; st.shot = false; st.t0 = t; st.first = true; }
     else { st.n++; if (t - st.t >= RE_READ) st.shot = false; }
     if (st.shot || st.n < NAME_HOLD || S.shots.length >= MAX_OCR) continue;
     st.shot = true; st.t = t;
-    S.shots.push({t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
+    S.shots.push({t: st.first ? st.t0 : t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
+    st.first = false;
     say(`${clock(t)} reading the name on ${mine ? 'your' : 'their'} card`);
   }
 }
@@ -208,17 +216,112 @@ function live(r) {
 
 // The HUD is hidden exactly when something is being announced: a charged move, a switch-in, a shield. Those
 // frames are useless for counting, which makes them the free place to grab the banner — no detector needed.
-const BANNER = [0.20, 0.28];                       // the band the game announces a move in, as a fraction of the screen
+/* Where the announcement is looked for. v2 took a fixed band and kept a frame only when that band was mostly dark
+   (mean < 150): a daylight battle has bright sky behind the words, so no frame ever passed, no banner was queued and
+   a whole match logged zero moves. The HUD is hidden during the announcement, so the band now starts right under the
+   status bar, and the words are found as what they are — a line of hard white strokes — wherever they sit in it. */
+const BANNER = [0.06, 0.55];
+const LINE_H = 0.032;                              // one line of the announcement, as a fraction of screen height
+const SCAN_W = 360;                                // the band is measured on a copy this wide: cheap at any resolution
+let SCAN = null;
 
-/* How much announcement a frame carries: the words are white type on a dark overlay, so a band that is mostly dark
-   with a few per cent of near-white pixels is the moment they are up. */
-function bannerScore(ctx, W, H) {
-  const d = ctx.getImageData(0, Math.round(H * BANNER[0]), W, Math.round(H * BANNER[1])).data;
-  let n = 0, white = 0, sum = 0;
-  for (let i = 0; i < d.length; i += 64) { n++; const v = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10; sum += v; if (v > 205) white++; }
-  if (!n) return 0;
-  const frac = white / n;
-  return (sum / n < 150 && frac > 0.008 && frac < 0.34) ? frac : 0;
+/* The strongest line of type in the band: rows are scored by how many hard edges they carry that touch near-white
+   (a stroke of the white lettering against the dark outline or overlay). Sky and cloud are smooth, a Pokémon model
+   has soft shading: neither scores like a sentence does. Returns the line's centre as a fraction of H, and a score. */
+function textLine(ctx, W, H) {
+  const y0 = Math.round(H * BANNER[0]), bh = Math.round(H * (BANNER[1] - BANNER[0]));
+  const sw = Math.min(SCAN_W, W), sh = Math.max(8, Math.round(bh * sw / W));
+  if (!SCAN) SCAN = document.createElement('canvas');
+  if (SCAN.width !== sw || SCAN.height !== sh) { SCAN.width = sw; SCAN.height = sh; }
+  const g = SCAN.getContext('2d', {willReadFrequently: true});
+  g.drawImage(ctx.canvas, 0, y0, W, bh, 0, 0, sw, sh);
+  const d = g.getImageData(0, 0, sw, sh).data, rows = new Float32Array(sh);
+  for (let y = 0; y < sh; y++) {
+    let n = 0, pv = -1;
+    for (let x = 0; x < sw; x++) {
+      const i = (y * sw + x) * 4, v = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10;
+      if (pv >= 0 && Math.abs(v - pv) > 80 && Math.max(v, pv) > 200) n++;
+      pv = v;
+    }
+    rows[y] = n / sw;
+  }
+  const win = Math.max(2, Math.round(LINE_H * H * sh / bh));
+  let best = 0, at = -1, sum = 0;
+  for (let y = 0; y < sh; y++) {
+    sum += rows[y]; if (y >= win) sum -= rows[y - win];
+    if (y >= win - 1 && sum > best) { best = sum; at = y - win / 2 + 0.5; }
+  }
+  const score = best / win;
+  return at < 0 ? {score: 0, y: 0} : {score: score >= 0.025 ? score : 0, y: BANNER[0] + (at / sh) * (BANNER[1] - BANNER[0])};
+}
+
+/* The crop OCR gets: full width, two lines tall around the line found, upscaled, in colour. It is turned into
+   something Tesseract reads only when it is read (inkOf / inverted), so the many frames that beat each other within
+   one gap cost a drawImage each and nothing more. */
+function bannerCrop(ctx, W, H, yc) {
+  const h = Math.round(H * LINE_H * 2.4), y = Math.max(0, Math.min(H - h, Math.round(yc * H - h / 2)));
+  const scale = Math.max(0.8, Math.min(2.5, 1100 / W));
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * scale); c.height = Math.round(h * scale);
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(ctx.canvas, 0, y, W, h, 0, 0, c.width, c.height);
+  return c;
+}
+/* The lettering as black ink on white. A plain "white is ink" threshold makes a midday sky ink too — the words are
+   white against bright sky there, legible only because of their dark outline (or the dark overlay behind them). So a
+   pixel is ink when it is white AND a dark pixel lies within about half a stroke of it: the inside of every letter
+   qualifies, open sky and cloud do not. */
+function inkOf(src) {
+  const w = src.width, h = src.height, g0 = src.getContext('2d', {willReadFrequently: true});
+  const id = g0.getImageData(0, 0, w, h), p = id.data, n = w * h;
+  const white = new Uint8Array(n), dark = new Uint8Array(n);
+  for (let i = 0, j = 0; j < n; i += 4, j++) {
+    const r = p[i], gg = p[i + 1], b = p[i + 2], v = (r * 3 + gg * 6 + b) / 10;
+    white[j] = v > 185 && Math.max(r, gg, b) - Math.min(r, gg, b) < 70 ? 1 : 0;
+    dark[j] = v < 110 ? 1 : 0;
+  }
+  const R = Math.max(2, Math.round(h / 2.4 * 0.13));       // about half a stroke of one line of the type
+  const tmp = new Uint8Array(n), near = new Uint8Array(n);
+  for (let y = 0; y < h; y++) {                             // box dilation of the dark mask, rows then columns
+    let run = 0; const o = y * w;
+    for (let x = 0; x < w + R; x++) {
+      if (x < w) run += dark[o + x];
+      if (x - 2 * R - 1 >= 0) run -= dark[o + x - 2 * R - 1];
+      const at = x - R; if (at >= 0 && at < w) tmp[o + at] = run > 0 ? 1 : 0;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let run = 0;
+    for (let y = 0; y < h + R; y++) {
+      if (y < h) run += tmp[y * w + x];
+      if (y - 2 * R - 1 >= 0) run -= tmp[(y - 2 * R - 1) * w + x];
+      const at = y - R; if (at >= 0 && at < h) near[at * w + x] = run > 0 ? 1 : 0;
+    }
+  }
+  /* And the sky right against the outline is white and next to dark too, which drew every letter as a white shape
+     in a black blob. What is outside the lettering can be reached from the edge of the crop without crossing the
+     outline; the inside of a letter cannot. Behind a dark plate nothing is reachable and every white pixel is type. */
+  const out0 = new Uint8Array(n), stack = [];
+  const seed = j => { if (!out0[j] && !dark[j]) { out0[j] = 1; stack.push(j); } };
+  for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+  while (stack.length) {
+    const j = stack.pop(), x = j % w;
+    if (x > 0) seed(j - 1); if (x < w - 1) seed(j + 1); if (j >= w) seed(j - w); if (j < n - w) seed(j + w);
+  }
+  const out = document.createElement('canvas'); out.width = w; out.height = h;
+  const go = out.getContext('2d'), od = go.createImageData(w, h), q = od.data;
+  for (let i = 0, j = 0; j < n; i += 4, j++) { const v = white[j] && near[j] && !out0[j] ? 0 : 255; q[i] = q[i + 1] = q[i + 2] = v; q[i + 3] = 255; }
+  go.putImageData(od, 0, 0);
+  return out;
+}
+function inverted(src) {                                    // white type on anything, as dark type: the second try
+  const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  const g = c.getContext('2d');
+  g.filter = 'grayscale(1) invert(1) contrast(1.4)';
+  g.drawImage(src, 0, 0);
+  return c;
 }
 
 function offCard(ctx, W, H, t) {
@@ -228,11 +331,10 @@ function offCard(ctx, W, H, t) {
   S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
   if (S.ends.length > 24) S.ends.shift();
   // The move is announced for a moment at the start of the animation, so a crop taken on a timer mostly catches the
-  // animation and not the words — which is why a three-minute match with fifty gaps in the HUD yielded one move.
-  // Every frame of a gap is scored and the best one kept, pushed when the HUD comes back: one OCR per gap, as
-  // before, but on the frame where the words were up.
-  const sc = bannerScore(ctx, W, H);
-  if (sc > S.gap.score) S.gap = {score: sc, t, img: grab(ctx, [0, Math.round(H * BANNER[0]), W, Math.round(H * BANNER[1])], Math.max(0.8, Math.min(2.5, 1100 / W)))};
+  // animation and not the words. Every frame of a gap is scored and the best one kept, pushed when the HUD comes
+  // back: one OCR per gap, on the frame where the words were up.
+  const ln = textLine(ctx, W, H);
+  if (ln.score > S.gap.score) S.gap = {score: ln.score, t, img: bannerCrop(ctx, W, H, ln.y)};
 }
 function flushGap() {
   if (!S || !S.gap.img) return;
@@ -315,14 +417,22 @@ function movesFor(species) {                               // this species' own 
    showed — assuming a fresh 3-a-side made a recording that starts mid-match report faints and shields it never saw. */
 function events(rows) {
   const f = rows[0] || {};
+  let prevT = null;
   const cur = {myMon: f.myMon !== undefined ? f.myMon : 3, oppMon: f.oppMon !== undefined ? f.oppMon : 3,
                mySh: f.mySh !== undefined ? f.mySh : 2, oppSh: f.oppSh !== undefined ? f.oppSh : 2}, run = {}, out = [];
-  for (const r of rows) for (const k of Object.keys(cur)) {
-    const v = r[k];
-    if (v >= cur[k]) { run[k] = null; continue; }
-    const p = run[k];
-    run[k] = (p && p.v === v) ? {v, n: p.n + 1} : {v, n: 1};
-    if (run[k].n >= HOLD) { out.push({t: r.t, what: k, from: cur[k], to: v}); cur[k] = v; run[k] = null; }
+  for (const r of rows) {
+    for (const k of Object.keys(cur)) {
+      const v = r[k];
+      if (v >= cur[k]) { run[k] = null; continue; }
+      const p = run[k];
+      // A faint or a shield happens while the HUD is hidden, and the lower count is only seen once it comes back. So
+      // the event is dated to when the HUD went (the last sample that still showed the old count, plus one step) —
+      // which puts a faint before the Pokémon that replaces it — and `seen` keeps when the new count first showed.
+      run[k] = (p && p.v === v) ? {v, n: p.n + 1, t: p.t, seen: p.seen}
+        : {v, n: 1, seen: r.t, t: prevT !== null && r.t - prevT > 1 ? prevT + SAMPLE_MIN : r.t};
+      if (run[k].n >= HOLD) { out.push({t: run[k].t, seen: run[k].seen, what: k, from: cur[k], to: v}); cur[k] = v; run[k] = null; }
+    }
+    prevT = r.t;
   }
   return out;
 }
@@ -371,6 +481,51 @@ function splitRows(rows) {
   return out.length ? out : [[0, rows.length - 1]];
 }
 
+/* The card reads, as who was on the field when. A card is read again every RE_READ seconds to catch a switch the ink
+   profile missed, and each of those used to be logged as another send-out — "you sent Chesnaught" three times while
+   Chesnaught never left. Only a change of Pokémon on a side is a stint; a read of the one already there only fills
+   in a CP. A side can field three Pokémon, so a species that is read less than the three most-read ones is a misread
+   of the card and goes, rather than becoming a fourth team member and a switch that never happened. */
+function stintsOf(reads) {
+  const out = {my: [], opp: []};
+  for (const side of ['my', 'opp']) {
+    const mine = reads.filter(r => r.side === side).sort((a, b) => a.t - b.t);
+    const n = {}; for (const r of mine) n[r.species] = (n[r.species] || 0) + 1;
+    const keep = Object.keys(n).sort((a, b) => n[b] - n[a] || mine.findIndex(r => r.species === a) - mine.findIndex(r => r.species === b)).slice(0, 3);
+    for (const r of mine) {
+      if (!keep.includes(r.species)) continue;
+      const L = out[side], last = L[L.length - 1];
+      if (last && last.species === r.species) { if (!last.cp && r.cp) last.cp = r.cp; continue; }
+      L.push({t: r.t, side, species: r.species, cp: r.cp});
+    }
+  }
+  return out;
+}
+// who was on that side at t: the last stint that had started by then
+const activeAt = (st, side, t) => { let cur = null; for (const x of st[side]) { if (x.t <= t) cur = x; else break; } return cur; };
+const chargedFor = species => {
+  const P = window.Planner, id = P && P.idByName ? P.idByName(title(species)) : null;
+  const e = id && typeof APP === 'object' && APP && APP.pokemon ? APP.pokemon[id] : null;
+  return e ? (e.charged || []).map(m => (APP.moves && APP.moves[m] ? APP.moves[m].n : String(m).replace(/_/g, ' '))) : [];
+};
+/* A move name somewhere in the words, when the sentence around it did not survive: the best run of one to three
+   words against a short list. Only ever used against the charged moves of the two Pokémon on the field at that moment,
+   so the bar can be high and a tie still says nothing. */
+function findIn(words, list) {
+  let best = null, br = 0, second = 0;
+  for (const x of list) {
+    const t = bare(x); if (t.length < 3) continue;
+    let r = 0;
+    // a fragment counts when nearly all of it is in the name and it covers at least half the name: "ne Edg" is Stone Edge
+    for (let i = 0; i < words.length; i++) for (let k = 1; k <= 3 && i + k <= words.length; k++) {
+      const w = bare(words.slice(i, i + k).join('')), l = w.length >= 3 ? lcs(w, t) : 0;
+      if (l && l / w.length >= 0.8) r = Math.max(r, l / t.length);
+    }
+    if (r > br) { second = br; br = r; best = x; } else if (r > second) second = r;
+  }
+  return br >= 0.5 && second < br * 0.8 ? best : null;
+}
+
 async function readSeg(g, file, onStep) {
   const P = window.Planner, reads = [], missed = [];       // missed: a name crop that was taken but could not be read
   for (const sh of g.shots) {
@@ -378,10 +533,11 @@ async function readSeg(g, file, onStep) {
     const sp = matchSpecies(await ocr(sh.name, LETTERS, 7));
     if (!sp) { missed.push({t: sh.t, side: sh.side}); continue; }
     const cp = parseInt((await ocr(sh.cp, '0123456789CP cp', 7)).replace(/\D/g, ''), 10) || null;
-    reads.push({t: sh.t, side: sh.side, species: sp, cp});
+    reads.push({t: sh.t, side: sh.side, species: sp, cp: cp >= 10 && cp <= 9999 ? cp : null});
   }
+  let st = stintsOf(reads);
   const teamOf = s2 => { const out = [];
-    for (const r of reads) if (r.side === s2 && !out.some(x => x.species === r.species)) out.push(r);
+    for (const r of st[s2]) if (!out.some(x => x.species === r.species)) out.push(r);
     return out; };
   const my = teamOf('my'), opp = teamOf('opp');
   if (!my.length || !opp.length) return null;
@@ -395,51 +551,123 @@ async function readSeg(g, file, onStep) {
   const whose = (sp, t) => {
     const had = known(sp); if (had) return had;
     const m = near(t), side = m ? m.side : 'opp';          // nothing to go on: a name on neither card is theirs
+    if ((side === 'my' ? my : opp).length >= 3) return side;
     const entry = {t: m ? m.t : t, side, species: sp, cp: null};
     (side === 'my' ? my : opp).push(entry); reads.push(entry);
     return side;
   };
 
   const onField = my.concat(opp).map(x => x.species);
-  const moves = [];                                        // "Chesnaught used Frenzy Plant!" then "BLOCKED!"
-  for (const b of g.banners) {
-    onStep();
-    const txt = (await ocr(b.img, LETTERS + ' ,!', 6)).replace(/\s+/g, ' ').trim();
+  /* one banner's words into {species, move}, {blocked}, or null. First the sentence: "<Pokémon> used <move>", the
+     joint matched loosely ("used" survives OCR as usec, uset, uec) and the Pokémon preferably one of the two on the
+     field at that moment. Failing that, a charged move of one of those two anywhere in the words — the name part is
+     the first thing a blurred banner loses. */
+  const parse = (txt, t) => {
     const words = txt.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).filter(Boolean);
-    if (words.some(w => lev(w.toUpperCase(), 'BLOCKED') <= 2)) {
-      const m = moves[moves.length - 1]; if (m && b.t - m.t < 6) m.blocked = true; continue;
-    }
-    // the joint the sentence turns on, loosely: "used" survives OCR as usec, uset, uec
+    if (!words.length) return null;
+    if (words.some(w => lev(w.toUpperCase(), 'BLOCKED') <= 2)) return {blocked: true};
+    const act = ['my', 'opp'].map(sd => activeAt(st, sd, t + 1)).filter(Boolean).map(x => x.species);
     let j = -1;
     for (let i = 1; i < words.length - 1; i++) if (isUsed(words[i])) { j = i; break; }
-    if (j < 0) continue;                                   // not a move announcement: a switch, a shield, the timer
-    const who2 = words.slice(0, j).join(''), what = words.slice(j + 1).join('');
-    const sp = pick(who2, onField) || matchSpecies(who2);
-    if (!sp) continue;
-    const own = movesFor(sp);
-    const move = pick(what, own.length ? own : allMoveNames());
-    if (!move) continue;                                   // a move we cannot put a name to is not worth a chip
+    if (j > 0) {
+      const who2 = words.slice(0, j).join(''), what = words.slice(j + 1).join('');
+      const sp = pick(who2, act) || pick(who2, onField) || matchSpecies(who2);
+      if (sp) {
+        const own = movesFor(sp);
+        const move = pick(what, own.length ? own : allMoveNames());
+        if (move) return {species: sp, move};
+      }
+    }
+    const opts = [];
+    for (const sp of act) for (const m of chargedFor(sp)) opts.push({sp, m});
+    const move = findIn(words, [...new Set(opts.map(o => o.m))]);
+    if (!move) return null;
+    const who = opts.filter(o => o.m === move).map(o => o.sp);
+    return new Set(who).size === 1 ? {species: who[0], move} : null;   // both on the field know it: can't say whose
+  };
+
+  const moves = [], unread = [];                           // unread: what OCR made of the banners that said nothing
+  for (const b of g.banners) {
+    onStep();
+    let got = null, raw = '';
+    for (const make of [inkOf, inverted]) {
+      const txt = (await ocr(make(b.img), LETTERS + " ,!'", 6)).replace(/\s+/g, ' ').trim();
+      if (!raw) raw = txt;
+      got = parse(txt, b.t);
+      if (got) break;
+    }
+    if (!got) { if (raw && unread.length < 12) unread.push(`${clock(b.t)} ${raw.slice(0, 60)}`); continue; }
+    if (got.blocked) { const m = moves[moves.length - 1]; if (m && b.t - m.t < 6) m.blocked = true; continue; }
+    const sp = got.species, move = got.move;
     if (moves.some(m => m.species === title(sp) && m.move === move && b.t - m.t < 4)) continue;
     moves.push({t: b.t, by: whose(sp, b.t), species: title(sp), move, blocked: false});
   }
+  st = stintsOf(reads);
 
-  const ev = events(g.rows), last = g.rows[g.rows.length - 1] || {};
-  let result = null;
+  const ev = events(g.rows), first = g.rows[0] || {}, last = g.rows[g.rows.length - 1] || {};
+  let result = null, endT = null;
   for (const e of g.ends.slice().reverse()) {
     onStep();
     const r = verdict((await ocr(e.img, '', 11)).toUpperCase());
-    if (r) { result = r; break; }
+    if (r) { result = r; endT = e.t; break; }
   }
-  if (!result) result = last.myMon === 0 ? 'L' : last.oppMon === 0 ? 'W' : null;
+  // no end screen read: the side that was down to its last Pokémon when the HUD went for good is the one that lost
+  if (!result && last.myMon === 1 && last.oppMon > 1) result = 'L';
+  if (!result && last.oppMon === 1 && last.myMon > 1) result = 'W';
+
+  /* The last faint is never in the counts: when a side's last Pokémon goes, the HUD goes with it, and a row with
+     no pokéball on one side is exactly what frame() throws away as "not the HUD". A loss that did not run the clock
+     out is that last Pokémon fainting, so it is added — the log said "fainted: you 2" for a battle lost 3–2. */
+  const battleT = (last.t || 0) - (first.t || 0), timedOut = battleT >= TIMER;
+  const lastT = (last.t || 0) + 0.5;
+  if (!timedOut && result === 'L' && last.myMon === 1) ev.push({t: lastT, what: 'myMon', from: 1, to: 0, end: true});
+  if (!timedOut && result === 'W' && last.oppMon === 1) ev.push({t: lastT, what: 'oppMon', from: 1, to: 0, end: true});
+
+  // A charged move and the faint (or shield) it causes share one gap in the HUD, and the gap's start is all the counts
+  // can date it to — so it would read as fainting before the move that did it. Anything announced inside the gap
+  // came first.
+  for (const e of ev) {
+    const inGap = moves.filter(m => m.t >= e.t && m.t <= (e.seen || e.t));
+    if (inGap.length) e.t = inGap[inGap.length - 1].t + SAMPLE_MIN;
+  }
+  // a shield the counts saw was spent on the charged move just announced on the other side
+  for (const e of ev) {
+    if (!/Sh$/.test(e.what)) continue;
+    const by = e.what === 'mySh' ? 'opp' : 'my';
+    const m = moves.filter(x => x.by === by && x.t >= e.t - 12 && x.t <= (e.seen || e.t) + 1).pop();
+    if (m) { m.blocked = true; e.move = m.move; }
+  }
 
   const nameOf = r => title(r.species), id = n => (P && P.idByName ? P.idByName(n) : null);
   const myIds = my.map(r => id(nameOf(r))).filter(Boolean), oppIds = opp.map(r => id(nameOf(r))).filter(Boolean);
+  const whoseSide = side => side === 'my' ? 'your' : 'their';
+  const faintOf = (side, t) => { const a = activeAt(st, side, t - 1.5); return a ? nameOf(a) : null; };   // on the field before the fall
   const film = [];
-  for (const r of reads) film.push({t: r.t, text: `${clock(r.t)} ${r.side === 'my' ? 'you sent' : 'they sent'} ${nameOf(r)}${r.cp ? ' (' + r.cp + ')' : ''}`});
-  for (const e of ev) film.push({t: e.t, text: `${clock(e.t)} ${LABEL[e.what]}${/Sh$/.test(e.what) ? ` (${e.to} left)` : ''}`});
+  for (const side of ['my', 'opp']) st[side].forEach((r, i) => {
+    // after a faint on that side it is a send-out; with nobody fainting, the player chose to switch
+    const prev = st[side][i - 1];
+    const fell = prev && ev.some(e => e.what === side + 'Mon' && e.t > prev.t && e.t <= r.t + 3);
+    const verb = !prev || fell ? (side === 'my' ? 'you sent' : 'they sent') : (side === 'my' ? 'you switched to' : 'they switched to');
+    film.push({t: r.t, text: `${clock(r.t)} ${verb} ${nameOf(r)}${r.cp ? ' (' + r.cp + ')' : ''}`});
+  });
+  for (const e of ev) {
+    let text;
+    if (/Mon$/.test(e.what)) { const side = e.what.slice(0, -3), nm = faintOf(side, e.t);
+      text = nm ? `${whoseSide(side)} ${nm} fainted` : LABEL[e.what]; }
+    else text = `${e.what === 'mySh' ? 'you shielded' : 'they shielded'}${e.move ? ' ' + e.move : ''} (${e.to} left)`;
+    film.push({t: e.t, text: `${clock(e.t)} ${text}`, o: /Mon$/.test(e.what) ? -1 : 1});   // the faint, then who came in
+  }
   for (const m of moves) film.push({t: m.t, text: `${clock(m.t)} ${m.species} used ${m.move}${m.blocked ? ' — blocked' : ''}`});
-  film.sort((a, b) => a.t - b.t);
+  film.sort((a, b) => a.t - b.t || (a.o || 0) - (b.o || 0));
+  if (result) { const t = endT !== null ? endT : lastT;
+    film.push({t, text: `${clock(t)} ${result === 'W' ? 'victory' : result === 'L' ? 'good effort — a loss' : 'a draw'}${timedOut ? ', on the clock' : ''}`}); }
   const relMoves = moves.map(m => ({t: Math.round(m.t * 10) / 10, by: m.by, species: m.species, move: m.move, blocked: m.blocked}));
+  const fell = k => ev.filter(e => e.what === k).reduce((n, e) => n + (e.from - e.to), 0);
+  // a shield spent in the last second or two of the HUD has no HOLD samples left to confirm it: two closing rows that
+  // agree are enough there
+  const tail = k => { const a = g.rows[g.rows.length - 1], b = g.rows[g.rows.length - 2];
+    return a && b && a[k] === b[k] && first[k] !== undefined ? Math.max(0, first[k] - a[k]) : 0; };
+  const used = k => Math.max(fell(k), tail(k));
 
   return {
     t: ((file && file.lastModified) || Date.now()) + Math.round((g.rows[0] ? g.rows[0].t : 0) * 1000),  // battles in a set keep their order
@@ -452,15 +680,18 @@ async function readSeg(g, file, onStep) {
     oppNames: opp.map(nameOf),
     myNames: my.map(nameOf),
     myLead: myIds[0] || null,
-    shields: {me: 2 - (last.mySh !== undefined ? last.mySh : 2), opp: 2 - (last.oppSh !== undefined ? last.oppSh : 2)},
-    fainted: {me: 3 - (last.myMon || 0), opp: 3 - (last.oppMon || 0)},
+    // from what the counts started at, so a recording that begins mid-match does not charge shields it never saw
+    shields: {me: Math.min(2, (2 - (first.mySh !== undefined ? first.mySh : 2)) + used('mySh')),
+              opp: Math.min(2, (2 - (first.oppSh !== undefined ? first.oppSh : 2)) + used('oppSh'))},
+    fainted: {me: Math.min(3, (3 - (first.myMon || 3)) + fell('myMon')), opp: Math.min(3, (3 - (first.oppMon || 3)) + fell('oppMon'))},
     moves: relMoves,
     film: film.slice(0, FILM_MAX).map(f => f.text),
     // everything the read found, kept as data and not only as sentences: the AI review and any later screen can use it
     filmData: {
-      reads: reads.map(r => ({t: Math.round(r.t * 10) / 10, side: r.side, species: r.species, cp: r.cp})),
+      reads: st.my.concat(st.opp).sort((a, b) => a.t - b.t).map(r => ({t: Math.round(r.t * 10) / 10, side: r.side, species: r.species, cp: r.cp})),
       events: ev.map(e => ({t: Math.round(e.t * 10) / 10, what: e.what, from: e.from, to: e.to})),
       moves: relMoves,
+      unread,
       samples: g.rows.length, dur: Math.round(g.rows[g.rows.length - 1].t - g.rows[0].t)
     },
     src: 'film'
@@ -509,7 +740,7 @@ async function finish(file) {
   return out;
 }
 
-window.Film = {start, stop, frame, finish, seen, report, calibrate, events, matchSpecies, movesFor,
+window.Film = {start, stop, frame, finish, seen, report, calibrate, events, matchSpecies, movesFor, textLine, bannerCrop, inkOf,
                shotCount: () => (S ? S.shots.length : 0), splitRows,
                segCount: () => (S && S.rows.length >= MIN_ROWS ? splitRows(S.rows).length : 0)};
 })();

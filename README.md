@@ -206,6 +206,20 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **The timeline reads like the match** (v9.94, after a daylight loss logged as "you sent Chesnaught" three times,
+  no moves and "fainted: you 2"): the log is built from who was on the field when, not from each read of a card.
+  A card re-read every 20 s only fills in a CP, so each Pokémon appears once per stint, and a new name is a send-out
+  after a faint or a switch without one ("they switched to Medicham"). Faints name the Pokémon ("their Medicham
+  fainted") and are dated to when the HUD went, after the move that caused them; a shield the counts saw is tied to
+  the charged move just announced ("you shielded Stone Edge", which also marks that move blocked). The last faint of
+  a match never shows in the counts — the HUD goes with it — so a loss or win that did not run the clock out counts
+  it, and the timeline ends with the result. The HUD search no longer backs off to every 8th sample during the
+  intro (calibration needs two agreeing samples, so that put the first read at 0:17 and missed a lead that switched
+  out). The banners are found as a line of hard white strokes anywhere under the status bar instead of in a band
+  that had to be mostly dark — which a daylight sky never is, so no move was ever read — and turned into black type
+  on white only where the white is enclosed by the lettering's outline or plate, so bright sky is not ink. When the
+  sentence does not survive, a charged move of one of the two Pokémon on the field anywhere in the words is enough
+  ("ne Edg" is Stone Edge). What OCR made of the banners it could not use is kept with the battle (`filmData.unread`).
 - **Which Pokémon was on the card**: a switch is spotted by comparing the ink profile of the name, which is
   smoothed before it is compared and compared at a low distance — measured, two different names of similar length
   scored 0.27 against the old threshold of 0.34 and so registered as no change at all, which is how an opponent's
