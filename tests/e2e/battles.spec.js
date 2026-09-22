@@ -39,8 +39,18 @@ test('battle log: saved reads, rating, stats, team record and coach context', as
   await page.evaluate(() => Planner.nav('#/battles'));
   await page.locator('#battles .team.row', { hasText: 'vs Tinkaton' }).first().click();   // a battle row opens its page (a rating row is not a battle and does not)
   await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/battle\//);
-  await page.locator('#battle a:has-text("delete this battle")').click();
+  // the delete sits on the card's own ⋮, and one tap on the toast puts the battle back
+  await page.locator('#battle .team.card .ctx .dots').first().click();
+  await page.locator('#battle .ctx .menu button:has-text("Delete this battle")').click();
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/battles');
+  expect(await page.evaluate(() => Planner.BATTLES.length)).toBe(4);
+  await page.locator('#toast:has-text("tap to undo")').click();
+  expect(await page.evaluate(() => Planner.BATTLES.length), 'undo puts it back').toBe(5);
+
+  // and every row carries a delete now, not only the ones with nothing to open
+  const row = page.locator('#battles .team.row', { hasText: 'vs Tinkaton' }).first();
+  await row.locator('.ctx .dots').click();
+  await row.locator('.ctx .menu button:has-text("Delete")').click();
   expect(await page.evaluate(() => Planner.BATTLES.length)).toBe(4);
   expect(errors).toEqual([]);
 });

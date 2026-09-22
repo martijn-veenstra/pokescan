@@ -164,6 +164,12 @@ test('a truncated read says how little of the recording it managed, instead of l
   // a read that covered the battle says nothing extra
   const rows = log.locator('.il');
   await expect(rows.nth(0), 'the complete read is not flagged').not.toContainText('could be read');
+  // and a line can be taken out on its own, not only by clearing the lot
+  await expect(rows).toHaveCount(2);
+  await rows.nth(0).locator('.ctx .dots').click();
+  await rows.nth(0).locator('.ctx .menu button:has-text("Remove this line")').click();
+  await expect(log.locator('.il')).toHaveCount(1);
+  await expect(log, 'the one that was removed is gone').not.toContainText('whole.mp4');
   expect(errors).toEqual([]);
 });
 

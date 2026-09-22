@@ -1352,7 +1352,20 @@ function logRating(v, extra) {
   BATTLES.push(Object.assign({id: newId(), t: Date.now(), league: LEAGUE.slug, rating, src: 'rating'}, extra || {}));
   saveBattles(); renderBattles(); status(`Rating ${rating} saved`);
 }
-function delBattle(id) { BATTLES = BATTLES.filter(b => b.id !== id); saveBattles(); renderBattles(); }
+/* Deleting is one tap behind the ⋮, with the battle held for one undo rather than a confirm dialog: the log is a
+   record of evenings, and a read that went wrong is the common reason to want it gone. saveBattles() sorts by time,
+   so putting one back needs no index. */
+let LASTDEL = null;
+function delBattle(id) {
+  const b = battleById(id); if (!b) return;
+  LASTDEL = b; BATTLES = BATTLES.filter(x => x.id !== id); saveBattles(); renderBattles(); refresh();
+  if (typeof toast === 'function') toast('Battle deleted — tap to undo', 'Planner.undoDelete()');
+}
+function undoDelete() {
+  if (!LASTDEL) return;
+  BATTLES.push(LASTDEL); LASTDEL = null; saveBattles(); renderBattles(); refresh();
+  if (typeof toast === 'function') toast('✓ battle back in the log', null, true);
+}
 function importFilm(files) {                    // a recording picked on the battle log page: same pipeline, but its log lands here
   if (!files || !files.length || typeof importFilmFiles !== 'function') return;
   importFilmFiles([...files]).then(() => renderBattles());
@@ -1364,6 +1377,12 @@ function logBattleImport(e) {
   localStorage.setItem('blog', JSON.stringify(BLOG)); renderBattles();
 }
 function clearBattleLog() { BLOG.length = 0; localStorage.removeItem('blog'); renderBattles(); }
+function delBattleImport(i) {                   // one line out of "Last imports", for a read you have finished with
+  if (i < 0 || i >= BLOG.length) return;
+  BLOG.splice(i, 1);
+  if (BLOG.length) localStorage.setItem('blog', JSON.stringify(BLOG)); else localStorage.removeItem('blog');
+  renderBattles();
+}
 function filmWhy(f) {                           // the reader's own diagnostics, in words
   if (!f) return 'The recording was read, but the battle reader did not run on it.';
   if (f.entries) {
@@ -1380,14 +1399,14 @@ function filmWhy(f) {                           // the reader's own diagnostics,
 }
 function blogCard() {
   if (!BLOG.length) return '';
-  const rows = BLOG.map(e => {
+  const rows = BLOG.map((e, i) => {
     const when2 = new Date(e.t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
     const name = (e.file || '').length > 26 ? (e.file || '').slice(0, 13) + '…' + (e.file || '').slice(-10) : (e.file || '');
     const why = e.ok ? filmWhy(e.film) : '';
     const dg = e.film ? `${e.film.frames || 0} frames sampled · HUD ${(e.film.cal !== undefined ? e.film.cal : e.film.hud) ? 'found' : 'not found'}${e.film.good ? ` · ${e.film.good} battle${e.film.good === 1 ? '' : 's'}` : ''}${e.film.shots ? ` · ${e.film.shots} names read` : ''}${e.film.banners ? ` · ${e.film.banners} banners` : ''}${e.film.seen1 && e.film.dur ? ` · read ${e.film.seen0 || 0}–${e.film.seen1}s of ${e.film.dur}s` : ''}` : '';
     return `<div class="il"><span class="t">${when2}</span><span><span class="f">${esc(name)}</span> <span class="dim">${e.size ? (e.size / 1e6).toFixed(0) + ' MB' : ''}${e.ms ? ` · ${(e.ms / 1000).toFixed(0)}s` : ''}</span>
       <br><span class="r ${e.ok && e.film && e.film.entries ? 'ok' : 'err'}">${e.ok && e.film && e.film.entries ? '✓ ' : '⚠ '}${esc(e.ok ? why : (e.msg || 'the import failed'))}</span>
-      ${dg ? `<br><span class="d">${esc(dg)}</span>` : ''}${!e.ok && e.detail ? `<br><span class="d">${esc(e.detail)}</span>` : ''}</span></div>`;
+      ${dg ? `<br><span class="d">${esc(dg)}</span>` : ''}${!e.ok && e.detail ? `<br><span class="d">${esc(e.detail)}</span>` : ''}</span>${ctxMenu([['Remove this line', `Planner.delBattleImport(${i})`, true]])}</div>`;
   }).join('');
   return `<div class="team card blog" style="cursor:default"><div class="sec" style="margin:0 0 4px;display:flex;justify-content:space-between;align-items:center"><span>Last imports</span><a href="#" class="dim" style="font-size:12px" onclick="Planner.clearBattleLog();return false">clear</a></div>${rows}</div>`;
 }
@@ -1528,7 +1547,7 @@ function battleInner() {
     return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${esc(use.join(' / ') || 'not read')}</div></div>`; };
   let h = `<div class="back" onclick="Planner.nav('#/battles')">‹ ${esc(PAGE_LABEL.battles)}</div>`;
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center">
-    <span style="color:${col}">${res}</span><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span></div>
+    <span style="color:${col}">${res}</span><span style="display:flex;align-items:center;gap:6px"><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span>${ctxMenu([['Delete this battle', `Planner.delBattleGo(${attr(b.id)})`, true]])}</span></div>
     <div class="bvs">${side(b.ids, b.myNames, 'you')}<span class="vs">vs</span>${side(b.opp, b.oppNames, 'them')}</div>
     ${kv([['Shields', b.shields ? `you ${b.shields.me} · them ${b.shields.opp}` : '—'], ['Fainted', b.fainted ? `you ${b.fainted.me} · them ${b.fainted.opp}` : '—'],
          ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in']])}
@@ -1546,7 +1565,7 @@ function battleInner() {
   }
   if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="filmt page">${b.film.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
   h += battleReviewCard(b);
-  h += `<div class="note">Read from a recording on this phone, so it can be wrong: <a href="#" onclick="Planner.delBattleGo(${attr(b.id)});return false">delete this battle</a> and it leaves your record and the stats.</div>`;
+  h += `<div class="note">Read from a recording on this phone, so it can be wrong. Deleting it (⋮ above) takes it out of your record and the stats, with one tap to put it back.</div>`;
   return h;
 }
 function delBattleGo(id) { delBattle(id); nav('#/battles'); }
@@ -1555,7 +1574,7 @@ function battleRow(b, noChips) {                // one line per battle; a film e
   const col = b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)';
   const open = b.result || b.opp ? ` onclick="Planner.openBattle(${attr(b.id)})" style="cursor:pointer"` : ' style="cursor:default"';
   const src = b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : b.src === 'film' ? ' · read from your recording' : '';
-  const row = `<div class="team row"${open}><span class="sc" style="color:${col}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${whenT(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${src}</div></span>${b.result || b.opp ? '<span class="go">›</span>' : ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`;
+  const row = `<div class="team row"${open}><span class="sc" style="color:${col}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${whenT(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${src}</div></span>${b.result || b.opp ? '<span class="go">›</span>' : ''}${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`;
   // asked only where it is still missing, so an attributed log stays quiet
   return row + (!noChips && b.src === 'film' && !b.team ? teamChips(b) : '');
 }
@@ -2520,7 +2539,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

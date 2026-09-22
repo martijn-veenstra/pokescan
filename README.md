@@ -186,6 +186,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   way. The importer drops to real time on the first stall, and when playback gives up for good it carries on reading
   the battle by seeking, so a stall no longer truncates the entry silently. The log names the span it managed
   (`read 2–37s of 205s`) and says what is missing when the coverage is partial.
+- **Anything read from a recording can be deleted**: every row in the battle log carries a ⋮ with Delete (it used
+  to be there only for rows with nothing to open, so a battle read from a recording could only be deleted from a
+  link at the bottom of its own page), a battle's own page has the same on its card, and a deleted battle is held
+  for one tap on the toast to put it back rather than behind a confirm dialog. A single line of **Last imports**
+  can be removed on its own instead of clearing the lot.
 - **When a read finds nothing, the battle log says why**: every import from that page leaves an entry under
   **Last imports** — how many frames were sampled, whether the two HUD cards were found at all, how many battles
   and names came out — so a recording the reader cannot use explains itself instead of failing silently. Those
