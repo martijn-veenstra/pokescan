@@ -387,7 +387,7 @@ function offCard(ctx, W, H, t) {
   // v2 kept end screens only after halfway through the recording, which in a set is after four battles have already
   // ended: they are kept throughout and assigned to the battle they follow, so every battle reads its own result
   S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
-  if (S.ends.length > 24) S.ends.shift();
+  if (S.ends.length > 40) S.ends.shift();          // the closing screens can run fifteen seconds and more
   // The move is announced for a moment at the start of the animation, so a crop taken on a timer mostly catches the
   // animation and not the words. Every frame of a gap is scored and the best one kept, pushed when the HUD comes
   // back: one OCR per gap, on the frame where the words were up.
@@ -698,7 +698,8 @@ async function readSeg(g, file, onStep) {
     return new Set(who).size === 1 ? {species: who[0], move} : null;   // both on the field know it: can't say whose
   };
 
-  const moves = [], unread = [];                           // unread: what OCR made of the banners that said nothing
+  const moves = [], unread = [];
+  let bannerResult = null;                                 // "YOU WIN!" caught by the banner readers, if the end frames miss it                           // unread: what OCR made of the banners that said nothing
   const WL = LETTERS + " ,!'";
   for (const b of g.banners) {
     onStep();
@@ -718,7 +719,10 @@ async function readSeg(g, file, onStep) {
       const txt = (await ocr(img, WL, 6)).replace(/\s+/g, ' ').trim();
       if (!raw && txt.replace(/[^A-Za-z]/g, '').length >= 4) raw = txt;
       const p = parse(txt, tr.t);
-      if (p && p.blocked) { const m = moves[moves.length - 1]; if (m && tr.t - m.t < 8) m.blocked = true; continue; }
+      // "BLOCKED!" says a shield went up, not whose or against what: which move it stopped comes from the counts below,
+      // since a "BLOCKED!" read out of a later gap used to mark the wrong move ("Torch Song — blocked")
+      const vd = verdict(txt.toUpperCase()); if (vd && !bannerResult) bannerResult = {r: vd, t: tr.t};
+      if (p && p.blocked) continue;
       if (p) { got = p; at = tr.t; break; }
     }
     if (!got) { if (raw && unread.length < 12) unread.push(`${clock(b.t)} ${raw.slice(0, 60)}`); continue; }
@@ -736,9 +740,11 @@ async function readSeg(g, file, onStep) {
   let result = null, endT = null;
   for (const e of g.ends.slice().reverse()) {
     onStep();
-    const r = verdict((await ocr(e.img, '', 11)).toUpperCase());
+    // big white type over the trainer: the white threshold first, then the crop as it is
+    const r = verdict((await ocr(whiteInk(e.img), '', 11)).toUpperCase()) || verdict((await ocr(e.img, '', 11)).toUpperCase());
     if (r) { result = r; endT = e.t; break; }
   }
+  if (!result && bannerResult) { result = bannerResult.r; endT = bannerResult.t; }
   // no end screen read: the side that was down to its last Pokémon when the HUD went for good is the one that lost
   if (!result && last.myMon === 1 && last.oppMon > 1) result = 'L';
   if (!result && last.oppMon === 1 && last.myMon > 1) result = 'W';
@@ -754,16 +760,18 @@ async function readSeg(g, file, onStep) {
   // A charged move and the faint (or shield) it causes share one gap in the HUD, and the gap's start is all the counts
   // can date it to — so it would read as fainting before the move that did it. Anything announced inside the gap
   // came first.
+  // A shield was spent on the other side's charged move just before the HUD came back with one fewer, and it goes
+  // right after that move — not after whatever else was announced in the same gap ("they shielded Dive" had landed
+  // after Skeledirge's Torch Song, ten seconds on). A faint goes after the other side's last move in the gap.
   for (const e of ev) {
-    const inGap = moves.filter(m => m.t >= e.t && m.t <= (e.seen || e.t));
-    if (inGap.length) e.t = inGap[inGap.length - 1].t + SAMPLE_MIN;
-  }
-  // a shield the counts saw was spent on the charged move just announced on the other side
-  for (const e of ev) {
-    if (!/Sh$/.test(e.what)) continue;
-    const by = e.what === 'mySh' ? 'opp' : 'my';
-    const m = moves.filter(x => x.by === by && x.t >= e.t - 12 && x.t <= (e.seen || e.t) + 1).pop();
-    if (m) { m.blocked = true; e.move = m.move; }
+    const hi = (e.seen || e.t) + 1, side = e.what.startsWith('my') ? 'my' : 'opp', by = side === 'my' ? 'opp' : 'my';
+    if (/Sh$/.test(e.what)) {
+      const m = moves.filter(x => x.by === by && x.t >= e.t - 12 && x.t <= hi).pop();
+      if (m) { m.blocked = true; e.move = m.move; e.t = m.t + SAMPLE_MIN; }
+    } else {
+      const m = moves.filter(x => x.by === by && x.t >= e.t && x.t <= hi).pop();
+      if (m) e.t = m.t + SAMPLE_MIN;
+    }
   }
 
   const nameOf = r => title(r.species);

@@ -206,6 +206,12 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **v9.97, from the same match read on the phone**: a shield is placed right after the move it stopped, and which move
+  was blocked comes only from the counts — a "BLOCKED!" read out of a later gap had marked Torch Song blocked. The
+  result is read off the closing screens with the white-text threshold too, from the last 40 frames instead of 24,
+  and a "YOU WIN!" / "GOOD EFFORT" caught by the banner readers counts when those miss it. The loader's line under
+  the ball follows the recording (it stayed on "Video 24s / 166s"), and its event list shows the newest first and
+  adds lines in place, so scrolling back while a recording is read no longer jumps.
 - **Read against a real recording** (v9.96, an evening battle on an iPhone, 1170×2532, that came back "No battle HUD
   found"): the shield test (red and blue both over 140) also matched a purple evening sky pixel for pixel, so
   calibration locked onto a row of sky. The HUD row is now found from pokéball red alone, and a live shield is the

@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='9.96';
+const APP_VERSION='9.97';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -818,10 +818,25 @@ function evt(text){
   renderEvents();
 }
 window.filmEvent=evt;                            // battlefilm.js reports the battle as it reads it
+/* Newest first, and only what is new is added. The list used to be emptied and refilled on every event with the
+   newest at the bottom: on a phone that reset the scroll each time and left it resting on half a line, so reading back
+   while a recording was being read meant fighting the list. Now the latest finding is always the top line, and
+   anyone who has scrolled down to read stays exactly where they are. */
+function evNode(e){ const d=document.createElement('div'); d.className='ev'; d.textContent=e.text; return d; }
 function fillEvents(el){
-  el.textContent='';
-  if(!EVT.length){ const d=document.createElement('div'); d.className='ev none'; d.textContent='nothing read yet'; el.appendChild(d); return; }
-  for(const e of EVT){ const d=document.createElement('div'); d.className='ev'; d.textContent=e.text; el.appendChild(d); }
+  const shown=+(el.dataset.n||0), first=EVT[0];
+  // a fresh list, or EVT has been trimmed or reset under it: rebuild
+  if(!shown || !first || el.dataset.first!==String(first.t)+first.text || shown>EVT.length){
+    el.textContent='';
+    if(!EVT.length){ const d=document.createElement('div'); d.className='ev none'; d.textContent='nothing read yet'; el.appendChild(d); el.dataset.n=0; return; }
+    for(let i=EVT.length-1;i>=0;i--) el.appendChild(evNode(EVT[i]));
+  } else {
+    const top=el.scrollTop;
+    let added=0;
+    for(let i=shown;i<EVT.length;i++){ const d=evNode(EVT[i]); el.insertBefore(d, el.firstChild); added+=d.offsetHeight; }
+    if(top>2) el.scrollTop=top+added;               // reading further down: the new lines must not push the text away
+  }
+  el.dataset.n=EVT.length; el.dataset.first=String(EVT[0].t)+EVT[0].text;
 }
 function renderEvents(){
   const label=`${evtOpen?'▾':'▸'} ${EVT.length} event${EVT.length===1?'':'s'} recorded`;
@@ -829,7 +844,7 @@ function renderEvents(){
     const b=$(pre+'evx'), l=$(pre+'evl'); if(!b||!l) continue;
     b.textContent=label; b.setAttribute('aria-expanded', evtOpen?'true':'false');
     l.hidden=!evtOpen;
-    if(evtOpen){ const bottom=l.scrollTop+l.clientHeight>=l.scrollHeight-4; fillEvents(l); if(bottom) l.scrollTop=l.scrollHeight; }
+    if(evtOpen) fillEvents(l);
   }
 }
 function toggleEvents(){ evtOpen=!evtOpen; renderEvents(); syncFloat(); }
@@ -993,7 +1008,7 @@ async function scanVideo(file,trainer){
   let aborted=false;
   if(played){
     try{ await new Promise((resolve,reject)=>{
-      let lastT=-1, busy=false, done=false, lastProgressAt=Date.now(), lastSeen=-1, nudged=0;
+      let lastT=-1, busy=false, done=false, lastProgressAt=Date.now(), lastSeen=-1, nudged=0, lastShown=-1;
       const finish=err=>{ if(done) return; done=true; clearInterval(iv); vid.onended=null; vid.onerror=null; err?reject(err):resolve(); };
       vid.onended=()=>finish(); vid.onerror=()=>finish(fail('the video stopped playing (decode error)'));
       const iv=setInterval(async()=>{
@@ -1012,7 +1027,9 @@ async function scanVideo(file,trainer){
         if(t-lastT<1/3) return;
         busy=true; lastT=t;
         try{
-          if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); if(window.Film) Film.frame(ctx,cv.width,cv.height,t); progress(Math.min(1,t/dur)); }   // no pause/play churn: the big file plays through smoothly
+          if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); if(window.Film) Film.frame(ctx,cv.width,cv.height,t); progress(Math.min(1,t/dur));   // no pause/play churn: the big file plays through smoothly
+            // the line under the ball kept saying the second battle mode began at ("Video 24s / 166s") for the whole read
+            if(Math.round(t)!==lastShown){ lastShown=Math.round(t); status(`Video ${lastShown}s / ${Math.round(dur)}s · watching the battle…`); } }
           else { vid.pause();                                      // hold the frame still while we look at it
             await analyse(t);
             if(!done){ await vid.play().catch(()=>{}); } }
