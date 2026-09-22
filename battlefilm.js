@@ -39,7 +39,13 @@ const RE_READ = 20;             // s: read each card again anyway, so a switch t
 // budget on its first two switches, which is why an opponent's second and third Pokémon never made the log. Wait
 // for the profile to hold, then take exactly one crop of it.
 const NAME_HOLD = 2;
-const MAX_OCR = 44, MAX_BANNERS = 70;              // across the recording; one match is easily 50 banners
+const MAX_OCR = 44, MAX_BANNERS = 90;              // gaps in the HUD kept, across the recording; one match is easily 50
+/* v9.93 kept a single frame per gap — the one that scored best as text — and when that was the wrong frame, the move
+   was gone. The v2 reader grabbed the fixed announcement band on a timer instead, and read moves this one missed. Both
+   are kept now: the best-scoring line, and the band at the start of the gap and every second after, a few per gap.
+   They are read in turn only until one of them gives a move, so a gap usually still costs one OCR. Stored as JPEG,
+   because a recording's worth of full-width canvases is more memory than a phone gives a page. */
+const TIMED = [0.20, 0.48], TIMED_EVERY = 1.0, TIMED_PER_GAP = 4, MAX_TIMED = 220;
 const MIN_ROWS = 8;             // samples a battle needs before it counts as one at all
 /* calibrate() reads a fifth of the screen, so after this many misses it is tried on every other sample only. It used to
    be every 8th: with two agreeing calibrations needed, a battle whose HUD came up 9 s in was first read at 0:17, after
@@ -141,10 +147,12 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 }
 
 /* ---------- per frame ---------- */
+const newGap = () => ({score: 0, t: 0, img: null, timed: [], tt: null});
+const jpeg = c => c.toDataURL('image/jpeg', 0.9);
 function start(dur) {
   S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
        name: {my: {p: null, n: 0, shot: false, t: -99, t0: 0, first: true}, opp: {p: null, n: 0, shot: false, t: -99, t0: 0, first: true}},
-       gap: {score: 0, t: 0, img: null}, lastT: -9, frames: 0, miss: 0, cur: null, run: {}};
+       gap: newGap(), timedN: 0, lastT: -9, frames: 0, miss: 0, cur: null, run: {}};
 }
 // the loader card shows the read as it happens: hand each finding to scanner.js's feed, if it is listening
 const say = s => { try { if (window.filmEvent) window.filmEvent(s); } catch (e) {} };
@@ -334,16 +342,31 @@ function offCard(ctx, W, H, t) {
   // animation and not the words. Every frame of a gap is scored and the best one kept, pushed when the HUD comes
   // back: one OCR per gap, on the frame where the words were up.
   const ln = textLine(ctx, W, H);
-  if (ln.score > S.gap.score) S.gap = {score: ln.score, t, img: bannerCrop(ctx, W, H, ln.y)};
+  const G = S.gap;
+  if (ln.score > G.score) { G.score = ln.score; G.t = t; G.img = bannerCrop(ctx, W, H, ln.y); }
+  // and the v2 way: the fixed band, greyscale, from the first frame of the gap and then every second
+  if (G.timed.length < TIMED_PER_GAP && S.timedN < MAX_TIMED && (G.tt === null || t - G.tt >= TIMED_EVERY)) {
+    G.tt = t; S.timedN++;
+    G.timed.push({t, url: jpeg(grab(ctx, [0, Math.round(H * TIMED[0]), W, Math.round(H * (TIMED[1] - TIMED[0]))], Math.min(0.8, 700 / W)))});
+  }
 }
 function flushGap() {
-  if (!S || !S.gap.img) return;
-  if (S.banners.length < MAX_BANNERS) {
-    S.banners.push({t: S.gap.t, img: S.gap.img});
-    if (S.banners.length % 5 === 0) say(`${clock(S.gap.t)} ${S.banners.length} announcements grabbed to read for moves`);
+  if (!S) return;
+  const G = S.gap;
+  if ((G.img || G.timed.length) && S.banners.length < MAX_BANNERS) {
+    const t = G.img ? G.t : G.timed[0].t;
+    S.banners.push({t, img: G.img ? jpeg(G.img) : null, timed: G.timed});
+    if (S.banners.length % 5 === 0) say(`${clock(t)} ${S.banners.length} announcements grabbed to read for moves`);
   }
-  S.gap = {score: 0, t: 0, img: null};
+  S.gap = newGap();
 }
+const toCanvas = url => new Promise(res => {            // a stored crop back into something OCR and inkOf can read
+  const im = new Image();
+  im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+    c.getContext('2d').drawImage(im, 0, 0); res(c); };
+  im.onerror = () => res(null);
+  im.src = url;
+});
 
 /* ---------- reading the queued crops ---------- */
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -570,11 +593,17 @@ async function readSeg(g, file, onStep) {
     let j = -1;
     for (let i = 1; i < words.length - 1; i++) if (isUsed(words[i])) { j = i; break; }
     if (j > 0) {
-      const who2 = words.slice(0, j).join(''), what = words.slice(j + 1).join('');
-      const sp = pick(who2, act) || pick(who2, onField) || matchSpecies(who2);
+      // the Pokémon is the word right before "used" — the v2 reader took exactly that, and a banner that opens with
+      // "The opponent's" buries the name in anything longer — then the last two words, then all of them
+      const before = words.slice(0, j), what = words.slice(j + 1).join('');
+      let sp = null;
+      for (const who2 of [before.slice(-1).join(''), before.slice(-2).join(''), before.join('')]) {
+        sp = pick(who2, act) || pick(who2, onField) || matchSpecies(who2);
+        if (sp) break;
+      }
       if (sp) {
-        const own = movesFor(sp);
-        const move = pick(what, own.length ? own : allMoveNames());
+        const own = movesFor(sp), list = own.length ? own : allMoveNames();
+        const move = pick(what, list) || closest(what, list) || findIn(words.slice(j + 1), list);
         if (move) return {species: sp, move};
       }
     }
@@ -587,20 +616,29 @@ async function readSeg(g, file, onStep) {
   };
 
   const moves = [], unread = [];                           // unread: what OCR made of the banners that said nothing
+  const WL = LETTERS + " ,!'";
   for (const b of g.banners) {
     onStep();
-    let got = null, raw = '';
-    for (const make of [inkOf, inverted]) {
-      const txt = (await ocr(make(b.img), LETTERS + " ,!'", 6)).replace(/\s+/g, ' ').trim();
-      if (!raw) raw = txt;
-      got = parse(txt, b.t);
-      if (got) break;
+    // the tries for one gap, cheapest-to-right first: the best line as black ink, the v2 band crops in time order,
+    // and the best line inverted. The first that says something settles the gap.
+    const best = b.img ? await toCanvas(b.img) : null;
+    const tries = [];
+    if (best) tries.push({t: b.t, get: () => inkOf(best)});
+    for (const x of b.timed || []) tries.push({t: x.t, get: () => toCanvas(x.url)});
+    if (best) tries.push({t: b.t, get: () => inverted(best)});
+    let got = null, at = b.t, raw = '';
+    for (const tr of tries) {
+      const img = await tr.get(); if (!img) continue;
+      const txt = (await ocr(img, WL, 6)).replace(/\s+/g, ' ').trim();
+      if (!raw && txt.replace(/[^A-Za-z]/g, '').length >= 4) raw = txt;
+      const p = parse(txt, tr.t);
+      if (p && p.blocked) { const m = moves[moves.length - 1]; if (m && tr.t - m.t < 8) m.blocked = true; continue; }
+      if (p) { got = p; at = tr.t; break; }
     }
     if (!got) { if (raw && unread.length < 12) unread.push(`${clock(b.t)} ${raw.slice(0, 60)}`); continue; }
-    if (got.blocked) { const m = moves[moves.length - 1]; if (m && b.t - m.t < 6) m.blocked = true; continue; }
     const sp = got.species, move = got.move;
-    if (moves.some(m => m.species === title(sp) && m.move === move && b.t - m.t < 4)) continue;
-    moves.push({t: b.t, by: whose(sp, b.t), species: title(sp), move, blocked: false});
+    if (moves.some(m => m.species === title(sp) && m.move === move && at - m.t < 4)) continue;
+    moves.push({t: at, by: whose(sp, at), species: title(sp), move, blocked: false});
   }
   st = stintsOf(reads);
 

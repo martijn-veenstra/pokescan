@@ -372,3 +372,43 @@ test('the reported battle reads back like the recording: each switch once, the m
   expect(at(/their Medicham fainted/)).toBeLessThan(at(/1:0\d they sent Bastiodon/));
   expect(errors).toEqual([]);
 });
+
+/* The v2 script read moves the one-best-frame reader lost: when the frame that scored best as text was not the
+   announcement (a bigger line elsewhere in the band, the swipe prompt), that gap's move was gone. The fixed band on
+   a timer is kept too, and a banner that opens with "The opponent's" still names the right Pokémon. */
+test('a move is still read when the best-looking line in the gap is not the announcement', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('bdraft'); localStorage.removeItem('roster'); });
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(HARNESS);
+  const out = await page.evaluate(async () => {
+    window.__names = ['AZUMARILL', 'BASTIODON'];
+    const seen = { ink: 0, band: 0 };
+    window.getWorker = async () => { let wl = '';
+      return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
+        recognize: async c => {
+          if (!wl.includes('!')) return { data: { text: wl.includes('Z') ? (window.__names.shift() || 'AZUMARILL') : '1500' } };
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let bw = true;
+          for (let i = 0; i < d.length; i += 4) if (d[i] !== 0 && d[i] !== 255) { bw = false; break; }
+          if (bw) { seen.ink++; return { data: { text: 'TAP TAP TAP' } }; }        // the best line: the swipe prompt
+          seen.band++; return { data: { text: "The opponent's BASTIODON used STONE EDGE!" } };
+        } }; };
+    Film.start(60);
+    let t = 0;
+    const step = () => { const c = window.__paint(3, 3, 2, 2, null, false, 'BASTIODON'); Film.frame(c, ...window.__size, t); t += 0.5; };
+    for (let i = 0; i < 12; i++) step();
+    const g = window.__ctx(), [W, H] = window.__size;
+    for (let i = 0; i < 4; i++) {                          // the gap: a huge prompt low down outscores the small words
+      window.__gap();
+      g.fillStyle = '#fff'; g.font = 'bold 16px sans-serif'; g.fillText("Bastiodon used Stone Edge!", 60, H * 0.24);
+      g.font = 'bold 40px sans-serif'; g.lineWidth = 5; g.strokeStyle = '#000'; g.strokeText('TAP TAP TAP', 40, H * 0.5); g.fillText('TAP TAP TAP', 40, H * 0.5);
+      Film.frame(g, W, H, t); t += 0.5;
+    }
+    for (let i = 0; i < 8; i++) step();
+    const e = (await Film.finish({ lastModified: Date.now() }))[0];
+    return { seen, moves: e.moves };
+  });
+  expect(out.seen.ink, 'the best line was tried first').toBeGreaterThan(0);
+  expect(out.seen.band, 'then the fixed band').toBeGreaterThan(0);
+  expect(out.moves.map(m => `${m.by} ${m.species} ${m.move}`)).toEqual(['opp Bastiodon Stone Edge']);
+  expect(errors).toEqual([]);
+});

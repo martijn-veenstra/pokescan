@@ -220,6 +220,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   on white only where the white is enclosed by the lettering's outline or plate, so bright sky is not ink. When the
   sentence does not survive, a charged move of one of the two Pokémon on the field anywhere in the words is enough
   ("ne Edg" is Stone Edge). What OCR made of the banners it could not use is kept with the battle (`filmData.unread`).
+  The v2 reader's way of grabbing banners is back alongside: v9.93 kept only the one frame per gap that scored best
+  as text, and when that was the wrong frame the move was lost, where v2's fixed band on a timer had read it. Each gap
+  now keeps both — the best line and the band from the gap's first frame and every second after (stored as JPEG) —
+  and reads them in turn until one gives a move. The Pokémon is taken from the word right before "used" first, as v2
+  did, so "The opponent's Bastiodon used Stone Edge" is not lost to the words in front of the name.
 - **Which Pokémon was on the card**: a switch is spotted by comparing the ink profile of the name, which is
   smoothed before it is compared and compared at a low distance — measured, two different names of similar length
   scored 0.27 against the old threshold of 0.34 and so registered as no change at all, which is how an opponent's
