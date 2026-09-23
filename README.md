@@ -206,6 +206,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **A game plan in the team review, and linked Pokémon on battle pages** (v10.0): the AI review of a team opens with a
+  **Game plan** under the verdict — three short beats, Open / Mid-game / Close: what the lead does with shields, when to
+  switch and who takes the awkward matchups, who finishes. A review cached before it existed says so and offers a
+  refresh instead of spending a new review by itself. On a battle page every Pokémon — the two teams, the move chips
+  and the names in the timeline — is a link: one of yours opens your own scanned copy (IVs, level, where it stands on
+  your roster), falling back to its species page when it has no scan; one of theirs opens the species page. Which side
+  a name in the timeline is on comes from the sentence ("you sent", "their …"), so a mirror match links correctly.
 - **A cup without some of your Pokémon** (v9.99): the roster is kept across leagues, so after switching to a cup the
   wanted and pending lists can name Pokémon the cup's data does not have (Tinkaton in the Retro Cup). Those went
   straight to the roster tiles, which read their rank unchecked, and every scan import failed with "undefined is not an

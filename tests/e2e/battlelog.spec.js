@@ -211,3 +211,35 @@ test('a battle row carries the clock time, the timeline is not boxed twice, and 
   await expect(page.locator('#battle .chip', { hasText: 'Stone Edge' })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+/* A battle page's Pokémon are links: one of yours opens your own scanned copy (IVs, level, where it stands on your
+   roster), one of theirs the species page. In the header, on the move chips and in the timeline alike. */
+test('the Pokémon on a battle page open their pages: yours your scanned copy, theirs the species', async ({ page }) => {
+  await page.addInitScript(seed);
+  const errors = await openApp(page, '#/battles');
+  const key = await page.evaluate(() => {
+    const b = DATA.stats['AZUMARILL'][0], lv = 38, m = cpmAt(lv);
+    const r = { species: 'AZUMARILL', cp: calcCP(b, 8, 15, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 8, 15, 15, b]], appraisal: [8, 15, 15], txt: '', cpCandidates: [] };
+    r.key = `AZUMARILL|${r.cp}|${r.hp}|${lv}|`; results.push(r); save(); render(); Planner.refresh();
+    return r.key;
+  });
+  await page.evaluate(() => Planner.openBattle('b1'));
+  const header = page.locator('#battle .bvs');
+  await expect(header.locator('a.bmon.mine', { hasText: 'Azumarill' })).toBeVisible();
+  await expect(header.locator('a.bmon:not(.mine)', { hasText: 'Registeel' })).toBeVisible();
+  // the timeline and the move chips carry the same links
+  await expect(page.locator('#battle .filmt a.bmon.mine', { hasText: 'Azumarill' })).toHaveCount(1);
+  await expect(page.locator('#battle .chips a.bmon', { hasText: 'Registeel' })).toHaveCount(1);
+  // yours: the scanned copy
+  await header.locator('a.bmon.mine', { hasText: 'Azumarill' }).click();
+  await expect.poll(() => page.evaluate(() => decodeURIComponent(location.hash))).toBe('#/scan/' + key);
+  await page.evaluate(() => Planner.openBattle('b1'));
+  // one of yours with no scan (Medicham): the species page
+  await page.locator('#battle .bvs a.bmon.mine', { hasText: 'Medicham' }).click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/mon/medicham');
+  await page.evaluate(() => Planner.openBattle('b1'));
+  // theirs: the species page
+  await page.locator('#battle .chips a.bmon', { hasText: 'Registeel' }).click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/mon/registeel');
+  expect(errors).toEqual([]);
+});

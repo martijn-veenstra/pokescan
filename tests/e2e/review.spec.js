@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { openApp } from './helpers.js';
 
-const REVIEW = '**Verdict** A solid safe-swap core around Azumarill.\n\n**Strengths**\n- Medicham leads and pressures shields\n- Azumarill is the safe swap\n\n**Weak spots**\n- Tinkaton beats all three: swap to Medicham and bait\n\n**Swaps**\n- Altaria → Corsola (Galarian) (to catch or build): answers Tinkaton\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria\nMedicham pressures shields early; Azumarill is the safest switch; Altaria closes with shields down.';
+const REVIEW = '**Verdict** A solid safe-swap core around Azumarill.\n\n**Game plan**\n- Open: Medicham leads and throws Ice Punch early to pull a shield\n- Mid-game: switch to Azumarill into anything Steel\n- Close: Altaria finishes with shields down\n\n**Strengths**\n- Medicham leads and pressures shields\n- Azumarill is the safe swap\n\n**Weak spots**\n- Tinkaton beats all three: swap to Medicham and bait\n\n**Swaps**\n- Altaria → Corsola (Galarian) (to catch or build): answers Tinkaton\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria\nMedicham pressures shields early; Azumarill is the safest switch; Altaria closes with shields down.';
 
 test('a complete team in the builder gets one AI review, cached per trio', async ({ page }) => {
   const posts = [];
@@ -17,7 +17,13 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
   await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
-  await expect(page.locator('#builder .team.card.review .rsec')).toHaveCount(4);
+  await expect(page.locator('#builder .team.card.review .rsec')).toHaveCount(5);
+  // the game plan sits right under the verdict, its three beats named
+  const plan = page.locator('#builder .team.card.review .rsec.plan');
+  await expect(plan).toContainText('Game plan');
+  await expect(plan.locator('li b')).toHaveText(['Open', 'Mid-game', 'Close']);
+  await expect(plan).toContainText('pull a shield');
+  await expect(page.locator('#builder .team.card.review')).not.toContainText('No game plan in this review yet');
   expect(posts).toHaveLength(1);
   expect(posts[0].mode).toBe('review');
   expect(posts[0].context.builder.slots).toHaveLength(3);
@@ -95,5 +101,33 @@ test('the review card runs the Pokéball loader: shaking with a live timer, caug
   await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
   expect(await page.evaluate(() => window.__caught), 'the ball was caught before the card turned into the review').toBe(true);
   await expect(page.locator('#builder .team.card.rvwait')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a review saved before the game plan existed offers to refresh for one, without asking by itself', async ({ page }) => {
+  const posts = [];
+  await page.route('**/api/**', route => {
+    const u = route.request().url(), m = route.request().method();
+    if (u.endsWith('/api/health')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, db: true, storage: 'memory', sync: true, coach: true, version: 'test' }) });
+    if (u.endsWith('/api/auth')) return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    if (u.endsWith('/api/coach') && m === 'POST') { posts.push(1); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: REVIEW }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"user":"default","state":{}}' });
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('sync', JSON.stringify({ code: 'test', last: {}, base: {} }));
+    localStorage.setItem('roster', JSON.stringify({ tagged: { Core: ['azumarill', 'medicham', 'altaria'] }, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] }));
+    const key = ['azumarill', 'medicham', 'altaria'].sort().join('+') + '|great';
+    localStorage.setItem('bcoach', JSON.stringify({ reviews: { [key]: { t: Date.now() - 86400000, text: '**Verdict** An older review.\n\n**Strengths**\n- ok', slots: ['azumarill', 'medicham', 'altaria'] } } }));
+  });
+  const errors = await openApp(page, '#/teams');
+  await page.evaluate(async () => { await Sync.detect(); Planner.openTeam(['azumarill', 'medicham', 'altaria'], 'Core'); });
+  const card = page.locator('#team .team.card.review');
+  await expect(card).toContainText('An older review');
+  await expect(card).toContainText('No game plan in this review yet');
+  expect(posts, 'an old review is not replaced behind the player\'s back').toHaveLength(0);
+  await card.locator('a:has-text("refresh it")').click();
+  await expect.poll(() => posts.length).toBe(1);
+  await expect(page.locator('#team .team.card.review .rsec.plan')).toContainText('Open');
+  await expect(page.locator('#team .team.card.review')).not.toContainText('No game plan in this review yet');
   expect(errors).toEqual([]);
 });

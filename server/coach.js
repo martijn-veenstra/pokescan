@@ -9,8 +9,12 @@ beat two of the three, the player's roster and the current top meta. The league 
 with the fewest hard losses; Closer wins the last fight, often with shields down. "appRoles" is the order the app's matchup numbers
 suggest, with the reason per member. When "lineupKnown" is false the order is not the player's choice.
 
-Review the team in markdown with exactly these five sections, under 220 words in total, no other text:
+Review the team in markdown with exactly these six sections, under 280 words in total, no other text:
 **Verdict** one sentence: how good this team is and its main idea.
+**Game plan** how to play this team, as exactly three short bullets a player can keep in mind mid-battle:
+"Open: …" what the lead does and whether to spend or bait shields early; "Mid-game: …" when to switch and who takes the
+awkward matchups; "Close: …" who finishes and what the shields should look like by then. Concrete, in this team's own
+Pokémon and moves, no general PvP advice.
 **Strengths** up to 3 bullets: what it handles well, who leads / swaps / closes.
 **Weak spots** up to 3 bullets: the meta Pokémon or patterns it fears, and what to do when you meet them.
 **Swaps** up to 2 bullets, each "X → Y: why", preferring Pokémon the player OWNS (mark others "to catch or build"). Write "none" if the team should stay as it is.

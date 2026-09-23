@@ -446,6 +446,8 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .role .rl .mvs:active{color:var(--green)}
 .btn.sec.mini{margin:0;padding:6px 10px;font-size:12px;flex:none;color:var(--ink);border-radius:9px}
 .review .rsec .btn.mini{display:inline-block;margin-top:6px}
+.team.card.review .rsec.plan{background:rgba(72,213,151,.07);border:1px solid rgba(72,213,151,.22);border-radius:10px;padding:8px 10px;color:var(--ink)}
+.team.card.review .rsec.plan>b{color:var(--green)}.team.card.review .rsec.plan li>b{color:var(--green);font-weight:700;margin-right:2px}
 
 /* page title: every top-level view names itself, since most are reachable only from the drawer */
 .ptitle{margin:2px 0 10px;font-family:Sora,sans-serif;font-weight:800;font-size:19px;letter-spacing:-.02em;color:var(--ink);line-height:1.2}
@@ -523,3 +525,7 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 .team.card.blog .il .f{color:var(--ink)}
 .team.card.blog .il .r.ok{color:#7FE3B6}.team.card.blog .il .r.err{color:#F59A8B}
 .team.card.blog .il .d{color:var(--dim);font-size:11px}
+
+/* a Pokémon on a battle page: tap for its page — yours to your scanned copy, theirs to the species */
+a.bmon{color:inherit;text-decoration:underline;text-decoration-color:rgba(126,147,172,.45);text-underline-offset:2px}
+a.bmon.mine{text-decoration-color:rgba(72,213,151,.6)}

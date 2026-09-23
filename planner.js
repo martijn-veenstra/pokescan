@@ -819,9 +819,9 @@ const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, 
 const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
 const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
 const coachOn = () => !!(window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable());
-const TEAM_SECS = ['Verdict', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
+const TEAM_SECS = ['Verdict', 'Game plan', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
 const BATTLE_SECS = ['What happened', 'Turning point', 'Do differently', 'Matchup note'];
-function parseReview(text, secs) {             // the team prompt asks for Verdict / Strengths / Weak spots / Swaps / Order; a battle review has its own four
+function parseReview(text, secs) {             // the team prompt asks for Verdict / Game plan / Strengths / Weak spots / Swaps / Order; a battle review has its own four
   const out = {}, re = new RegExp('\\*\\*(' + (secs || TEAM_SECS).join('|') + ')\\*\\*:?\\s*', 'gi'), parts = text.split(re);
   if (parts.length < 3) return {Verdict: text.trim()};
   for (let i = 1; i < parts.length; i += 2) out[parts[i][0].toUpperCase() + parts[i].slice(1).toLowerCase()] = (parts[i + 1] || '').trim();
@@ -912,14 +912,20 @@ function reviewCard(ids, auto) {                // the card; auto = ask Claude b
   if (busy || (!rv && auto && !failed)) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is judging this team: roles, weak spots and swaps from your roster. Usually 20 to 90 seconds.');
   if (!rv && failed) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a>`);
   if (!rv) return wait('', '', `<a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Get an AI review</a> of this team: roles, weak spots and swaps from your roster.`);
-  const sec = parseReview(rv.text), order = ['Verdict', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
+  const sec = parseReview(rv.text), order = TEAM_SECS;
   // the Order section's first line is a lineup: one tap applies it to the saved party or the builder slots when it differs
   const perm = sec.Order ? orderFromReview(sec.Order, ids) : null, party = perm ? savedName(ids, null) : null;
   let apply = '';
   if (perm && party && ROSTER.tagged[party].join() !== perm.join()) apply = `<button class="btn sec mini" onclick="Planner.reorderTeam(${attr(party)},${attr(perm)})">Use this order</button>`;
   else if (perm && !party && onView() === 'builder' && UI.build.slots.join() !== perm.join()) apply = `<button class="btn sec mini" onclick="Planner.reorderSlots(${attr(perm)})">Reorder the slots</button>`;
-  const body = order.filter(k => sec[k]).map(k => k === 'Verdict' ? `<div class="verdict">${linkNames(mdLite(sec[k]))}</div>` : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}${k === 'Order' ? apply : ''}</div>`).join('');
-  return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
+  // the game plan is how to play the team, so it sits right under the verdict and reads as one: Open / Mid-game / Close
+  const plan = t => mdLite(t).replace(/<li>(Open|Mid-game|Close):?\s*/g, '<li><b>$1</b> ');
+  const body = order.filter(k => sec[k]).map(k => k === 'Verdict' ? `<div class="verdict">${linkNames(mdLite(sec[k]))}</div>`
+    : k === 'Game plan' ? `<div class="rsec plan"><b>Game plan</b>${linkNames(plan(sec[k]))}</div>`
+    : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}${k === 'Order' ? apply : ''}</div>`).join('');
+  // a review saved before the game plan existed: one tap asks again, rather than spending a review on every old team
+  const old = !sec['Game plan'] ? `<div class="dt" style="margin-top:8px">No game plan in this review yet — <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">refresh it</a> to get one.</div>` : '';
+  return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}${old}</div>`;
 }
 function builderContext(m, L, filled) {
   const ctx = coachContext(m), ev = L.evaluate(filled);
@@ -1578,6 +1584,43 @@ function renderBattle() {
   const el = $('battle'); if (!el) return;
   try { el.innerHTML = battleInner(); } catch (e) { el.innerHTML = errorCard('Battle', e); }
 }
+/* ---------- Pokémon on a battle page link to their own pages: yours to the scanned copy on your roster (IVs, level,
+   moves, where it stands), theirs to the species page ---------- */
+function battleMonId(b, name) {                 // a name as the recording read it → the app's id in this league
+  if (!APP || !name) return null;
+  const got = idByName(name); if (got && APP.pokemon[got]) return got;
+  // "Lycanroc" read off the card is Lycanroc (Midday) in the app: the battle's own ids know which one it was
+  const k = String(name).toLowerCase();
+  return [].concat(b.ids || [], b.myIds || [], b.opp || []).find(id => APP.pokemon[id] && nm(id).toLowerCase().startsWith(k)) || null;
+}
+function openBattleMon(id, mine) {
+  if (!APP || !APP.pokemon[id]) return;
+  const o = mine ? (M().own || {})[id] : null;
+  if (o && o.key && !o.manual) openScan(o.key); else openMon(id);
+}
+const monA = (id, mine, text) => id ? `<a href="#" class="bmon${mine ? ' mine' : ''}" onclick="Planner.openBattleMon(${attr(id)},${mine ? 'true' : 'false'});return false">${esc(text)}</a>` : esc(text);
+/* the timeline's sentences with the Pokémon in them linked. Which side a name is on comes from the sentence itself ("you
+   sent", "your …", "they …", "their …") — both sides can field the same species — and, for "X used Y", from the move */
+function linkFilm(b, lines) {
+  const names = {};
+  const add = (n, mine) => { if (!n) return; const id = battleMonId(b, n); if (!id) return; (names[n] = names[n] || {})[mine ? 'my' : 'opp'] = id; };
+  for (const n of b.myNames || []) add(n, true);
+  for (const n of b.oppNames || []) add(n, false);
+  for (const m of (b.moves || [])) add(m.species, m.by === 'my');
+  const keys = Object.keys(names).sort((a, c) => c.length - a.length);
+  if (!keys.length) return lines.map(esc);
+  // whole names only: Mew must not light up inside Mewtwo
+  const rx = new RegExp('(?<![A-Za-z])(' + keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Za-z])', 'g');
+  return lines.map(l => {
+    const mineLine = /\b(you|your)\b/.test(l), theirLine = /\b(they|their)\b/.test(l);
+    return l.split(rx).map((seg, i) => {
+      if (i % 2 === 0) return esc(seg);
+      const e = names[seg];
+      const mine = mineLine ? true : theirLine ? false : !!(e.my && !e.opp);
+      return monA(mine ? (e.my || e.opp) : (e.opp || e.my), mine && !!e.my, seg);
+    }).join('');
+  });
+}
 function battleInner() {
   const b = UI.battle && battleById(UI.battle);
   if (!b) return '<div class="note">That battle is no longer in the log.</div>';
@@ -1585,8 +1628,9 @@ function battleInner() {
   const res = b.result === 'W' ? 'Win' : b.result === 'L' ? 'Loss' : b.result === 'D' ? 'Draw' : 'Battle';
   const col = b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)';
   // once a party is attributed its three names are the truth; a partial read only speaks for itself
-  const side = (ids, names, label) => { const use = ids && ids.length === 3 ? ids.map(nm) : (names && names.length ? names : (ids || []).map(nm));
-    return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${esc(use.join(' / ') || 'not read')}</div></div>`; };
+  const side = (ids, names, label) => { const mine = label === 'you';
+    const use = ids && ids.length === 3 ? ids.map(id => [id, nm(id)]) : (names && names.length ? names.map(n => [battleMonId(b, n), n]) : (ids || []).map(id => [id, nm(id)]));
+    return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${use.length ? use.map(([id, n]) => monA(id, mine, n)).join(' / ') : 'not read'}</div></div>`; };
   let h = `<div class="back" onclick="Planner.nav('#/battles')">‹ ${esc(PAGE_LABEL.battles)}</div>`;
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center">
     <span style="color:${col}">${res}</span><span style="display:flex;align-items:center;gap:6px"><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span>${ctxMenu([['Delete this battle', `Planner.delBattleGo(${attr(b.id)})`, true]])}</span></div>
@@ -1597,7 +1641,7 @@ function battleInner() {
   const mv = b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [];
   if (mv.length) {
     const side = who => mv.filter(m => m.by === who);
-    const chip = m => `<span class="chip ${m.blocked ? 'warn' : ''}">${esc(m.species ? m.species + ' · ' : '')}${esc(m.move)}${m.blocked ? ' ✕' : ''}</span>`;
+    const chip = m => `<span class="chip ${m.blocked ? 'warn' : ''}">${m.species ? monA(battleMonId(b, m.species), m.by === 'my', m.species) + ' · ' : ''}${esc(m.move)}${m.blocked ? ' ✕' : ''}</span>`;
     const list = rows => rows.length ? rows.map(chip).join('') : '<span class="dim">none read</span>';
     const loose = mv.filter(m => m.by !== 'my' && m.by !== 'opp');   // read before the side could be worked out
     h += `<div class="sec">Moves used <small>${mv.length} read off the recording</small></div><div class="team card" style="cursor:default">${kv([
@@ -1605,7 +1649,7 @@ function battleInner() {
       ['Theirs', `<div class="chips">${list(side('opp'))}</div>`],
     ].concat(loose.length ? [['Side not read', `<div class="chips">${loose.map(chip).join('')}</div>`]] : []))}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
   }
-  if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="filmt page">${b.film.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
+  if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="filmt page">${linkFilm(b, b.film).map(l => `<div>${l}</div>`).join('')}</div>`;
   h += battleReviewCard(b);
   h += `<div class="note">Read from a recording on this phone, so it can be wrong. Deleting it (⋮ above) takes it out of your record and the stats, with one tap to put it back.</div>`;
   return h;
@@ -2581,7 +2625,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, openBattleMon, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
