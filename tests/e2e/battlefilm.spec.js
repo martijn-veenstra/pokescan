@@ -453,3 +453,69 @@ test('a real evening recording: the HUD is found through a purple sky and the mo
   expect(mv, 'Sludge is only in Galarian Weezing\'s moveset: that settles which Weezing it is').toContain('Galarian Weezing Sludge');
   expect(errors).toEqual([]);
 });
+
+/* A whole set in one recording. Each battle takes about fifteen card reads (leads, switches, the re-read every 20 s),
+   and the recording used to have 44 for everything: a three-battle test lost a Pokémon in its third battle. The
+   closing screen of each battle is kept with that battle too, not in a rolling window the next one overwrites. */
+test('a set of four battles in one recording: four entries, each with its own team and result', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('bdraft'); localStorage.removeItem('roster'); });
+  const errors = await openApp(page, '#/battles');
+  const out = await page.evaluate(async () => {
+    const W = 390, H = 844;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const BALLS = [0.092, 0.225, 0.368], SHIELDS = [0.568, 0.686];
+    const MON = { AZUMARILL: 165, MEDICHAM: 175, ALTARIA: 185, SKELEDIRGE: 195, LANTURN: 205, TINKATON: 215, QUAGSIRE: 225 };
+    const hud = (me, them, myMon, oppMon) => {
+      ctx.fillStyle = '#6a5a8a'; ctx.fillRect(0, 0, W, H);
+      const y = Math.round(H * 0.06), h = Math.round(H * 0.055);
+      for (const c of [{ x: 8, w: 148, mine: true, n: me }, { x: W - 8 - 148, w: 148, mine: false, n: them }]) {
+        const grey = MON[c.n];
+        ctx.fillStyle = `rgb(${grey},${grey},${grey})`; ctx.fillRect(c.x, y, c.w, h);
+        ctx.fillStyle = '#202020'; ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(c.n, c.mine ? c.x + 5 : c.x + c.w - 5 - ctx.measureText(c.n).width, y + 15);
+        const row = y + Math.round(h * 0.72);
+        const pip = (fx, n, i, col) => { if (i >= n) return; const f = c.mine ? fx : 1 - fx;
+          ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c.x + f * c.w, row, Math.round(0.042 * c.w), 0, 7); ctx.fill(); };
+        BALLS.forEach((f, i) => pip(f, c.mine ? myMon : oppMon, i, '#e0322a'));
+        SHIELDS.forEach((f, i) => pip(f, 2, i, '#e0b0ff'));
+      }
+    };
+    const win = () => { ctx.fillStyle = '#10182a'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.font = 'bold 40px sans-serif'; ctx.fillText('YOU WIN!', 90, H * 0.36); };
+    const mode = c => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, n = {};
+      for (let i = 0; i < d.length; i += 16) n[d[i]] = (n[d[i]] || 0) + 1;
+      return +Object.keys(n).sort((a, b) => n[b] - n[a])[0]; };
+    const grey2mon = v => Object.entries(MON).map(([k, g]) => [k, Math.min(255, (g - 128) * 1.35 + 128)]).sort((a, b) => Math.abs(a[1] - v) - Math.abs(b[1] - v))[0][0];
+    window.getWorker = async () => { let wl = '';
+      return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
+        recognize: async c => ({ data: { text: wl.includes('!') ? '' : !wl ? 'YOU WIN!' : wl.includes('Z') ? grey2mon(mode(c)) : '1500' } }) }; };
+    const THEM = [['MEDICHAM', 'SKELEDIRGE', 'LANTURN'], ['LANTURN', 'MEDICHAM', 'SKELEDIRGE'], ['SKELEDIRGE', 'LANTURN', 'MEDICHAM'], ['MEDICHAM', 'LANTURN', 'SKELEDIRGE']];
+    const ME = ['AZUMARILL', 'ALTARIA', 'QUAGSIRE'];
+    Film.start(720);
+    let t = 0;
+    const run = (until, paint) => { while (t < until - 1e-6) { paint(); Film.frame(ctx, W, H, t); t += 0.5; } };
+    for (let k = 0; k < 4; k++) {
+      const b = t, th = THEM[k];
+      run(b + 3, () => { ctx.fillStyle = '#2a2350'; ctx.fillRect(0, 0, W, H); });       // matchmaking
+      // long stretches on each card, as in a real match: the re-read every 20 s is most of what a battle spends
+      run(b + 53, () => hud(ME[0], th[0], 3, 3));
+      run(b + 56, () => { ctx.fillStyle = '#6a5a8a'; ctx.fillRect(0, 0, W, H); });      // their lead faints
+      run(b + 106, () => hud(ME[0], th[1], 3, 2));
+      run(b + 109, () => { ctx.fillStyle = '#6a5a8a'; ctx.fillRect(0, 0, W, H); });
+      run(b + 159, () => hud(ME[1], th[2], 3, 1));                                         // and you switch
+      run(b + 176, win);                                                                   // their last one goes
+    }
+    const entries = await Film.finish({ lastModified: Date.now() });
+    return (entries || []).map(e => ({ opp: e.oppNames, me: e.myNames, result: e.result, fainted: e.fainted }));
+  });
+  expect(out.length, 'one entry per battle').toBe(4);
+  const THEM = [['Medicham', 'Skeledirge', 'Lanturn'], ['Lanturn', 'Medicham', 'Skeledirge'], ['Skeledirge', 'Lanturn', 'Medicham'], ['Medicham', 'Lanturn', 'Skeledirge']];
+  out.forEach((e, k) => {
+    expect(e.opp, `battle ${k + 1}: all three of theirs, in the order they came`).toEqual(THEM[k]);
+    expect(e.me, `battle ${k + 1}: both of yours that played`).toEqual(['Azumarill', 'Altaria']);
+    expect(e.result, `battle ${k + 1}: its own closing screen`).toBe('W');
+    expect(e.fainted).toEqual({ me: 0, opp: 3 });
+  });
+  expect(errors).toEqual([]);
+});

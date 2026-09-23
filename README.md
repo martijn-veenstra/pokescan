@@ -206,6 +206,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **A whole set in one recording** (v9.98): tested by reading the real match three times over as one recording —
+  three entries, each with all six Pokémon, all eight moves and its own victory. What had to change: the card reads
+  had a budget of 44 for the whole recording and ran out in the third battle (now 150); each battle's closing screens
+  are kept with that battle rather than in a rolling window of the last 40 frames that the next battle's charged-move
+  gaps pushed out (a stretch without the HUD that ends within 12 s is a charged move and its frames are dropped); and
+  every crop is stored as a JPEG, so a set's worth costs a few MB instead of hundreds. The live feed says when the
+  next battle starts. Timeline stamps stay recording time.
 - **v9.97, from the same match read on the phone**: a shield is placed right after the move it stopped, and which move
   was blocked comes only from the counts — a "BLOCKED!" read out of a later gap had marked Torch Song blocked. The
   result is read off the closing screens with the white-text threshold too, from the last 40 frames instead of 24,

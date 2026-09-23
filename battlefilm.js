@@ -39,7 +39,10 @@ const RE_READ = 20;             // s: read each card again anyway, so a switch t
 // budget on its first two switches, which is why an opponent's second and third Pokémon never made the log. Wait
 // for the profile to hold, then take exactly one crop of it.
 const NAME_HOLD = 2;
-const MAX_OCR = 44, MAX_BANNERS = 140;              // gaps in the HUD kept, across the recording; one match is easily 50
+/* A recording of a whole set is one file: three to five battles, fifteen or so card reads and twenty-five banners each.
+   44 card reads across the recording ran out in the third battle of a three-battle test, which then lost a Pokémon.
+   Every crop is kept as a JPEG, so these budgets cost a few MB rather than the hundreds a set's worth of canvases took. */
+const MAX_OCR = 150, MAX_BANNERS = 200;              // gaps in the HUD kept, across the recording; one match is easily 50
 /* v9.93 kept a single frame per gap — the one that scored best as text — and when that was the wrong frame, the move
    was gone. The v2 reader grabbed the fixed announcement band on a timer instead, and read moves this one missed. Both
    are kept now: the best-scoring line, and the band at the start of the gap and every second after, a few per gap.
@@ -155,7 +158,7 @@ function grab(ctx, r, scale) {                             // upscaled greyscale
 const newGap = () => ({score: 0, t: 0, img: null, timed: [], tt: null});
 const jpeg = c => c.toDataURL('image/jpeg', 0.9);
 function start(dur) {
-  S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [],
+  S = {dur, cal: null, pending: null, rows: [], shots: [], banners: [], ends: [], hudT: -99, endRun: null, endN: 0, endAt: 0,
        name: {my: {p: null, n: 0, shot: false, t: -99, t0: 0, first: true}, opp: {p: null, n: 0, shot: false, t: -99, t0: 0, first: true}},
        gap: newGap(), timedN: 0, lastT: -9, frames: 0, miss: 0, cur: null, run: {}};
 }
@@ -191,6 +194,9 @@ function frame(ctx, W, H, t) {
   const oppMon = count(ctx, S.cal.opp, BALLS, isRed, false, row, w);
   if (myMon < 1 || oppMon < 1) return offCard(ctx, W, H, t);   // a charged-move animation, a switch sheet, the end
   flushGap();                                                  // the HUD is back: that gap's announcement is settled
+  // a stretch without the HUD that ends this soon was a charged move, not the end of a battle: its frames go
+  if (S.endRun === S.hudT && t - S.hudT < 12) S.ends.length = S.endAt;
+  S.hudT = t;
   S.rows.push({t, myMon, oppMon,
     mySh: count(ctx, S.cal.my, SHIELDS, isPink, true, row, w),
     oppSh: count(ctx, S.cal.opp, SHIELDS, isPink, false, row, w)});
@@ -205,7 +211,7 @@ function frame(ctx, W, H, t) {
     else { st.n++; if (t - st.t >= RE_READ) st.shot = false; }
     if (st.shot || st.n < NAME_HOLD || S.shots.length >= MAX_OCR) continue;
     st.shot = true; st.t = t;
-    S.shots.push({t: st.first ? st.t0 : t, side, name: grab(ctx, nr, 3), cp: grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3)});
+    S.shots.push({t: st.first ? st.t0 : t, side, name: jpeg(grab(ctx, nr, 3)), cp: jpeg(grab(ctx, rect(c, 0.60, 0.98, mine, row, w), 3))});
     st.first = false;
     say(`${clock(t)} reading the name on ${mine ? 'your' : 'their'} card`);
   }
@@ -216,6 +222,13 @@ function frame(ctx, W, H, t) {
    still built from the full row stream in events(), which is what a later re-read has to agree with. */
 function live(r) {
   if (!S.cur) { S.cur = {myMon: r.myMon, oppMon: r.oppMon, mySh: r.mySh, oppSh: r.oppSh}; S.run = {}; return; }
+  // back to a full three-a-side after something fell: the next battle of the set (splitRows makes the same call)
+  if (r.myMon === 3 && r.oppMon === 3 && (S.cur.myMon < 3 || S.cur.oppMon < 3)) {
+    S.up = (S.up || 0) + 1;
+    if (S.up >= HOLD) { S.cur = {myMon: 3, oppMon: 3, mySh: r.mySh, oppSh: r.oppSh}; S.run = {}; S.up = 0; say(`${clock(r.t)} the next battle has started`); }
+    return;
+  }
+  S.up = 0;
   for (const k of Object.keys(S.cur)) {
     const v = r[k];
     if (v >= S.cur[k]) { S.run[k] = null; continue; }
@@ -386,8 +399,14 @@ function offCard(ctx, W, H, t) {
   watchPlate(ctx, W, H, t);
   // v2 kept end screens only after halfway through the recording, which in a set is after four battles have already
   // ended: they are kept throughout and assigned to the battle they follow, so every battle reads its own result
-  S.ends.push({t, img: grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], 1)});
-  if (S.ends.length > 40) S.ends.shift();          // the closing screens can run fifteen seconds and more
+  // The closing screens ("YOU WIN!", the rating bar, NEXT BATTLE) come once the HUD has been gone a couple of seconds,
+  // and a set has one run of them per battle. A rolling window of the last frames let the next battle's charged-move
+  // gaps push the previous battle's result out; now each stretch without a HUD keeps its own first frames.
+  if (t - S.hudT > 2) {
+    if (S.hudT !== S.endRun) { S.endRun = S.hudT; S.endN = 0; S.endAt = S.ends.length; }
+    if (S.endN < 30 && S.ends.length < 240) { S.endN++;
+      S.ends.push({t, img: jpeg(grab(ctx, [0, Math.round(H * 0.22), W, Math.round(H * 0.34)], Math.min(1, 800 / W)))}); }
+  }
   // The move is announced for a moment at the start of the animation, so a crop taken on a timer mostly catches the
   // animation and not the words. Every frame of a gap is scored and the best one kept, pushed when the HUD comes
   // back: one OCR per gap, on the frame where the words were up.
@@ -621,9 +640,9 @@ async function readSeg(g, file, onStep) {
   const P = window.Planner, reads = [], missed = [];       // missed: a name crop that was taken but could not be read
   for (const sh of g.shots) {
     onStep();
-    const sp = matchSpecies(await ocr(sh.name, LETTERS, 7));
+    const sp = matchSpecies(await ocr(await toCanvas(sh.name), LETTERS, 7));
     if (!sp) { missed.push({t: sh.t, side: sh.side}); continue; }
-    const cp = parseInt((await ocr(sh.cp, '0123456789CP cp', 7)).replace(/\D/g, ''), 10) || null;
+    const cp = parseInt((await ocr(await toCanvas(sh.cp), '0123456789CP cp', 7)).replace(/\D/g, ''), 10) || null;
     reads.push({t: sh.t, side: sh.side, species: sp, cp: cp >= 10 && cp <= 9999 ? cp : null});
   }
   let st = stintsOf(reads);
@@ -741,7 +760,8 @@ async function readSeg(g, file, onStep) {
   for (const e of g.ends.slice().reverse()) {
     onStep();
     // big white type over the trainer: the white threshold first, then the crop as it is
-    const r = verdict((await ocr(whiteInk(e.img), '', 11)).toUpperCase()) || verdict((await ocr(e.img, '', 11)).toUpperCase());
+    const im = await toCanvas(e.img); if (!im) continue;
+    const r = verdict((await ocr(whiteInk(im), '', 11)).toUpperCase()) || verdict((await ocr(im, '', 11)).toUpperCase());
     if (r) { result = r; endT = e.t; break; }
   }
   if (!result && bannerResult) { result = bannerResult.r; endT = bannerResult.t; }
