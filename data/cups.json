@@ -1,6 +1,6 @@
 {
- "generatedAt": "2026-09-20T09:23:29Z",
- "gamemasterTimestamp": "2026-09-18 15:44:18",
+ "generatedAt": "2026-09-23T10:29:30Z",
+ "gamemasterTimestamp": "2026-09-23 03:24:34",
  "leagues": [
   {
    "slug": "great",
@@ -56,20 +56,6 @@
    "file": "data/app-mega-2500.json"
   },
   {
-   "slug": "willpower-1500",
-   "title": "Willpower Cup",
-   "short": "Willpower",
-   "cp": 1500,
-   "cup": "willpower",
-   "kind": "cup",
-   "rules": [
-    "Pokemon must be at or below 1,500 CP to enter.",
-    "Only Fighting-, Psychic-, and Dark-type Pokémon are eligible.",
-    "The following Pokemon are not allowed: Gardevoir, Zorua, Zoroark."
-   ],
-   "file": "data/app-willpower-1500.json"
-  },
-  {
    "slug": "retro-1500",
    "title": "Retro Cup",
    "short": "Retro",
@@ -98,6 +84,36 @@
     "Prohibited Pokemon: Altaria, Annihilape, Araquanid, Chansey, Clodsire, Corsola (Galarian), Dusclops, Furret, Jellicent, Kingdra, Medicham, Oranguru, Snorlax, Wobbuffet, Mega Sableye."
    ],
    "file": "data/app-laic2027-1500.json"
+  },
+  {
+   "slug": "spectral-1500",
+   "title": "Battle Frontier (Spectral)",
+   "short": "Battle Frontier (Spectral)",
+   "cp": 1500,
+   "cup": "spectral",
+   "kind": "cup",
+   "rules": [],
+   "file": "data/app-spectral-1500.json"
+  },
+  {
+   "slug": "cauldron-2500",
+   "title": "Battle Frontier (Cauldron)",
+   "short": "Battle Frontier (Cauldron)",
+   "cp": 2500,
+   "cup": "cauldron",
+   "kind": "cup",
+   "rules": [],
+   "file": "data/app-cauldron-2500.json"
+  },
+  {
+   "slug": "gymbreakers-1500",
+   "title": "Gymbreakers Invitational Season 7",
+   "short": "Gymbreakers Invitational Season 7",
+   "cp": 1500,
+   "cup": "gymbreakers",
+   "kind": "cup",
+   "rules": [],
+   "file": "data/app-gymbreakers-1500.json"
   }
  ]
 }
