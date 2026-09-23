@@ -72,3 +72,43 @@ test('Umbreon and Gallade: the evolution conditions from the game master, in pla
   expect(await page.evaluate(() => Planner.evoShort(Planner.evoBranch('eevee', 'vaporeon')))).toBe('');
   expect(errors).toEqual([]);
 });
+
+/* A Pokémon that only spawns in the wild used to get "not in raids, eggs, research or announced events right now. Wild
+   spawns are not listed" and nothing else, which read as if there were no way to get it at all. */
+test('Oranguru: a wild spawn says so, with the weather that boosts it; a legendary says raids and research', async ({ page }) => {
+  const errors = await openApp(page, '#/mon/oranguru');
+  await page.evaluate(() => { results.length = 0; save(); Planner.refresh(); });
+  await page.evaluate(() => Sources.load(true));
+  await expect.poll(() => page.evaluate(() => Sources.ready() && !!localStorage.getItem('evo'))).toBe(true);
+  await page.evaluate(() => Planner.renderMon());
+  const card = page.locator('#mon .sec:has-text("How to get Oranguru") + .avb');
+  await expect(card).toContainText('Catch it in the wild');
+  await expect(card, 'Normal and Psychic: partly cloudy and windy').toContainText('Partly cloudy and Windy weather');
+  await expect(card).toContainText('trade');
+  await expect(page.locator('#mon')).not.toContainText('Wild spawns are not listed');
+  await page.evaluate(() => Planner.openMon('registeel'));
+  const leg = page.locator('#mon .sec:has-text("How to get Registeel") + .avb');
+  await expect(leg).toContainText('Raids, research and events');
+  await expect(leg).toContainText('Legendary');
+  await expect(leg).not.toContainText('Catch it in the wild');
+  expect(errors).toEqual([]);
+});
+
+/* The app names no other app or site on screen: rankings, matchups, the schedule and the lineups are its own words. */
+test('no page names another app or site', async ({ page }) => {
+  const errors = await openApp(page, '#/today');
+  await page.evaluate(() => Sources.load(true));
+  const rx = /pvpoke|leek ?duck|scrapedduck|pokeminers|pokebattler|silph|gamepress/i;
+  const seen = [];
+  for (const h of ['#/today', '#/builder', '#/teams', '#/roster', '#/meta', '#/rank', '#/raids', '#/scans', '#/matchups', '#/battles', '#/pro', '#/mon/oranguru', '#/mon/ninetales_shadow', '#/mon/azumarill']) {
+    await page.evaluate(h => Planner.nav(h), h);
+    await page.waitForTimeout(300);
+    const text = await page.evaluate(() => document.querySelector('.view.on').innerText + ' ' + [...document.querySelectorAll('.view.on a[href]')].map(a => a.href).join(' '));
+    const m = text.match(rx); if (m) seen.push(`${h}: ${text.slice(Math.max(0, m.index - 60), m.index + 40)}`);
+  }
+  // the help sheet and the menu too
+  const help = await page.evaluate(() => document.body.innerText);
+  const hm = help.match(rx); if (hm) seen.push(`body: ${help.slice(Math.max(0, hm.index - 60), hm.index + 40)}`);
+  expect(seen).toEqual([]);
+  expect(errors).toEqual([]);
+});

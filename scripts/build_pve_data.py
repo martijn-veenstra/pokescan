@@ -241,8 +241,9 @@ def branch_conditions(br, quests):
 
 def build_evo(gm):
     """data/evo.json: evolution candy costs and conditions (items, lures, buddy km, day/night, gender, trade, quests), which
-    species exist as Shadow, purification costs. Ids like PvPoke's (vulpix, vulpix_alolan)."""
-    evolve, shadow, purify = {}, set(), {}
+    species exist as Shadow, purification costs, and which are legendary / mythical / Ultra Beasts. Ids like the app's
+    (vulpix, vulpix_alolan)."""
+    evolve, shadow, purify, klass = {}, set(), {}, {}
     quests = {}
     for t in gm:
         if t.get("templateId", "").endswith("_EVOLUTION_QUEST"):
@@ -258,6 +259,10 @@ def build_evo(gm):
         if suf is None:
             continue
         pid_l = pid.lower() + ("_" + suf if suf else "")
+        # legendary / mythical / Ultra Beast: never a wild spawn, so How to get says raids, research and events instead
+        k = {"POKEMON_CLASS_LEGENDARY": "legendary", "POKEMON_CLASS_MYTHIC": "mythic", "POKEMON_CLASS_ULTRA_BEAST": "ultra"}.get(ps.get("pokemonClass"))
+        if k:
+            klass[pid_l] = k
         for br in ps.get("evolutionBranch", []) or []:
             if not br.get("evolution") or br.get("temporaryEvolution"):
                 continue
@@ -274,7 +279,8 @@ def build_evo(gm):
             shadow.add(pid_l)
             sh = ps["shadow"]
             purify[pid_l] = {"dust": sh.get("purificationStardustNeeded", 0), "candy": sh.get("purificationCandyNeeded", 0)}
-    return {"evolve": dict(sorted(evolve.items())), "shadow": sorted(shadow), "purify": dict(sorted(purify.items()))}
+    return {"evolve": dict(sorted(evolve.items())), "shadow": sorted(shadow), "purify": dict(sorted(purify.items())),
+            "klass": dict(sorted(klass.items()))}
 
 
 def main():

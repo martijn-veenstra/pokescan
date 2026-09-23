@@ -206,6 +206,14 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **How to get a wild-only Pokémon, and no other apps named on screen** (v10.2): the How to get card knew only what the
+  event schedule lists (raids, eggs, research, events, Rocket lineups), so a Pokémon that just spawns in the wild
+  (Oranguru) got "not in raids, eggs, research or announced events" and nothing more. A species with nothing to evolve
+  from now gets a **Catch it in the wild** route with the weather that boosts its types, plus Incense, Lures and trading;
+  one the game master marks legendary, mythical or an Ultra Beast (`evo.json` → `klass`) says raids, research and events
+  instead, and the classic babies say eggs. The screens no longer name the sites and projects the data comes from —
+  rankings, matchups, the event schedule and the Rocket lineups are described in the app's own words, and the links
+  out to lineup pages are gone. This README keeps the credits.
 - **Team reviews are asked for, never spent by themselves** (v10.1): the review used to start on its own for every
   complete trio in the builder and every saved party, so saving a few teams used up the account's hourly Pro reviews
   without the player asking. Each card now offers "Review this team" and sends nothing until it is tapped. The

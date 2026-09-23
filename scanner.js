@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.1';
+const APP_VERSION='10.2';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -91,7 +91,7 @@ function showLoadError(msg){
 }
 async function loadMeta(){
   let loaded=false;
-  const slow=setTimeout(()=>{ if(!loaded) showLoadError('The PvPoke data file is taking long to load. Offline, or the first visit on a slow connection?'); }, 12000);
+  const slow=setTimeout(()=>{ if(!loaded) showLoadError('The battle data file is taking long to load. Offline, or the first visit on a slow connection?'); }, 12000);
   try{
     let slug=leagueSlug(), r=await fetch(`data/app-${slug}.json?v=`+APP_VERSION,{cache:'no-cache'});
     if(!r.ok && slug!=='great'){ localStorage.setItem('league','great'); slug='great'; r=await fetch('data/app-great.json?v='+APP_VERSION,{cache:'no-cache'}); }   // a cup that is no longer featured
@@ -100,7 +100,7 @@ async function loadMeta(){
     applyLeague(APP.league||{slug:'great',cp:1500,title:'Great League'}); rankCache.clear();
     APP.prevo=APP.prevo||{}; APP.unranked=APP.unranked||{}; APP.benchmark=APP.benchmark||{best:720.9,median:521.5};
     META={}; for(const [id,e] of Object.entries(APP.pokemon)) META[id]=[e.rank, e.score, e.moveset];
-    const di=$('datainfo'); if(di) di.textContent=`PvPoke ${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} most common Pokémon`;
+    const di=$('datainfo'); if(di) di.textContent=`${APP.league.title} rankings, gamemaster ${APP.gamemasterTimestamp.slice(0,10)} · ${APP.meta.length} most common Pokémon`;
     const dl=$('species'); if(dl) dl.innerHTML=Object.keys(APP.pokemon).map(id=>`<option value="${id}">`).join('');
     try{ migrateScans(); dedupeScans(); }catch(e){ console.warn('migration skipped', e); }
   }catch(e){
@@ -1246,7 +1246,7 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
   const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
     r.shadow?'<span class="chip ul">shadow</span>':'',
     r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
-    (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length&&!(ex&&ex.movesSaid)?'<span class="chip" title="no attacks screenshot yet; the planner falls back to PvPoke\'s moveset without showing it as fact">moves not read</span>':'',
+    (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length&&!(ex&&ex.movesSaid)?'<span class="chip" title="no attacks screenshot yet; the planner falls back to the recommended moveset without showing it as fact">moves not read</span>':'',
     ...(ex&&ex.chips?ex.chips:[]),
     !r.bench&&bestCopy&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
     ].join('');

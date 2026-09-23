@@ -7,7 +7,7 @@ test('the matrix drives roles, threat counts and the Matchups page', async ({ pa
   // matrix loaded → simulated threat count in the builder hero
   await expect(page.locator('#builder .hero')).toContainText(/Beaten by \d+ of the common Pokémon|No common Pokémon beats all three of yours/);
   await page.evaluate(() => Planner.nav('#/matchups'));
-  await expect(page.locator('#matchups')).toContainText("simulated with PvPoke's engine");
+  await expect(page.locator('#matchups')).toContainText('Battles simulated for');
   await expect(page.locator('#matchups .chip.ok')).toContainText('Builder');
   await page.fill('#muq', 'tinka');
   await page.click('#matchups .tchips .chip:has-text("Tinkaton")');

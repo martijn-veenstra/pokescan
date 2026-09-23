@@ -114,7 +114,7 @@ function rocket(d, t) {
   const names = lu ? (lu.slots[slotIdx] || []) : (r.pokemon || []);
   const cands = names.map(n => P && P.rocketVerdict ? P.rocketVerdict(n) : {name: n, text: ''});
   const want = cands.filter(c => c.wanted), good = cands.filter(c => !c.wanted && c.rank && c.rank <= 100);
-  const verdict = !lu && !names.length ? 'Lineups for this taunt are not known right now; Leek Duck updates them after every rotation.'
+  const verdict = !lu && !names.length ? 'Lineups for this taunt are not known right now; they are updated after every rotation.'
     : want.length ? `Catch it: ${want.map(c => c.name).join(' or ')} ${want.length === 1 ? 'is' : 'are'} on your list.`
     : good.length ? `Worth catching: Shadow ${good[0].name} ranks #${good[0].rank} in ${P ? P.leagueAbbr() : 'this league'}.`
     : `Skip unless you need candy: none of ${names.join(', ') || 'these'} rank for your league.`;
@@ -141,7 +141,7 @@ function render() {
       return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${esc(c.who)} <small>read by Claude · ${esc(when)}</small></span></div>
         ${c.quote ? `<div class="dt">“${esc(c.quote)}”</div>` : ''}
         ${c.names.length ? `<div class="dt" style="margin-top:6px">You will meet Shadow</div><div class="chips">${c.cands.map(k => `<span class="chip ${k.wanted ? 'ok' : k.rank && k.rank <= 100 ? 'gl' : ''}" ${k.id ? `onclick="Planner.openMon('${k.id}')" style="cursor:pointer"` : ''}>${k.id ? Planner.icon(k.id, 'xs') : ''}${esc(k.name)}${k.text ? ` <span style="opacity:.7">${esc(k.text)}</span>` : ''}</span>`).join('')}</div>` : ''}
-        <div class="dt" style="margin-top:6px;color:var(--ink)">${esc(c.verdict)}</div>${c.known ? '' : '<div class="dt">Lineups: <a href="https://leekduck.com/rocket-lineups/" target="_blank" rel="noopener">Leek Duck</a></div>'}</div>`;
+        <div class="dt" style="margin-top:6px;color:var(--ink)">${esc(c.verdict)}</div></div>`;
     }
     return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 4px"><span>Shared screenshot <small>read by Claude · ${esc(when)}</small></span></div><div class="dt">${esc(c.line)}</div></div>`;
   }).join('');
