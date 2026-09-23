@@ -206,6 +206,11 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **A cup without some of your Pokémon** (v9.99): the roster is kept across leagues, so after switching to a cup the
+  wanted and pending lists can name Pokémon the cup's data does not have (Tinkaton in the Retro Cup). Those went
+  straight to the roster tiles, which read their rank unchecked, and every scan import failed with "undefined is not an
+  object (evaluating 'APP.pokemon[id].rank')". They now sit out in a league that lacks them, and every rank read goes
+  through one helper that shows "–" instead of throwing.
 - **A whole set in one recording** (v9.98): tested by reading the real match three times over as one recording —
   three entries, each with all six Pokémon, all eight moves and its own victory. What had to change: the card reads
   had a budget of 44 for the whole recording and ran out in the third battle (now 150); each battle's closing screens

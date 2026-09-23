@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, importFile } from './helpers.js';
 
 test('switching league changes cap, rankings and roster readiness', async ({ page }) => {
   const errors = await openApp(page, '#/rank');
@@ -33,5 +33,29 @@ test('switching league changes cap, rankings and roster readiness', async ({ pag
   await page.reload();
   await page.waitForFunction(() => typeof APP !== 'undefined' && APP && APP.league && APP.league.slug === 'little', null, { timeout: 30000 });
   await expect(page.locator('#leaguelbl')).toHaveText('Little League');
+  expect(errors).toEqual([]);
+});
+
+/* The roster is kept across leagues, so switching to a cup leaves Pokémon in it that the cup's data does not have.
+   A wanted Tinkaton in the Retro Cup made every scan import fail with "undefined is not an object (evaluating
+   'APP.pokemon[id].rank')", because the roster tiles read the rank of each wanted Pokémon unchecked. */
+test('a cup that lacks some of your wanted and pending Pokémon still imports scans and shows every page', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(() => {
+    localStorage.setItem('league', 'retro-1500');
+    localStorage.setItem('roster', JSON.stringify({ tagged: { Rain: ['azumarill', 'medicham', 'altaria'] }, owned: { tinkaton: null },
+      candidates: { tinkaton: null, azumarill: null, medicham: null }, pending: { mimikyu: null }, exclude: ['mimikyu_busted'], moves: {}, log: [] }));
+  });
+  const errors = await openApp(page, '#/scans');
+  expect(await page.evaluate(() => [APP.league.slug, !!APP.pokemon.tinkaton, !!APP.pokemon.azumarill]), 'the cup really lacks them').toEqual(['retro-1500', false, false]);
+  await importFile(page, 'cram-appr.png');
+  const log = await page.evaluate(() => document.getElementById('implog').innerText);
+  expect(log, 'the scan is read, not failed').not.toMatch(/failed/);
+  expect(await page.evaluate(() => results.some(r => r.species === 'CRAMORANT'))).toBe(true);
+  for (const h of ['#/roster', '#/today', '#/builder', '#/teams', '#/battles', '#/rank', '#/meta']) {
+    await page.evaluate(h => Planner.nav(h), h);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => [...document.querySelectorAll('.view.on .empty b')].map(b => b.textContent).filter(t => /hit an error/.test(t))), `${h} renders`).toEqual([]);
+  }
   expect(errors).toEqual([]);
 });

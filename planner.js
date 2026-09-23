@@ -54,6 +54,10 @@ function hasSecond(r, id) {                    // false only with evidence (NEW 
   if (r && r.secondMove === true) return true;
   return (r && r.moves && r.moves.length) ? r.moves.filter(Boolean).length >= 3 || r.secondMove === undefined : movesFor(r, id).length >= 3;
 }
+// A Pokémon's rank in the current league, or '–' when it is not ranked there: the roster, the log and saved parties
+// outlive a league switch, and one missing id used to take the whole page (or a scan import) down with it.
+const rankOf = id => (APP && APP.pokemon[id] ? APP.pokemon[id].rank : '–');
+const rankN = id => (APP && APP.pokemon[id] ? APP.pokemon[id].rank : 9e9);   // for sorting: the unranked go last
 function rosterOwned() {
   const own = {};
   if (!APP) return own;
@@ -94,9 +98,11 @@ function autoEvolutions(own) {
 function rosterInput() {
   const own = rosterOwned(), auto = autoEvolutions(own);
   const pending = {}; for (const k of Object.keys(auto)) pending[k] = ROSTER.moves[k] || null;
-  for (const [k, v] of Object.entries(ROSTER.pending)) if (!own[k]) pending[k] = ROSTER.moves[k] || v || null;
+  // the roster is kept across leagues, so a wanted or pending Pokémon may not exist in this one (Tinkaton in the Retro
+  // Cup): it sits out here rather than reaching code that reads its rank and throws — which failed every scan import
+  for (const [k, v] of Object.entries(ROSTER.pending)) if (!own[k] && APP.pokemon[k]) pending[k] = ROSTER.moves[k] || v || null;
   const owned = {}; for (const o of Object.values(own)) owned[o.id] = o.moves;
-  const candidates = {}; for (const k of Object.keys(ROSTER.candidates)) if (!own[k] && !(k in pending)) candidates[k] = ROSTER.moves[k] || null;
+  const candidates = {}; for (const k of Object.keys(ROSTER.candidates)) if (!own[k] && !(k in pending) && APP.pokemon[k]) candidates[k] = ROSTER.moves[k] || null;
   return {league: 'great', owned, pending, candidates, tagged: ROSTER.tagged, _own: own, _auto: auto};
 }
 function compute() {
@@ -235,7 +241,7 @@ function onNewScan(s) {                        // called by the scanner after a 
     logEntry({kind: 'catch', id: 'get:' + newId, title: `${nm(newId)} caught, ${s.cp} CP`, evidence: s.key});
     delete ROSTER.candidates[newId]; delete ROSTER.pending[newId];
   } else if (newId) {
-    for (const evo of (APP.pokemon[newId].evo || [])) if (ROSTER.candidates[evo] !== undefined) {
+    for (const evo of ((APP.pokemon[newId] || {}).evo || [])) if (ROSTER.candidates[evo] !== undefined) {
       const eb = evoBaseStats(evo), b = sid.best;
       if (eb && calcCP(eb, b[1], b[2], b[3], cpmAt(b[0])) <= LEAGUE.cp) logEntry({kind: 'catch', id: 'get:' + evo, title: `${nm(newId)} caught for ${nm(evo)}, ${s.cp} CP`, evidence: s.key});
     }
@@ -404,7 +410,7 @@ function threats(L, team, ev) {               // meta Pokémon this team should 
     const hole = ev.holes.includes(o), shared = ev.shared.includes(o);
     if (!hole && !shared) continue;
     const beats = team.filter(t => L.rating(t, o) < 400), answer = team.filter(t => L.rating(t, o) >= 500);
-    rows.push({id: o, rank: APP.pokemon[o].rank, hole, beats, answer: answer.sort((a, b) => L.rating(b, o) - L.rating(a, o))[0] || null});
+    rows.push({id: o, rank: rankOf(o), hole, beats, answer: answer.sort((a, b) => L.rating(b, o) - L.rating(a, o))[0] || null});
   }
   return rows.sort((a, b) => (b.hole - a.hole) || a.rank - b.rank);
 }
@@ -703,7 +709,7 @@ function teamInner(m, ids, name) {
   h += `<div class="sec">Members <small>role · moves · status</small></div><div class="team members" style="cursor:default">` + show.map(r => {
     const mv = L.movesOf(r.id), st = ownership(m, r.id), o = own[r.id];
     const status = st === 'owned' ? (o && !o.manual ? (o.toLevel > 40 && o.toLevel > o.level ? `needs L${o.toLevel}, XL candy` : o.toLevel > o.level ? `${o.cp} CP · power up to L${o.toLevel}` : `${o.cp} CP · ready`) : 'owned, not scanned') : st === 'pending' ? 'pending: you are building it' : st === 'wanted' ? 'on your wanted list' : 'not in your roster';
-    return `<div class="mb"><span class="rl">${r.role}</span>${icon(r.id, 'm')}<span class="mn"><b onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span class="dim">#${APP.pokemon[r.id].rank}</span><div class="dt">${mv.map(mvName).map(esc).join(' · ')} · ${esc(status)}</div></span>${ownChip(st) || chip('missing', 'warn')}</div>`;
+    return `<div class="mb"><span class="rl">${r.role}</span>${icon(r.id, 'm')}<span class="mn"><b onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span class="dim">#${rankOf(r.id)}</span><div class="dt">${mv.map(mvName).map(esc).join(' · ')} · ${esc(status)}</div></span>${ownChip(st) || chip('missing', 'warn')}</div>`;
   }).join('') + '</div>';
   // to-dos for these members
   const todo = openMoves(m).filter(x => (x.species && ids.includes(x.species)) || (x.id.startsWith('get:') && ids.includes(x.id.slice(4))) || (x.id.startsWith('park:') && ids.includes(x.id.slice(5))));
@@ -777,7 +783,7 @@ function coachContext(m) {
     wanted: Object.keys(ri.candidates).filter(id => APP.pokemon[id]).map(mon),
     bestTeams: rep.today.slice(0, 5).map(team), parties: rep.tagged.map(t => `${t.name}: ${team(t)}`),
     nextMoves: openMoves(m).slice(0, 8).map(x => `${x.title} — ${x.sub}`),
-    topMeta: L.meta.slice(0, 30).map(id => `${nm(id)} #${APP.pokemon[id].rank}`),
+    topMeta: L.meta.slice(0, 30).map(id => `${nm(id)} #${rankOf(id)}`),
     battles: battleSummaryText(null) || undefined,
     scoring: 'Team score = mean best matchup rating vs the meta (PvPoke published matchups, type effectiveness otherwise) minus 12 per unanswered meta Pokémon and 6 per meta Pokémon that beats two members. Meta best is about ' + Math.round((APP.benchmark || {best: 721}).best) + '.',
   };
@@ -919,17 +925,17 @@ function builderContext(m, L, filled) {
   const ctx = coachContext(m), ev = L.evaluate(filled);
   const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;
   const cand = pool => pool.map(p => { const e2 = L.evaluate(filled.concat(p)); return {p, score: e2.score, fixes: ev.holes.filter(o => !e2.holes.includes(o))}; }).sort((a, b) => b.score - a.score).slice(0, 6)
-    .map(x => `${nm(x.p)} (#${APP.pokemon[x.p].rank}${ownership(m, x.p) ? ', ' + ownership(m, x.p) : ''}) → team ${x.score.toFixed(0)}, answers ${x.fixes.slice(0, 4).map(nm).join(', ') || 'nothing new'}`);
+    .map(x => `${nm(x.p)} (#${rankOf(x.p)}${ownership(m, x.p) ? ', ' + ownership(m, x.p) : ''}) → team ${x.score.toFixed(0)}, answers ${x.fixes.slice(0, 4).map(nm).join(', ') || 'nothing new'}`);
   const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct);
   const party = filled.length === 3 ? savedName(filled, null) : null, lineupIds = party ? ROSTER.tagged[party] : filled;
   ctx.builder = {
-    slots: filled.map(id => `${nm(id)} (#${APP.pokemon[id].rank}, ${APP.pokemon[id].types.join('/')}, ${L.movesOf(id).map(mvName).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
+    slots: filled.map(id => `${nm(id)} (#${rankOf(id)}, ${((APP.pokemon[id] || {}).types || []).join('/')}, ${L.movesOf(id).map(mvName).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
     lineup: filled.length === 3 ? lineupIds.map((id, i) => ({slot: SLOTS[i], name: nm(id), types: APP.pokemon[id].types})) : undefined,
     lineupKnown: filled.length === 3 ? !!(party || onView() === 'builder') : undefined,
     appRoles: filled.length === 3 ? roles(L, filled).map(r => ({role: r.role, name: nm(r.id), why: r.why || ''})) : undefined,
     partyName: party || undefined,
     openSlots: 3 - filled.length,
-    scoreSoFar: ev.score, weakSpots: ev.holes.slice(0, 15).map(o => `${nm(o)} #${APP.pokemon[o].rank}`),
+    scoreSoFar: ev.score, weakSpots: ev.holes.slice(0, 15).map(o => `${nm(o)} #${rankOf(o)}`),
     twoOfThreeLoseTo: filled.length === 3 ? ev.shared.slice(0, 10).map(nm) : undefined,
     candidatesFromRoster: filled.length < 3 ? cand(mine) : undefined,
     candidatesFromMeta: filled.length < 3 ? cand(APP.meta.slice(0, 60).filter(distinct)) : undefined,
@@ -949,7 +955,7 @@ function coverageInner(L, team, m) {
   const cls = r => r >= 500 ? 'w' : r < 400 ? 'l' : 'e';
   const swaps = bestSwaps(L, team, m, ev);
   const grid = `<div class="cov"><div class="cr head"><span>Meta threat</span>${team.map(t => `<span>${esc(nm(t))}</span>`).join('')}</div>` +
-    rows.map(o => `<div class="cr ${ev.shared.includes(o) || ev.holes.includes(o) ? 'tint' : ''}"><span>${esc(nm(o))} <span class="dim">#${APP.pokemon[o].rank}</span></span>${team.map(t => `<i class="${cls(L.rating(t, o))} ${L.source(t, o) === 'est' ? 'est' : ''}" title="${Math.round(L.rating(t, o))}"></i>`).join('')}</div>`).join('') +
+    rows.map(o => `<div class="cr ${ev.shared.includes(o) || ev.holes.includes(o) ? 'tint' : ''}"><span>${esc(nm(o))} <span class="dim">#${rankOf(o)}</span></span>${team.map(t => `<i class="${cls(L.rating(t, o))} ${L.source(t, o) === 'est' ? 'est' : ''}" title="${Math.round(L.rating(t, o))}"></i>`).join('')}</div>`).join('') +
     `<div class="legend"><span><i class="w"></i>wins</span><span><i class="e"></i>even</span><span><i class="l"></i>loses</span><span><i class="w est"></i>faded = estimated from typing</span><span class="dim">${rows.length} of ${L.meta.length}</span></div></div>`;
   const readout = `${ev.holes.length ? `<b>${esc(ev.holes.map(nm).join(', '))}</b> ${ev.holes.length > 1 ? 'have' : 'has'} no green cell: none of your three beats ${ev.holes.length > 1 ? 'them' : 'it'}. ` : 'Every row has a green cell: your team beats all of them. '}${ev.shared.length ? `A tinted row beats two of your three: if your lead meets one, swap straight to the green Pokémon.` : ''}`;
   const sw = swaps.slice(0, 4).map(s => `<div class="swap"><span class="dim">Swap ${esc(nm(s.out))} → ${esc(nm(s.in))}${s.pending ? ' (pending)' : ''}</span><span class="${s.delta >= 0 ? 'up' : 'down'}">${s.delta >= 0 ? '+' : ''}${s.delta}${s.fixed.length ? ' · fixes ' + esc(s.fixed.slice(0, 2).join(', ')) : ''}${s.opened.length ? ' · opens ' + esc(s.opened.slice(0, 2).join(', ')) : ''}</span></div>`).join('');
@@ -984,7 +990,7 @@ function cardExtras(r) {
   }
   const sid = id || unrankedId(r);
   const auto = sid ? Object.entries(m.auto).find(([, a]) => a.fromKey === r.key) : null;
-  if (auto) { const [evo, a] = auto; out.status = chipS(`evolve → ${esc(nm(evo))} #${APP.pokemon[evo].rank}`, 'gl'); out.right = chipS(`fits to L${a.toLevel}`); return out; }
+  if (auto) { const [evo, a] = auto; out.status = chipS(`evolve → ${esc(nm(evo))} #${rankOf(evo)}`, 'gl'); out.right = chipS(`fits to L${a.toLevel}`); return out; }
   if (!id && sid) { out.status = chipS(`not ranked in ${LEAGUE.abbr}`, ''); return out; }
   if (own && own.key !== r.key && r.cp <= LEAGUE.cp) out.chips.push(chipS('spare copy'));
   return out;
@@ -998,15 +1004,15 @@ function tiles(m) {
     else if (o.toLevel > 40 && o.toLevel > o.level) { st = 'xl'; txt = `XL gated · L${o.toLevel}`; }
     else if (o.toLevel > o.level) { st = 'power'; const c = costTo(o.level, o.toLevel); txt = `L${o.level} → ${o.toLevel} · ${c.candy} candy`; bar = (o.level - 1) / (o.toLevel - 1); }
     else { const rd = readiness(m, o.id); if (rd.ready) { st = 'ready'; txt = 'ready'; } else { st = 'moves'; const k = rd.items[0].k; txt = k === 'scan' ? 'scan the attacks' : k === 'move2' ? 'unlock 2nd move' : k === 'check' ? 'check 2nd move' : 'needs a TM'; } }
-    out.push({id: o.id, st, txt, bar, sub: `#${APP.pokemon[o.id].rank}${o.cp ? ' · ' + o.cp + ' CP' : ''}`, iv: o.ivs ? o.ivs.join('/') : null, teams: inTeams(o.id)});
+    out.push({id: o.id, st, txt, bar, sub: `#${rankOf(o.id)}${o.cp ? ' · ' + o.cp + ' CP' : ''}`, iv: o.ivs ? o.ivs.join('/') : null, teams: inTeams(o.id)});
   }
-  for (const [id, a] of Object.entries(auto)) out.push({id, st: 'pending', txt: `evolve ${a.from}`, sub: `#${APP.pokemon[id].rank} · fits to L${a.toLevel}`});
-  for (const id of Object.keys(ROSTER.pending)) if (!own[id] && !auto[id] && APP.pokemon[id]) out.push({id, st: 'pending', txt: 'pending', sub: `#${APP.pokemon[id].rank}`});
+  for (const [id, a] of Object.entries(auto)) out.push({id, st: 'pending', txt: `evolve ${a.from}`, sub: `#${rankOf(id)} · fits to L${a.toLevel}`});
+  for (const id of Object.keys(ROSTER.pending)) if (!own[id] && !auto[id] && APP.pokemon[id]) out.push({id, st: 'pending', txt: 'pending', sub: `#${rankOf(id)}`});
   for (const id of Object.keys(ri.candidates)) { const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
-    out.push({id, st: 'wanted', txt: sc ? `${nm(pre)} ≤ ${sc.safe} CP` : 'wanted', sub: `#${APP.pokemon[id].rank}`}); }
-  for (const id of ROSTER.exclude) if (APP.pokemon[id]) out.push({id, st: 'bench', txt: 'benched', sub: `#${APP.pokemon[id].rank}`});
+    out.push({id, st: 'wanted', txt: sc ? `${nm(pre)} ≤ ${sc.safe} CP` : 'wanted', sub: `#${rankOf(id)}`}); }
+  for (const id of ROSTER.exclude) if (APP.pokemon[id]) out.push({id, st: 'bench', txt: 'benched', sub: `#${rankOf(id)}`});
   const order = {ready: 0, power: 1, moves: 2, manual: 3, pending: 4, wanted: 5, xl: 6, bench: 7};
-  out.sort((a, b) => order[a.st] - order[b.st] || APP.pokemon[a.id].rank - APP.pokemon[b.id].rank);
+  out.sort((a, b) => order[a.st] - order[b.st] || rankN(a.id) - rankN(b.id));
   return out;
 }
 function movesRow(id, moves, handler) {
@@ -1214,7 +1220,7 @@ function howToGet(m, id) {
 function availBlock(id, list, opts) {          // a species block for Today: name, then its bundled channels
   opts = opts || {};
   const lines = bundleAvail(list, nm(id));
-  return `<div class="avb" onclick="Planner.openMon('${id}')"><div class="avh"><b>${esc(nm(id))}</b><span class="dim">#${APP.pokemon[id].rank}${opts.status ? ' · ' + opts.status : ''}</span></div>` +
+  return `<div class="avb" onclick="Planner.openMon('${id}')"><div class="avh"><b>${esc(nm(id))}</b><span class="dim">#${rankOf(id)}${opts.status ? ' · ' + opts.status : ''}</span></div>` +
     lines.map(l => `<div class="avl ${l.now ? 'now' : ''}"><span class="lb">${l.label}</span><span class="tx">${l.html}</span></div>`).join('') + '</div>';
 }
 function availLines(list, species) {           // the same bundle, for a Pokémon page
@@ -1639,13 +1645,13 @@ function matchupsInner() {
   const pool = L.pool(), q = MU.q.toLowerCase();
   const hits = q ? pool.filter(o => nm(o).toLowerCase().includes(q) || o.includes(q)).slice(0, 8) : [];
   h += `<div class="add" style="margin:6px 0"><input id="muq" placeholder="opponent: search ${pool.length} ${mx ? 'simulated' : 'meta'} Pokémon" value="${esc(MU.q)}" oninput="Planner.muSearch(this.value)"></div>`;
-  if (hits.length) h += `<div class="tchips">${hits.map(o => `<span class="chip ${MU.opp === o ? 'ok' : ''}" onclick="Planner.muOpp('${o}')">${esc(nm(o))} <span style="opacity:.7">#${APP.pokemon[o].rank}</span></span>`).join('')}</div>`;
+  if (hits.length) h += `<div class="tchips">${hits.map(o => `<span class="chip ${MU.opp === o ? 'ok' : ''}" onclick="Planner.muOpp('${o}')">${esc(nm(o))} <span style="opacity:.7">#${rankOf(o)}</span></span>`).join('')}</div>`;
   else if (MU.recent.length) h += `<div class="tchips">${MU.recent.filter(o => APP.pokemon[o]).map(o => `<span class="chip ${MU.opp === o ? 'ok' : ''}" onclick="Planner.muOpp('${o}')">${esc(nm(o))}</span>`).join('')}</div>`;
   const opp = MU.opp && APP.pokemon[MU.opp] ? MU.opp : null;
   if (!opp) return h + `<div class="note">Pick an opponent to see how each of your ${ids.length === 1 ? 'Pokémon does' : 'Pokémon do'} against it.</div>`;
   const rows = L.matchup(ids, opp), scen = mx ? mx.scenarios : ['1-1'];
   const oppMoves = mx && mx.moves[opp] ? mx.moves[opp] : APP.pokemon[opp].moveset;
-  h += `<div class="sec">${MU.mode === 'lead' ? 'Their lead' : 'Against'} <b style="color:var(--ink)">${esc(nm(opp))}</b> <small>#${APP.pokemon[opp].rank} · ${esc(oppMoves.map(mvName).join(' · '))}</small></div>`;
+  h += `<div class="sec">${MU.mode === 'lead' ? 'Their lead' : 'Against'} <b style="color:var(--ink)">${esc(nm(opp))}</b> <small>#${rankOf(opp)} · ${esc(oppMoves.map(mvName).join(' · '))}</small></div>`;
   h += `<div class="mut" style="grid-template-columns:1fr repeat(${scen.length},minmax(52px,64px))"><div class="mh"></div>${scen.map(sc => `<div class="mh">${sc === '0-0' ? 'no shields' : sc === '1-1' ? '1 shield each' : sc === '2-2' ? '2 shields each' : sc}</div>`).join('')}` +
     rows.map(r => `<div class="mn" onclick="Planner.openMon('${r.id}')"><b>${icon(r.id, 'xs')}${esc(nm(r.id))}</b><small>${r.verdict === 'wins' ? '<span class="good">wins regardless</span>' : r.verdict === 'loses' ? '<span class="bad">loses</span>' : 'shield-dependent'}${r.source === 'sim-default' ? ' · <span title="simulated with PvPoke\'s moveset, yours differs">PvPoke moveset</span>' : r.source === 'est' ? ' · estimated' : ''}</small></div>${scen.map(sc => `<div class="mc ${cls(r.ratings[sc])}">${Math.round(r.ratings[sc])}</div>`).join('')}`).join('') + `</div>`;
   if (MU.mode === 'lead' && ids.length === 3) {
@@ -1692,8 +1698,8 @@ function changesFor(m) {
   for (const e of CHANGES) {
     if (e.league !== LEAGUE.slug) continue;
     for (const c of e.moveset || []) if (mine(c.id) && APP.pokemon[c.id]) out.push({k: `${e.date}|mv|${c.id}`, date: e.date, id: c.id, txt: `<b>${esc(nm(c.id))}</b>: PvPoke's best moves are now ${esc(names(c.to))} <span class="dim">(were ${esc(names(c.from))})</span>`});
-    for (const id of e.newMeta || []) if (mine(id) && APP.pokemon[id]) out.push({k: `${e.date}|in|${id}`, date: e.date, id, txt: `<b>${esc(nm(id))}</b> entered the meta group <span class="dim">(now #${APP.pokemon[id].rank})</span>`});
-    for (const id of e.leftMeta || []) if (mine(id) && APP.pokemon[id]) out.push({k: `${e.date}|out|${id}`, date: e.date, id, txt: `<b>${esc(nm(id))}</b> left the meta group <span class="dim">(now #${APP.pokemon[id].rank})</span>`});
+    for (const id of e.newMeta || []) if (mine(id) && APP.pokemon[id]) out.push({k: `${e.date}|in|${id}`, date: e.date, id, txt: `<b>${esc(nm(id))}</b> entered the meta group <span class="dim">(now #${rankOf(id)})</span>`});
+    for (const id of e.leftMeta || []) if (mine(id) && APP.pokemon[id]) out.push({k: `${e.date}|out|${id}`, date: e.date, id, txt: `<b>${esc(nm(id))}</b> left the meta group <span class="dim">(now #${rankOf(id)})</span>`});
     for (const c of e.rank || []) if (mine(c.id) && APP.pokemon[c.id]) out.push({k: `${e.date}|rk|${c.id}`, date: e.date, id: c.id, txt: `<b>${esc(nm(c.id))}</b> moved from #${c.from} to #${c.to}`});
   }
   return out.filter(x => !ROSTER.seen[x.k]).sort((a, b) => b.date.localeCompare(a.date));
@@ -2107,8 +2113,8 @@ function monInner(m, id, noHead) {
   h += metaFit(m, id);
   // matchups against the meta
   const rated = L.meta.filter(x => x !== id).map(x => ({o: x, r: L.rating(id, x)}));
-  const wins = rated.filter(x => x.r >= 500).sort((p, q) => q.r - p.r), losses = rated.filter(x => x.r < 400).sort((p, q) => APP.pokemon[p.o].rank - APP.pokemon[q.o].rank);
-  const mchip = x => `<span class="chip ${x.r >= 500 ? 'meta1' : 'warn'}" style="cursor:pointer" onclick="Planner.openMon('${x.o}')">${esc(nm(x.o))} <span style="opacity:.7">#${APP.pokemon[x.o].rank}</span></span>`;
+  const wins = rated.filter(x => x.r >= 500).sort((p, q) => q.r - p.r), losses = rated.filter(x => x.r < 400).sort((p, q) => rankN(p.o) - rankN(q.o));
+  const mchip = x => `<span class="chip ${x.r >= 500 ? 'meta1' : 'warn'}" style="cursor:pointer" onclick="Planner.openMon('${x.o}')">${esc(nm(x.o))} <span style="opacity:.7">#${rankOf(x.o)}</span></span>`;
   h += `<div class="sec">Against the common Pokémon <small>${wins.length} wins · ${rated.length - wins.length - losses.length} even · ${losses.length} losses of ${rated.length}</small></div>`;
   h += `<div class="team" style="cursor:default"><div class="nm" style="font-size:13px">Loses to <span class="dim">most dangerous first</span></div><div class="chips">${fold(losses.map(mchip), 10, {chip: true}) || '<span class="dim">nothing in the meta beats it clearly</span>'}</div>
     <div class="nm" style="font-size:13px;margin-top:10px">Beats</div><div class="chips">${fold(wins.map(mchip), 10, {chip: true}) || '<span class="dim">no clear wins</span>'}</div>
@@ -2199,7 +2205,7 @@ function renderBuilder(m, L) {
   const slots = UI.build.slots, filled = slots.filter(Boolean);
   let h = `<div class="note">Pick any three Pokémon: from the rankings, a meta team, or your roster. Scored the same way as Today.</div>`;
   const SLOT_NAMES = ['Lead', 'Swap', 'Closer'];   // slot order is the in-game order: lead, safe swap, closer
-  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">${SLOT_NAMES[i]}</span>${icon(id, 'l')}<span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${APP.pokemon[id].rank}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
+  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">${SLOT_NAMES[i]}</span>${icon(id, 'l')}<span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">#${rankOf(id)}${ownership(m, id) ? ' · ' + ownership(m, id) : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
     : `<div class="role slot empty" onclick="Planner.metaPanel('rank')"><span class="rl">${SLOT_NAMES[i]}</span>${icon(null, 'l ph')}<span class="rn dim" style="font-size:14px">＋ pick</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
   // per-slot move choice
@@ -2227,22 +2233,22 @@ function renderBuilder(m, L) {
     const ev = filled.length ? L.evaluate(filled) : null;
     const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;
     // your roster, one tap to add
-    const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct).sort((a, b) => APP.pokemon[a].rank - APP.pokemon[b].rank);
+    const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct).sort((a, b) => rankOf(a) - rankOf(b));
     h += `<div class="sec">From your roster <small>tap to add</small></div>`;
     h += mine.length ? `<div class="tchips">${mine.map(p => `<span class="chip ${m.ri.owned[p] ? 'ok' : 'gl'}" onclick="Planner.fillSlot('${p}')">${esc(nm(p))}</span>`).join('')}</div>` : `<div class="note">Nothing left in your roster to add.</div>`;
     if (Object.keys(m.own).length < 3) h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scan ${3 - Object.keys(m.own).length} more Pokémon under ${LEAGUE.cp} CP</span><div class="dt">then the builder can complete a team from your own roster</div></span><span class="go">›</span></div>`;
     if (filled.length) {
       // weak spots of what is in the slots so far
-      const holes = ev.holes.slice().sort((a, b) => APP.pokemon[a].rank - APP.pokemon[b].rank);
+      const holes = ev.holes.slice().sort((a, b) => rankOf(a) - rankOf(b));
       h += `<div class="sec">Not covered yet <small>${holes.length ? `you have no winning matchup against these ${holes.length}` : `your picks already beat all ${L.meta.length}`}</small></div>`;
-      if (holes.length) h += `<div class="team" style="cursor:default"><div class="chips">${fold(holes.map(o => `<span class="chip warn" onclick="Planner.openMon('${o}')" style="cursor:pointer">${esc(nm(o))} <span style="opacity:.7">#${APP.pokemon[o].rank}</span></span>`), 12, {chip: true})}</div></div>`;
+      if (holes.length) h += `<div class="team" style="cursor:default"><div class="chips">${fold(holes.map(o => `<span class="chip warn" onclick="Planner.openMon('${o}')" style="cursor:pointer">${esc(nm(o))} <span style="opacity:.7">#${rankOf(o)}</span></span>`), 12, {chip: true})}</div></div>`;
       // suggestions: what to add next, from your roster or from the meta
       const pool = UI.buildPool === 'meta' ? APP.meta.slice(0, 60).filter(distinct) : mine;
       const sug = pool.map(p => { const e2 = L.evaluate(filled.concat(p)); const fixes = ev.holes.filter(o => !e2.holes.includes(o)); return {p, score: e2.score, fixes, left: e2.holes.length}; })
         .sort((a, b) => b.score - a.score).slice(0, 6);
       h += `<div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>Add next <small>${filled.length === 2 ? 'completes the team' : 'best partner'}</small></span><span class="tabs sub seg"><button class="${UI.buildPool !== 'meta' ? 'on' : ''}" onclick="Planner.buildPool('roster')">Your roster</button><button class="${UI.buildPool === 'meta' ? 'on' : ''}" onclick="Planner.buildPool('meta')">Meta</button></span></div>`;
       if (!sug.length) h += `<div class="note">${UI.buildPool === 'meta' ? 'No meta Pokémon left to add.' : 'Nothing in your roster fits; switch to Meta to see what to catch.'}</div>`;
-      else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${APP.pokemon[x.p].rank}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `starts beating <span class="good">${fewText(x.fixes.map(nm))}</span>` : 'beats nothing new'}${x.left ? ` · ${x.left} still not covered` : ` · then you beat all ${L.meta.length}`}</div></span><span class="go">+</span></div>`).join('');
+      else h += sug.map(x => `<div class="team row" onclick="Planner.fillSlot('${x.p}')"><span class="sc">${x.score.toFixed(0)}</span><span class="tx"><span class="nm">${esc(nm(x.p))} <span class="dim">#${rankOf(x.p)}</span> ${ownChip(ownership(m, x.p))}</span><div class="dt">${x.fixes.length ? `starts beating <span class="good">${fewText(x.fixes.map(nm))}</span>` : 'beats nothing new'}${x.left ? ` · ${x.left} still not covered` : ` · then you beat all ${L.meta.length}`}</div></span><span class="go">+</span></div>`).join('');
       h += `<div class="note">The score is your slots with this Pokémon added, on the same scale as Today. The green names are the ones it would start beating for you.</div>`;
     }
   }
