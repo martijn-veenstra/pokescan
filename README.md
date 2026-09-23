@@ -79,9 +79,9 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   pages to within a point. The same matrix drives team roles (lead / safe swap / closer), the "N of 150 beat all
   three" threat count on team pages and the builder, and the coverage grid (only cells without a simulation are faded).
   Pokémon pages show move counts (fast moves and turns per charged move) from the game master.
-- **AI review**: every complete team in the builder, and every saved party, gets one structured Claude review (verdict,
-  strengths, weak spots, swaps from your roster), cached per trio and league so it costs one call; saved-team rows show
-  the verdict, ⋮ → Refresh review asks again. Other team pages offer the review on tap.
+- **AI review** (Pro): any complete team — in the builder or a saved party — offers one structured Claude review
+  (verdict, game plan, strengths, weak spots, swaps from your roster) on tap, never by itself; it is cached per trio
+  and league so it costs one call, saved-team rows show the verdict, and ⋮ → Refresh review asks again.
   The review also judges the Lead / Swap / Closer order: its **Order** line names the lineup it would run, with the reasons
   from the members' types and the app's role numbers, and one tap applies it to the saved party or the builder slots. A saved
   party's page shows your own order in the hero tiles, with the app's suggestion and a **Use this order** button under them,
@@ -146,7 +146,7 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   Scans; the import log says "read by Claude" for those files and everything else stays on the device. On Android and
   desktop the app is a Web Share Target (`share_target` in the manifest, files land in a cache and are imported on
   `#/inbox`); on iPhone use Import scans. Free accounts see a Pro teaser instead and nothing leaves the phone.
-- **No chat**: the AI never asks or answers questions; it only writes the structured review above, automatically.
+- **No chat**: the AI never asks or answers questions; it only writes the structured review above, when asked.
   Pokémon names in a review are tappable and fill an open builder slot, or open the Pokémon page.
 - **Import log** (Scans, under the progress bar): one line per imported file with what it gave (new cards,
   appraisals, moves, profile, screens read) or why it failed, with decoder details for videos. Kept on the
@@ -206,6 +206,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **Team reviews are asked for, never spent by themselves** (v10.1): the review used to start on its own for every
+  complete trio in the builder and every saved party, so saving a few teams used up the account's hourly Pro reviews
+  without the player asking. Each card now offers "Review this team" and sends nothing until it is tapped. The
+  paywall and the limits are the server's: `/api/coach` is Pro only (403 `upgrade_required` otherwise), at most
+  `COACH_PER_USER_HOUR` (10) reviews an hour per account — of which `COACH_BATTLE_PER_HOUR` (5) may be battle reviews
+  — and `COACH_PER_HOUR` (30) across the server. A refresh keeps the review there was until the new one lands, so a
+  refresh that hits the limit says so under the old review instead of leaving an empty card.
 - **A game plan in the team review, and linked Pokémon on battle pages** (v10.0): the AI review of a team opens with a
   **Game plan** under the verdict — three short beats, Open / Mid-game / Close: what the lead does with shields, when to
   switch and who takes the awkward matchups, who finishes. A review cached before it existed says so and offers a
@@ -289,8 +296,8 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   also runs on the AI review card, the app's other long wait. There is no percentage to show for a review, so the
   ring spins instead of filling and the heading counts the seconds; when the review arrives the ball finishes its
   catch before the card turns into the text. A failed review drops the ball.
-- **AI review** (server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, every complete
-  team gets one structured review from Claude, cached per trio and league; the server rate-limits reviews.
+- **AI review** (server only): with `ANTHROPIC_API_KEY` set on the server and sync connected, a complete
+  team gets one structured review from Claude on request, cached per trio and league; Pro only, rate-limited per account.
 
 Files: `index.html` (scanner and shell), `planner.js` (Today, coverage, roster and Pokémon pages), `sources.js` (raid/egg/research/event schedule), `pvp.js` (trio heuristic, shared with Node), `sw.js` + `manifest.webmanifest`
 (PWA), `data/app-great.json` (bundled PvPoke data), `vendor/tesseract/` (bundled text recognition, so scanning works offline and without a CDN). `.github/workflows/update-data.yml` regenerates all

@@ -717,7 +717,7 @@ function teamInner(m, ids, name) {
     const mine = BATTLES.filter(b => b.ids && teamKey(b.ids) === teamKey(ids) && (b.result || b.opp)).sort((a2, b2) => b2.t - a2.t);
     if (mine.length) h += `<div class="sec">Its battles <small>${mine.length} logged with this trio</small></div>`
       + fold(mine.map(b => battleRow(b, true)), 5, {label: n => `show ${n} older`}); }
-  h += reviewCard(ids, !!saved);
+  h += reviewCard(ids);
   h += `<div class="sec">To do for this team</div>`;
   h += todo.length ? todo.map(moveCard).join('') : `<div class="note">Nothing open: the members you own are at the cap and carry the right moves.</div>`;
   // weak spots
@@ -828,10 +828,11 @@ function parseReview(text, secs) {             // the team prompt asks for Verdi
   return out;
 }
 const verdictOf = rv => { const v = (parseReview(rv.text).Verdict || rv.text).replace(/\*\*/g, '').split(/\n/)[0]; return v.length > 140 ? v.slice(0, 137) + '…' : v; };
-async function autoReview(ids) {
+async function askReview(ids, again) {         // one review, because the player asked for it; again = replace the one there is
   if (!coachOn() || !APP || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
   const key = reviewKey(ids);
-  if (BCOACH.reviews[key] || BCOACH.reviewBusy[key] || BCOACH.reviewFailed[key]) return;
+  if (BCOACH.reviewBusy[key] || (!again && BCOACH.reviews[key])) return;
+  delete BCOACH.reviewFailed[key];
   BCOACH.reviewBusy[key] = true;
   const paint = () => { const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); if (v === 'teams') renderTeams(); };
   // the card's Pokéball shakes while we wait; the heading counts the seconds so a slow review still looks alive
@@ -900,18 +901,21 @@ function battleReviewCard(b) {
   const body = order.filter(k => sec[k]).map(k => `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('') || `<div class="rsec">${linkNames(mdLite(rv.text))}</div>`;
   return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
 }
-function refreshReview(ids) { const key = reviewKey(ids); delete BCOACH.reviews[key]; delete BCOACH.reviewFailed[key]; saveBCoach(); autoReview(ids); const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); }
-function reviewCard(ids, auto) {                // the card; auto = ask Claude by itself when there is no review yet (builder and saved parties), else offer a button
+// the review there is stays up until the new one lands: a refresh that hits the hourly limit must not leave nothing
+function refreshReview(ids) { askReview(ids, true); const v = onView(); if (v === 'builder') renderMeta('build'); if (v === 'team') renderTeam(); }
+/* The card. A review is only ever asked for by a tap: it used to start by itself for every complete trio in the builder
+   and every saved party, so saving a few teams (or trying trios in the builder) spent the account's hourly allowance
+   of Pro reviews without the player asking for any of them. */
+function reviewCard(ids) {
   if (ids.length !== 3) return '';
   if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered() ? proTeaser('AI review', 'Claude judges this team: its plan, what it fears and the one swap from your roster that helps.') : '';
   const key = reviewKey(ids), rv = BCOACH.reviews[key], busy = BCOACH.reviewBusy[key], failed = BCOACH.reviewFailed[key];
-  if (!rv && auto && !busy && !failed) setTimeout(() => autoReview(ids), 0);
   const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>AI review <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
   // the scan importer's Pokéball, on the app's other long wait: shaking while Claude thinks, caught when it lands, dropped when it fails
   const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
-  if (busy || (!rv && auto && !failed)) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is judging this team: roles, weak spots and swaps from your roster. Usually 20 to 90 seconds.');
+  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is judging this team: roles, weak spots and swaps from your roster. Usually 20 to 90 seconds.');
   if (!rv && failed) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a>`);
-  if (!rv) return wait('', '', `<a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Get an AI review</a> of this team: roles, weak spots and swaps from your roster.`);
+  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Review this team</a> — Claude writes a game plan, the weak spots and the swaps from your roster. Pro, and counted in your AI reviews an hour.`);
   const sec = parseReview(rv.text), order = TEAM_SECS;
   // the Order section's first line is a lineup: one tap applies it to the saved party or the builder slots when it differs
   const perm = sec.Order ? orderFromReview(sec.Order, ids) : null, party = perm ? savedName(ids, null) : null;
@@ -925,7 +929,8 @@ function reviewCard(ids, auto) {                // the card; auto = ask Claude b
     : `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}${k === 'Order' ? apply : ''}</div>`).join('');
   // a review saved before the game plan existed: one tap asks again, rather than spending a review on every old team
   const old = !sec['Game plan'] ? `<div class="dt" style="margin-top:8px">No game plan in this review yet — <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">refresh it</a> to get one.</div>` : '';
-  return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}${old}</div>`;
+  const lost = failed ? `<div class="dt" style="margin-top:8px">⚠ The refresh did not come through: ${esc(failed)}. This is the review from before.</div>` : '';
+  return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}${old}${lost}</div>`;
 }
 function builderContext(m, L, filled) {
   const ctx = coachContext(m), ev = L.evaluate(filled);
@@ -2272,7 +2277,7 @@ function renderBuilder(m, L) {
       <div class="dim" style="font-size:12px;margin-top:6px">${coverText({holes: d.unansweredMeta}, L)}.</div>
       ${L.mx ? `<div class="dim" style="font-size:12px;margin-top:6px">${(() => { const tl = L.threatList(filled, 6); return tl.count ? `Beaten by <b style="color:var(--ink)">${tl.count}</b> of the common Pokémon: ${esc(tl.threats.map(t => nm(t.id)).join(', '))}${tl.count > 6 ? '…' : ''}` : 'No common Pokémon beats all three of yours.'; })()}</div>` : ''}
       <div style="font-size:13px;margin-top:8px">${esc(needLine(m, filled))}</div></div>`;
-    h += reviewCard(filled, true);
+    h += reviewCard(filled);
   } else {
     const ev = filled.length ? L.evaluate(filled) : null;
     const distinct = p => !filled.includes(p) && new Set(filled.concat(p).map(PVP.baseSpecies)).size === filled.length + 1;

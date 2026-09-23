@@ -38,11 +38,13 @@ test('free plan sees the locked review and the Pro page; Pro unlocks the review'
   await page.evaluate(() => Planner.nav('#/builder'));
   await page.click('#builder .team.card.pro-lock');
   await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/pro');
-  // the account is upgraded: the Pro page says so and the builder review runs
+  // the account is upgraded: the Pro page says so and the builder offers the review
   plan = 'pro';
   await page.evaluate(async () => { await Sync.refreshMe(); });
   await expect(page.locator('#pro')).toContainText('You are on Pro');
   await page.evaluate(() => Planner.nav('#/builder'));
+  // Pro offers the review; it is asked for with a tap, never by itself
+  await page.click('#builder .team.card.rvwait a:has-text("Review this team")');
   await expect(page.locator('#builder .team.card.review')).toContainText('Fine.', { timeout: 15000 });
   expect(coachPosts.length).toBe(1);
   expect(errors).toEqual([]);

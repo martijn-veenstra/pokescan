@@ -3,7 +3,7 @@ import { openApp } from './helpers.js';
 
 const REVIEW = '**Verdict** A solid safe-swap core around Azumarill.\n\n**Game plan**\n- Open: Medicham leads and throws Ice Punch early to pull a shield\n- Mid-game: switch to Azumarill into anything Steel\n- Close: Altaria finishes with shields down\n\n**Strengths**\n- Medicham leads and pressures shields\n- Azumarill is the safe swap\n\n**Weak spots**\n- Tinkaton beats all three: swap to Medicham and bait\n\n**Swaps**\n- Altaria → Corsola (Galarian) (to catch or build): answers Tinkaton\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria\nMedicham pressures shields early; Azumarill is the safest switch; Altaria closes with shields down.';
 
-test('a complete team in the builder gets one AI review, cached per trio', async ({ page }) => {
+test('a complete team gets an AI review when asked, never by itself, cached per trio', async ({ page }) => {
   const posts = [];
   await page.route('**/api/**', route => {
     const u = route.request().url(), m = route.request().method();
@@ -16,6 +16,12 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   const errors = await openApp(page, '#/builder');
   await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
+  // a complete trio offers a review and asks for nothing until it is tapped: reviews are Pro and counted per hour
+  const ask = page.locator('#builder .team.card.rvwait a:has-text("Review this team")');
+  await expect(ask).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(posts, 'nothing is sent before the tap').toHaveLength(0);
+  await ask.click();
   await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
   await expect(page.locator('#builder .team.card.review .rsec')).toHaveCount(5);
   // the game plan sits right under the verdict, its three beats named
@@ -41,8 +47,16 @@ test('a complete team in the builder gets one AI review, cached per trio', async
   await expect(page.locator('#builder .team.card.review')).toContainText('A solid safe-swap core');
   expect(posts).toHaveLength(1);
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'tinkaton']));
+  await page.waitForTimeout(500);
+  expect(posts, 'a different trio does not ask by itself either').toHaveLength(1);
+  await page.click('#builder .team.card.rvwait a:has-text("Review this team")');
   await expect.poll(() => posts.length).toBe(2);
   // saved party rows carry the verdict, team page shows the review
+  // a newly saved party with no review yet: its page offers one and does not ask
+  await page.evaluate(() => { Planner.ROSTER.tagged['Fresh'] = ['azumarill', 'altaria', 'tinkaton']; Planner.refresh(); Planner.openTeam(['azumarill', 'altaria', 'tinkaton'], 'Fresh'); });
+  await expect(page.locator('#team .team.card.rvwait a:has-text("Review this team")')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(posts, 'saving a team spends no review').toHaveLength(2);
   await page.evaluate(() => { Planner.ROSTER.tagged['Core'] = ['azumarill', 'medicham', 'altaria']; Planner.refresh(); Planner.nav('#/teams'); });
   await expect(page.locator('#teams .team.row .ai').first()).toContainText('A solid safe-swap core');
   await page.evaluate(() => Planner.openTeam(['azumarill', 'medicham', 'altaria'], 'Core'));
@@ -87,6 +101,7 @@ test('the review card runs the Pokéball loader: shaking with a live timer, caug
   const errors = await openApp(page, '#/builder');
   await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
+  await page.click('#builder .team.card.rvwait a:has-text("Review this team")');
   // the ball shakes inside the card while Claude thinks, and the heading counts the seconds
   const ball = page.locator('#builder .team.card.rvwait .pball.rv');
   await expect(ball).toHaveClass(/\bon\b/);
@@ -129,5 +144,32 @@ test('a review saved before the game plan existed offers to refresh for one, wit
   await expect.poll(() => posts.length).toBe(1);
   await expect(page.locator('#team .team.card.review .rsec.plan')).toContainText('Open');
   await expect(page.locator('#team .team.card.review')).not.toContainText('No game plan in this review yet');
+  expect(errors).toEqual([]);
+});
+
+test('a refresh that does not come through keeps the review there was', async ({ page }) => {
+  let n = 0;
+  await page.route('**/api/**', route => {
+    const u = route.request().url(), m = route.request().method();
+    if (u.endsWith('/api/health')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, db: true, storage: 'memory', sync: true, coach: true, version: 'test' }) });
+    if (u.endsWith('/api/auth')) return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    if (u.endsWith('/api/coach') && m === 'POST') { n++; return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: 'rate_limited', message: 'at most 10 reviews per hour per account' }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"user":"default","state":{}}' });
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('sync', JSON.stringify({ code: 'test', last: {}, base: {} }));
+    localStorage.setItem('roster', JSON.stringify({ tagged: { Core: ['azumarill', 'medicham', 'altaria'] }, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] }));
+    const key = ['azumarill', 'medicham', 'altaria'].sort().join('+') + '|great';
+    localStorage.setItem('bcoach', JSON.stringify({ reviews: { [key]: { t: Date.now() - 3600000, text: '**Verdict** The review from before.\n\n**Game plan**\n- Open: lead\n- Mid-game: swap\n- Close: close', slots: ['azumarill', 'medicham', 'altaria'] } } }));
+  });
+  const errors = await openApp(page, '#/teams');
+  await page.evaluate(async () => { await Sync.detect(); Planner.openTeam(['azumarill', 'medicham', 'altaria'], 'Core'); });
+  await page.click('#team .team.card.review .ctx .dots');
+  await page.click('#team .team.card.review .ctx .menu button:has-text("Refresh review")');
+  await expect.poll(() => n).toBe(1);
+  const card = page.locator('#team .team.card.review');
+  await expect(card).toContainText('The review from before');
+  await expect(card).toContainText('did not come through');
+  await expect(card).toContainText('10 reviews per hour');
   expect(errors).toEqual([]);
 });
