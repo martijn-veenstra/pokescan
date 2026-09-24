@@ -28,9 +28,11 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   // the import brings Tinkaton itself: added, and the page turns into the owned one
   await page.evaluate(() => { Planner.scanFor('tinkaton'); const b = DATA.stats['TINKATON'][0], lv = 13, m = cpmAt(lv); const r = { species: 'TINKATON', cp: calcCP(b, 10, 15, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 10, 15, 15, b]], appraisal: [10, 15, 15], txt: '', cpCandidates: [] }; r.key = `TINKATON|${r.cp}|${r.hp}|${lv}|`; results.push(r); save(); render(); Planner.nav('#/scans'); Planner.afterImport([r]); });
   await expect(page.locator('#toast')).toContainText('Tinkaton added to your roster');
-  expect(await page.evaluate(() => location.hash)).toBe('#/mon/tinkaton');
+  // a Pokémon you scanned has one page: its copy on top, the species below
+  await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/scan\/TINKATON/);
+  await expect(mon.locator('.scanhero')).toContainText('Tinkaton');
   await expect(mon.locator('.notown')).toHaveCount(0);
-  await expect(mon.locator('.monhead .chip.ok')).toHaveText('owned');
+  await expect(mon).toContainText('In your roster');
   await expect(mon.locator('button:has-text("Update with a new scan")')).toBeVisible();
   // PvE tab: raid moves by damage, the attacker ranking, the boss weaknesses
   await mon.locator('.montabs button:has-text("PvE")').click();
@@ -50,7 +52,7 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   await expect(mon.locator('button:has-text("Update with a new scan")')).toBeVisible();
   await mon.locator('button:has-text("Update with a new scan")').click();
   expect(await page.evaluate(() => Planner.updateKey())).toMatch(/^AZUMARILL\|/);
-  expect(await page.evaluate(() => location.hash)).toBe('#/mon/azumarill');
+  expect(await page.evaluate(() => location.hash)).toMatch(/^#\/scan\/AZUMARILL/);
   // while that import runs the Pokémon page shows the same loader as Scans, floating above the bottom bar
   await page.evaluate(() => { progBox(true); progress(0.4); status('Scanning IMG_1.png'); });
   await expect(page.locator('#impfloat')).toBeVisible();
@@ -62,7 +64,7 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   expect(await page.evaluate(() => document.querySelector('#impfloat .pball').dataset.pct)).toBe('100');
   await page.evaluate(() => pballState('on'));
   await page.evaluate(() => Planner.nav('#/scans'));
-  await expect(page.locator('#impfloat')).toBeHidden();        // on Scans the page's own bar shows, not the floating one
+  await expect(page.locator('#impfloat')).toBeHidden();        // on the Roster (old #/scans link) the page's own bar shows, not the floating one
   await expect(page.locator('#prog')).toBeVisible();
   await page.evaluate(() => { progBox(false); Planner.openMon('azumarill'); });
   await expect(page.locator('#impfloat')).toBeHidden();

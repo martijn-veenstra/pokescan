@@ -2098,6 +2098,7 @@ function scanSection(m, r) {
     else if (ea && e0) rows.push(['Shadow', isSh ? `shadow copy, meta #${e0.rank} · purified it would be the normal ${esc(nm(alt))}, meta #${ea.rank}` : `normal copy, meta #${e0.rank} · the Shadow form ranks meta #${ea.rank} <span class="dim">(⋮ → Mark as Shadow if this one is)</span>`]);
   }
   if (r.history && r.history.length) rows.push(['History', r.history.slice().reverse().map(h => `${when(h.t)}: ${h.species !== r.species ? esc(nice(h.species)) + ' · ' : ''}${h.cp} CP · L${h.level ?? '?'}`).join('<br>') + `<div class="dim" style="font-size:12px">now ${r.cp} CP · L${r.level ?? '?'}</div>`]);
+  if (!r.superseded) rows.push(['', `<button class="btn sec" style="margin:4px 0 0" onclick="Planner.updateScan(${attr(r.key)},'mon')">⟳ Update with a new scan</button><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this card is updated, no second card.</div>`]);
   h += kv(rows) + (best ? evoTable(r, best) : '') + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, ${LEAGUE.abbr} rank and ${LEAGUE.cp === 2500 ? 'GL' : 'UL'} rank mean?</div>`;
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
