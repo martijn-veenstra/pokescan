@@ -50,3 +50,58 @@ test('Today shows meta changes for owned Pokémon and can dismiss them', async (
   expect(await page.evaluate(() => Object.keys(Planner.ROSTER.seen).length)).toBe(2);
   expect(errors).toEqual([]);
 });
+
+/* IVs do not change on evolving, so a scanned pre-evolution already says where its evolution will rank in every
+   league: a Meditite's spread against Medicham's base stats at each cap, and Medicham's own meta rank there. */
+test('a scanned Meditite shows where Medicham would rank in every league before it is evolved', async ({ page }) => {
+  const errors = await openApp(page, '#/scans');
+  const key = await page.evaluate(() => {
+    const b = DATA.stats['MEDITITE'][0]; let lv = 1; for (let l = 1; l <= 40; l += 0.5) if (calcCP(b, 5, 13, 12, cpmAt(l)) <= 173) lv = l;
+    const m = cpmAt(lv), r = { species: 'MEDITITE', cp: calcCP(b, 5, 13, 12, m), hp: calcHP(b, 12, m), level: lv, dust: null, combos: [[lv, 5, 13, 12, b]], appraisal: [5, 13, 12], txt: '', cpCandidates: [] };
+    r.key = `MEDITITE|${r.cp}|${r.hp}|${lv}|`; results.length = 0; results.push(r); save(); render(); Planner.refresh(); return r.key;
+  });
+  await page.evaluate(k => Planner.openScan(k), key);
+  const card = page.locator('#mon .team.evot');
+  await expect(card).toContainText('Medicham');
+  await expect(card).toContainText('CP right after evolving');
+  // wait for the rankings of all leagues to load, then compare with the app's own maths
+  await expect(card.locator('tbody tr').first()).not.toContainText('…');
+  const want = await page.evaluate(async () => {
+    const eb = Planner.evoStats('medicham'), out = {};
+    const d = await (await fetch('data/pvpoke-rankings.json')).json();
+    for (const [k, cp] of [['little', 500], ['great', 1500], ['ultra', 2500]]) {
+      const rk = pvpRank(eb, 5, 13, 12, cp), meta = (d.leagues[k].rankings.find(x => x.speciesId === 'medicham') || {}).rank;
+      out[k] = { n: rk.n, meta: meta ? '#' + meta : '—', over: calcCP(eb, 5, 13, 12, cpmAt(results[0].level)) > cp };
+    }
+    return out;
+  });
+  const rows = await card.locator('tbody tr').allInnerTexts();
+  expect(rows[0]).toMatch(/^Little/);
+  expect(rows[1]).toMatch(/^Great/);
+  expect(rows[2]).toMatch(/^Ultra/);
+  for (const [i, k] of ['little', 'great', 'ultra'].entries()) {
+    if (want[k].over) { expect(rows[i]).toContain('over the cap'); continue; }
+    expect(rows[i], k).toContain('#' + want[k].n);
+    expect(rows[i], k).toContain(want[k].meta);
+  }
+  await card.screenshot({ path: '/tmp/claude-0/-home-user-pokescan/b55cac74-a03b-5534-a7f1-62ddf86efdf8/scratchpad/shot-evo.png' });
+  expect(errors).toEqual([]);
+});
+
+/* Data that finishes loading in the background redraws the page. It used to close an open ⋮ menu under the tap that
+   was about to land on it — the "Mark as normal" step above timed out that way in a slow run. */
+test('a background data load does not close an open menu', async ({ page }) => {
+  const errors = await openApp(page, '#/scans');
+  const key = await page.evaluate(seed);
+  await page.evaluate(k => Planner.openScan(k), key);
+  await page.click('#mon .monhead .ctx .dots');
+  const item = page.locator('#mon .monhead .ctx .menu button:has-text("Mark as Shadow")');
+  await expect(item).toBeVisible();
+  // the schedule reloads (it notifies the page), and the evolution data arrives again
+  await page.evaluate(async () => { await Sources.load(true); });
+  await page.waitForTimeout(400);
+  await expect(item, 'the menu is still open').toBeVisible();
+  await item.click();
+  await expect.poll(() => page.evaluate(() => Planner.scanId(results[0]).id)).toBe('ninetales_shadow');
+  expect(errors).toEqual([]);
+});

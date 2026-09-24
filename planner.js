@@ -768,7 +768,15 @@ function wantedCard(m) {
   h += `<div class="note">Event schedule updated ${when(src.updated())}. Only events with a published boss or spawn list can be matched. Remote OK = regular raid you can join with a Remote Raid Pass; Shadow raids are in person only.</div>`;
   return h;
 }
-if (window.Sources) Sources.onChange(() => { renderToday(); if (UI.mon) renderMon(); });
+/* A redraw that nobody asked for — data that finished loading in the background (the schedule, evo.json, the league
+   rankings) — must not pull an open ⋮ menu out from under a tap: it re-rendered the page, the menu closed, and the tap
+   on "Mark as normal" found nothing. Such redraws wait until no menu is open. */
+function whenIdle(fn) {
+  const open = () => [...document.querySelectorAll('.view.on .ctx .menu')].some(m => !m.hidden);
+  if (!open()) { fn(); return; }
+  const iv = setInterval(() => { if (!open()) { clearInterval(iv); fn(); } }, 300);
+}
+if (window.Sources) Sources.onChange(() => whenIdle(() => { renderToday(); if (UI.mon) renderMon(); }));
 
 /* ---------- AI review context (server-side Claude API, only when the server has a key and sync is connected) ---------- */
 function coachContext(m) {
@@ -1122,7 +1130,7 @@ function bundleAvail(list, species) {          // fold a species' entries into a
 /* ---------- How to get a Pokémon: catch it, evolve a pre-evolution (candy, safe catch CP, its sources), or Team GO Rocket for shadows ---------- */
 let EVO = JSON.parse(localStorage.getItem('evo') || 'null');
 async function loadEvo() {
-  try { const r = await fetch('data/evo.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}); if (r.ok) { EVO = await r.json(); localStorage.setItem('evo', JSON.stringify(EVO)); if (UI.mon && onView() === 'mon') renderMon(); } } catch {}
+  try { const r = await fetch('data/evo.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}); if (r.ok) { EVO = await r.json(); localStorage.setItem('evo', JSON.stringify(EVO)); if (UI.mon && onView() === 'mon') whenIdle(renderMon); } } catch {}
 }
 const evoBase = id => id.replace(/_shadow$/, '');
 function evoBranch(preId, toId) {             // the game master's evolution branch pre → to: candy plus every condition (shadow ids share the base species' entry)
@@ -1975,6 +1983,67 @@ function toggleMenu(btn) {
 }
 document.addEventListener('click', () => document.querySelectorAll('.ctx .menu').forEach(m => { m.hidden = true; m.style.transform = ''; }));
 function toggleGloss() { UI.gloss = !UI.gloss; renderMon(); }
+/* ---------- If you evolve it: where the evolution would stand in every league, before spending the candy ----------
+   IVs never change on evolving, so a scanned pre-evolution already fixes the evolution's IV rank in every league: its
+   own spread against the evolution's base stats at each cap. The meta rank per league comes from the bundled rankings
+   of all four standard leagues (loaded the first time the table is shown); a cup's own rank from the cup's data. */
+let LRANKS = null, LRANKS_BUSY = false;
+async function loadLeagueRanks() {
+  if (LRANKS || LRANKS_BUSY) return; LRANKS_BUSY = true;
+  try {
+    const res = await fetch('data/pvpoke-rankings.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''));
+    if (res.ok) { const d = await res.json(); LRANKS = {};
+      for (const [k, L] of Object.entries(d.leagues || {})) { const m = {}; for (const x of L.rankings || []) m[x.speciesId] = {rank: x.rank, types: x.types}; LRANKS[k] = {cp: L.cp, count: L.count, m}; }
+      if (onView() === 'mon') whenIdle(renderMon); }
+  } catch {}
+  LRANKS_BUSY = false;
+}
+const EVO_LEAGUES = [{k: 'little', abbr: 'Little', cp: 500}, {k: 'great', abbr: 'Great', cp: 1500}, {k: 'ultra', abbr: 'Ultra', cp: 2500}];
+function evoStatsFor(id) {                     // base stats of an evolution id; the form picked by its types, from any league's data
+  const forms = DATA.stats[id.split('_')[0].toUpperCase()]; if (!forms) return null;
+  const base = id.replace(/_shadow$/, ''), info = APP.pokemon[base] || APP.unranked[base] || (LRANKS && (LRANKS.great.m[base] || LRANKS.ultra.m[base] || LRANKS.little.m[base] || (LRANKS.master && LRANKS.master.m[base])));
+  if (!info || !info.types) return forms[0];
+  const want = info.types.filter(t => t && t !== 'none').slice().sort().join('/');
+  return forms.find(f => [f[3], f[4]].filter(Boolean).map(t => t.toLowerCase()).sort().join('/') === want) || forms[0];
+}
+function evoChain(id) {                        // every evolution below this id, from the game master: [{id, from, depth}]
+  const out = [], sh = /_shadow$/.test(id);
+  const walk = (from, depth) => { const lst = (EVO && EVO.evolve && EVO.evolve[from.replace(/_shadow$/, '')]) || [];
+    for (const b of lst) { const to = b.to + (sh ? '_shadow' : ''); if (out.some(x => x.id === to)) continue; out.push({id: to, from, depth, branch: b}); if (depth < 2) walk(to, depth + 1); } };
+  walk(id, 1);
+  if (!out.length && typeof evosOf === 'function') for (const e of evosOf(id)) out.push({id: e, from: id, depth: 1, branch: evoBranch(id, e)});
+  return out;
+}
+function evoTable(r, best) {
+  const s0 = scanId(r), from = (s0 && s0.id) || unrankedId(r) || (r.species || '').toLowerCase();
+  const chain = from ? evoChain(from + (r.shadow && !/_shadow$/.test(from) ? '_shadow' : '')) : [];
+  if (!chain.length) return '';
+  if (!LRANKS) loadLeagueRanks();
+  const leagues = EVO_LEAGUES.slice();
+  // the cup you are planning for, when it is not one of the three (Retro Cup, a themed 1500 cup): its own meta rank
+  if (!leagues.some(l => l.k === LEAGUE.slug) && LEAGUE.slug !== 'master') leagues.push({k: LEAGUE.slug, abbr: LEAGUE.title, cp: LEAGUE.cp, cup: true});
+  const [lv, ia, id, is] = best, meta = (L, eid) => {
+    if (L.cup) { const e = APP.pokemon[eid] || APP.pokemon[eid.replace(/_shadow$/, '')]; return e ? `#${e.rank}` : '—'; }
+    if (!LRANKS) return '…';
+    const t = LRANKS[L.k] && (LRANKS[L.k].m[eid] || null); return t ? `#${t.rank}` : '—';
+  };
+  const cards = chain.map(({id: eid, from: pre, branch}) => {
+    const eb = evoStatsFor(eid); if (!eb) return '';
+    const cpNow = calcCP(eb, ia, id, is, cpmAt(lv)), candy = branch && branch.candy, need = evoShort(branch);
+    const name = nm(eid) !== eid ? nm(eid) : ((LRANKS && LRANKS.great.m[eid]) ? eid : nice(eid.split('_')[0].toUpperCase()));
+    const rows = leagues.map(L => {
+      if (cpNow > L.cp) return `<tr><td>${esc(L.abbr)} <span class="dim">${L.cp}</span></td><td colspan="3"><span class="no">over the cap</span> <span class="dim">· ${cpNow} CP as soon as it evolves</span></td></tr>`;
+      const rk = pvpRank(eb, ia, id, is, L.cp), c = costTo(lv, rk.lv), under = calcCP(eb, ia, id, is, cpmAt(maxL() / 2)) < L.cp;
+      const cost = rk.lv > lv ? `${fmt(c.dust)} dust · ${c.candy} candy${c.xl ? ` · ${c.xl} XL` : ''}` : 'no power-up';
+      return `<tr><td>${esc(L.abbr)} <span class="dim">${L.cp}</span></td><td>L${rk.lv} · ${rk.cp} CP<div class="dim">${under ? `tops out under ${L.cp} · ` : ''}${cost}</div></td><td><b>#${rk.n}</b><div class="dim">${rk.pct.toFixed(1)}%</div></td><td>${meta(L, eid)}</td></tr>`;
+    }).join('');
+    return `<div class="evc"><div class="evh"><b>${esc(name)}</b>${pre !== from && pre.replace(/_shadow$/, '') !== from.replace(/_shadow$/, '') ? ` <span class="dim">via ${esc(nm(pre))}</span>` : ''}<div class="dim">${cpNow} CP right after evolving${candy ? ` · ${candy} candy` : ''}${need ? ` · needs ${esc(need)}` : ''}</div></div>
+      <table class="evtab"><thead><tr><th>League</th><th>At the cap</th><th>IV rank</th><th>Meta</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+  if (!cards) return '';
+  const unsure = r.combos.length > 1 ? `<div class="dt warnt">${r.combos.length} IV spreads fit this scan: these ranks are for the best one. Scan the appraisal to pin it down.</div>` : '';
+  return `<div class="sec">If you evolve it <small>its IVs stay the same: where the evolution ranks in each league, before you spend the candy</small></div><div class="team evot" style="cursor:default">${unsure}${cards}<div class="dt" style="margin-top:6px">IV rank: this spread among the 4096 possible ones for the evolution at that league's cap (#1 is the best). Meta: the evolution's place in that league's rankings; — means it is not ranked there.</div></div>`;
+}
 function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
   const lo = ps.length ? Math.min(...ps) : 0, hi = ps.length ? Math.max(...ps) : 0;
@@ -2023,8 +2092,6 @@ function scanSection(m, r) {
     rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">${r.movesSeen ? 'one charged move read, but the NEW ATTACK button was not in the shot: screenshot the attacks with that button visible, or pick the 2nd move in the third box' : 'not known yet: scan the attacks, or pick it in the third box'}${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
     rows.push(['Recommended', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
   }
-  if (best) { const plan = planFor(r, best); const lines = plan ? plan.replace(/^<div class="plan">|<\/div>$/g, '').split('<br>').filter(l => !/2nd charged move/.test(l)) : [];
-    if (lines.length) rows.push(['Evolve', `<div class="plan" style="margin:0">${lines.join('<br>')}</div>`]); }
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
   if (sid0 && sid0.id) {                        // the other form's standing: a shadow ranks differently from its purified/normal twin
     const isSh = /_shadow$/.test(sid0.id), alt = isSh ? sid0.id.replace(/_shadow$/, '') : sid0.id + '_shadow', ea = APP.pokemon[alt], e0 = APP.pokemon[sid0.id];
@@ -2032,7 +2099,7 @@ function scanSection(m, r) {
     else if (ea && e0) rows.push(['Shadow', isSh ? `shadow copy, meta #${e0.rank} · purified it would be the normal ${esc(nm(alt))}, meta #${ea.rank}` : `normal copy, meta #${e0.rank} · the Shadow form ranks meta #${ea.rank} <span class="dim">(⋮ → Mark as Shadow if this one is)</span>`]);
   }
   if (r.history && r.history.length) rows.push(['History', r.history.slice().reverse().map(h => `${when(h.t)}: ${h.species !== r.species ? esc(nice(h.species)) + ' · ' : ''}${h.cp} CP · L${h.level ?? '?'}`).join('<br>') + `<div class="dim" style="font-size:12px">now ${r.cp} CP · L${r.level ?? '?'}</div>`]);
-  h += kv(rows) + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
+  h += kv(rows) + (best ? evoTable(r, best) : '') + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, ${LEAGUE.abbr} rank and ${LEAGUE.cp === 2500 ? 'GL' : 'UL'} rank mean?</div>`;
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
   if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Poké Genie shows the same rank; its "Rank %" is the share of spreads below this one ${g0 ? ` (${(100 - g0.n / 40.96).toFixed(1)}% here)` : ''} and its "Stat Prod" is our percentage. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
@@ -2649,7 +2716,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, openBattleMon, drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

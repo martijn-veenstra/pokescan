@@ -537,3 +537,12 @@ h1 .help.menu{margin-left:0;margin-right:2px}
 /* a Pokémon on a battle page: tap for its page — yours to your scanned copy, theirs to the species */
 a.bmon{color:inherit;text-decoration:underline;text-decoration-color:rgba(126,147,172,.45);text-underline-offset:2px}
 a.bmon.mine{text-decoration-color:rgba(72,213,151,.6)}
+
+/* If you evolve it: one small table per evolution, a row per league */
+.team.evot{padding:10px 12px}.evc+.evc{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.evh{margin-bottom:4px}.evh b{font-size:14px}.evh .dim{font-size:12px}
+.evtab{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.evtab th{text-align:left;font-weight:500;color:var(--dim);font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:4px 6px 4px 0;border-bottom:1px solid var(--line)}
+.evtab td{padding:6px 6px 6px 0;border-bottom:1px solid var(--line);vertical-align:top}.evtab tr:last-child td{border-bottom:none}
+.evtab td .dim{font-size:11px}.evtab td:first-child{white-space:nowrap}.evtab .no{color:var(--coral)}
+.team.evot .warnt{color:var(--gold);margin-bottom:6px}

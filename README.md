@@ -206,6 +206,16 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **If you evolve it** (v10.6): IVs do not change on evolving, so a scanned pre-evolution already fixes where its
+  evolution ranks. A scan's page shows a table per evolution (the whole chain, from the game master's evolution data):
+  for Little (500), Great (1500), Ultra (2500) and the cup you are planning for, the level and CP at the cap with the
+  power-up cost (or "over the cap" with its CP right after evolving), the IV rank among the 4096 spreads with its
+  stat-product %, and the evolution's meta rank in that league from the bundled rankings of all four leagues (loaded
+  the first time the table shows). A scan whose IVs are not pinned says the ranks are for its best spread. It replaces
+  the one-league "Evolve" line on the scan page.
+  Also: data that finishes loading in the background (the schedule, evo.json, the league rankings) redrew the page
+  and closed an open ⋮ menu under the tap about to land on it; such redraws now wait until no menu is open. It was
+  the cause of the "Mark as Shadow" e2e test timing out in slow full runs.
 - **Section subtitles under their titles, and a padded How to get card** (v10.5): every section header now puts its
   subtitle on the line below the title instead of pushing it to the right edge, where a long one wrapped into a
   ragged column beside the title. The How to get card (and the other cards that are themselves an availability
