@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.3';
+const APP_VERSION='10.4';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -719,7 +719,7 @@ function renderLog(){
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
-function showErr(msg){ const st=$('stat'), pr=$('prog'); if(pr) pr.style.display='flex'; if(st) status('⚠ '+msg); pballState('err'); console.error(msg); }
+function showErr(msg){ const pr=$(CARD_FILM?'bprog':'prog'); if(pr) pr.style.display='flex'; status('⚠ '+msg); pballState('err'); console.error(msg); }
 window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
 window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
 const results=JSON.parse(localStorage.getItem('scans')||'[]').filter(r=>r&&typeof r.species==='string'); results.forEach(r=>{ if(!Array.isArray(r.combos)) r.combos=[]; });
@@ -735,16 +735,31 @@ try{ render(); }catch(e){ showErr('render failed: '+e.message); }
 
 $('file').addEventListener('change', async e=>{ const files=[...e.target.files]; e.target.value=''; await importFiles(files); });
 let BATTLE_IMPORT=false, FILM_REPORT=null;         // an import started from the battle log: its log entry belongs there
+let RUNNING=false;                                 // the pipeline itself, not the card: a finished card lingers a moment and must not block
+function busyImport(){                             // one import at a time: they share the video decoder and the OCR worker
+  if(!RUNNING) return false;
+  toast(CARD_FILM?'A recording is still being read on the battle log: let it finish or stop it first':'An import is still running on Scans & import: let it finish or stop it first');
+  return true;
+}
 function importFilmFiles(files){                   // called by the battle log's own import button
+  if(busyImport()) return Promise.resolve();
   BATTLE_IMPORT=true; FILM_REPORT=null;
-  return importFiles(files).finally(()=>{ BATTLE_IMPORT=false; FILM_REPORT=null; });
+  return runImport(files).finally(()=>{ BATTLE_IMPORT=false; FILM_REPORT=null; });
 }
 function noteImport(e){                            // route the entry to whichever log the player is actually looking at
   if(BATTLE_IMPORT && window.Planner && Planner.logBattleImport){ Planner.logBattleImport(Object.assign({film:FILM_REPORT}, e)); return; }
   logImport(e);
 }
-async function importFiles(files){                 // the import pipeline: also fed by files shared to the app (Share.drainInbox)
+async function importFiles(files){                 // Scans & import, and files shared to the app (Share.drainInbox)
+  if(!files||!files.length||busyImport()) return;
+  return runImport(files);
+}
+async function runImport(files){                   // the import pipeline, whichever card it reads out in
   if(!files||!files.length) return;
+  RUNNING=true;
+  try{ return await runImportInner(files); } finally{ RUNNING=false; }
+}
+async function runImportInner(files){
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
   CANCEL=false; EVT=[]; progBox(true); progress(0); renderEvents();
@@ -800,11 +815,19 @@ $('pfile').addEventListener('change', async e=>{
 function del(i){ results.splice(i,1); save(); render(); }
 
 let IMPORTING=false, STICKY=false;                 // STICKY: the import is over but the card stays up — it failed, or the events are open
-function status(s){ $('stat').textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
-let CARD_FILM=false;                             // the card on screen belongs to a battle import: it never shows on the Scans page
-function progBox(on){                            // the Pokéball loader and status line: in the Scans page, and floating above the bottom bar on any other page
+/* Two loaders, one pipeline. A screenshot or recording imported on Scans & import reads out in that page's card; a
+   recording imported from the battle log has its own card on the battle log. Only one import runs at a time (they
+   share the video decoder and the OCR worker), and whichever it is, a small copy of its card floats above the bottom
+   bar on the other pages — never over the Scans page for a battle import. */
+let CARD_FILM=false;                             // the import on screen is the battle log's
+const cardStat=()=>$(CARD_FILM?'bstat':'stat');  // the status line of the card that is showing
+function status(s){ const el=cardStat(); if(el) el.textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
+function progBox(on){                            // the Pokéball loader and status line: in its own page, and floating above the bottom bar on the others
   IMPORTING=on; if(on){ STICKY=false; CARD_FILM=BATTLE_IMPORT; }
-  $('prog').style.display=(on||STICKY)&&!CARD_FILM?'flex':'none'; pballState(on?'on':''); syncFloat();
+  const up=on||STICKY;
+  $('prog').style.display=up&&!CARD_FILM?'flex':'none';
+  const b=$('bprog'); if(b) b.style.display=up&&CARD_FILM?'flex':'none';
+  pballState(on?'on':''); syncFloat();
 }
 /* ---------- the loader's own feed: what this import has found so far, behind an expand button ----------
    The import log only appears once a file is finished, which is no help while a three-minute recording is being
@@ -841,7 +864,7 @@ function fillEvents(el){
 }
 function renderEvents(){
   const label=`${evtOpen?'▾':'▸'} ${EVT.length} event${EVT.length===1?'':'s'} recorded`;
-  for(const pre of ['p','f']){
+  for(const pre of ['p','f','b']){
     const b=$(pre+'evx'), l=$(pre+'evl'); if(!b||!l) continue;
     b.textContent=label; b.setAttribute('aria-expanded', evtOpen?'true':'false');
     l.hidden=!evtOpen;
@@ -850,7 +873,7 @@ function renderEvents(){
 }
 function toggleEvents(){ evtOpen=!evtOpen; renderEvents(); syncFloat(); }
 function endCard(){                              // the import is over: put the card away, unless it failed or the events are being read
-  if(evtOpen||$('stat').textContent.startsWith('⚠')){ IMPORTING=false; STICKY=true; syncFloat(); }
+  if(evtOpen||(cardStat()||{textContent:''}).textContent.startsWith('⚠')){ IMPORTING=false; STICKY=true; syncFloat(); }
   else { STICKY=false; progBox(false); }
 }
 let CANCEL=false;                                // the ✕ on the card: stop the import wherever it is
@@ -873,8 +896,10 @@ document.querySelectorAll('.pball').forEach(el=>{ el.innerHTML=pballSVG(); });  
 function pballState(st){ document.querySelectorAll('.pball:not(.rv)').forEach(el=>{ el.classList.remove('on','done','err'); if(st) el.classList.add(st); }); }
 function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
   const f=$('impfloat'); if(!f) return;
-  const scans=$('view-scans'), onScans=scans&&getComputedStyle(scans).display!=='none';
-  f.hidden=!((IMPORTING||STICKY)&&!onScans);
+  const on=id=>{ const v=$(id); return !!v&&getComputedStyle(v).display!=='none'; };
+  // not on the page whose own card is showing it, and a battle import never over the Scans page either
+  const home=CARD_FILM?on('view-battles'):on('view-scans'), scans=on('view-scans');
+  f.hidden=!((IMPORTING||STICKY)&&!home&&!(CARD_FILM&&scans));
 }
 window.addEventListener('hashchange', ()=>setTimeout(syncFloat,0));   // after the router has switched the view
 let TOAST_T=null;
@@ -1002,7 +1027,7 @@ async function scanVideo(file,trainer){
   try{ vid.currentTime=0; await vid.play(); played=!vid.paused; mode='play'; }catch(e){ played=false; playErr=(e&&e.name)||String(e); }
   if(!played){                                          // autoplay refused (Low Power Mode, or no gesture left): one tap starts it
     status('Tap ▶ below to start reading the recording');
-    const st=$('stat'); const btn=document.createElement('button'); btn.className='btn'; btn.style.margin='8px 0 0'; btn.textContent='▶ Start reading the recording';
+    const st=cardStat(); const btn=document.createElement('button'); btn.className='btn'; btn.style.margin='8px 0 0'; btn.textContent='▶ Start reading the recording';
     st.appendChild(btn);
     played=await new Promise(res=>{ const to=setTimeout(()=>res(false),60000);
       const poll=setInterval(()=>{ if(CANCEL){ clearInterval(poll); clearTimeout(to); res(false); } },200);   // the ✕ works while we wait for the tap too

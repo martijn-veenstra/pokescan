@@ -206,6 +206,13 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **The battle log has its own loader** (v10.4): a recording imported from the battle log reads out in a card on the
+  battle log itself — its own Pokéball, status line, events and stop button — and no longer shares the Scans page's
+  card or writes into its status line. Away from the battle log a small copy floats above the bottom bar (never over
+  Scans & import); a scan import keeps its card on Scans and floats elsewhere, the battle log included. One import runs
+  at a time, since both use the same video decoder and OCR worker: starting the other one says what is still running.
+  The "▶ Start reading the recording" button for a phone that refuses autoplay goes into the card that is showing (it
+  used to land in the Scans card, hidden during a battle import).
 - **A daylight battle's moves, and battle imports kept off Scans** (v10.3): replayed against a second real recording
   (a daylight loss, Lickilicky / Cramorant / Altaria vs Clodsire / Raichu / Skeledirge), which came back with five of
   its fifteen announced moves. Over bright sky the plate is pale and its letters stand only ~75 grey levels off it, so

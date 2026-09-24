@@ -92,7 +92,9 @@ test('the cross stops a recording part way through, and the log says it was stop
     cancelImport();
     const stopping = document.getElementById('fstat').textContent;
     await running;
-    return { before, stopping, events: EVT.map(e => e.text), stat: document.getElementById('stat').textContent,
+    // a recording imported from the battle log reads out in the battle log's own card
+    return { before, stopping, events: EVT.map(e => e.text), stat: document.getElementById('bstat').textContent,
+             scansStat: document.getElementById('stat').textContent,
              draft: localStorage.getItem('bdraft'), blog: JSON.parse(localStorage.getItem('blog') || '[]'),
              report: Film.report() };
   });
@@ -100,6 +102,7 @@ test('the cross stops a recording part way through, and the log says it was stop
   expect(res.events.join('\n'), 'and it read the HUD before being stopped').toMatch(/HUD found/);
   expect(res.stopping, 'the card says so the moment the cross is pressed').toBe('Stopping the import…');
   expect(res.stat, 'and reports where it got to').toMatch(/^Stopped/);
+  expect(res.scansStat, 'the Scans page card is never written to by a battle import').not.toMatch(/Stopped|Video/);
   expect(res.events).toContain('stopped by you');
   expect(res.draft, 'a stopped recording is not read into a draft').toBeNull();
   expect(res.blog.length, 'but the battle log keeps the record of the attempt').toBe(1);
@@ -110,23 +113,40 @@ test('the cross stops a recording part way through, and the log says it was stop
   expect(errors).toEqual([]);
 });
 
-/* An import started from the battle log is the battle log's: its card floats on the other pages but never shows on
-   Scans & import, and the recording never goes through the screenshot reader (so it cannot make a scan card). */
-test('a battle import stays off the Scans page, and the card has one divider', async ({ page }) => {
+/* The battle log has its own loader. A recording imported there reads out in the battle log's card, floats on the
+   other pages, never shows on Scans & import and never writes into its card; the scan importer's card is unchanged.
+   One import at a time: starting the other while one runs says so instead. */
+test('the battle log has its own loader, separate from the scan importer', async ({ page }) => {
   const errors = await openApp(page, '#/battles');
-  await page.evaluate(() => { BATTLE_IMPORT = true; EVT = []; progBox(true); renderEvents(); status('Video 12s / 224s · watching the battle…'); });
-  await expect(page.locator('#impfloat'), 'on the battle log the card floats').toBeVisible();
+  await page.evaluate(() => { status('the scans card, before'); });
+  await page.evaluate(() => { BATTLE_IMPORT = true; RUNNING = true; EVT = []; progBox(true); renderEvents(); status('Video 12s / 224s · watching the battle…'); evt('0:36 you sent Lickilicky'); });
+  const own = page.locator('#bprog');
+  await expect(own, 'the battle log shows its own card').toBeVisible();
+  await expect(own.locator('#bstat')).toHaveText('Video 12s / 224s · watching the battle…');
+  await expect(page.locator('#impfloat'), 'no floating copy on its own page').toBeHidden();
+  await own.locator('#bevx').click();
+  await expect(own.locator('#bevl')).toContainText('you sent Lickilicky');
+  expect(await page.evaluate(() => document.getElementById('stat').textContent), 'the scans card is not written to').toBe('the scans card, before');
   await page.evaluate(() => Planner.nav('#/scans'));
   await expect(page.locator('#prog'), 'not on Scans').toBeHidden();
   await expect(page.locator('#impfloat'), 'nor floating over it').toBeHidden();
   await page.evaluate(() => Planner.nav('#/today'));
-  await expect(page.locator('#impfloat')).toBeVisible();
-  await page.evaluate(() => { BATTLE_IMPORT = false; endCard(); });
-  // a screenshot import is the Scans page's again
+  await expect(page.locator('#impfloat'), 'elsewhere it floats').toBeVisible();
+  await expect(page.locator('#fstat')).toHaveText('Video 12s / 224s · watching the battle…');
+  // a scan import while the recording is read is refused, with a reason
+  await page.evaluate(() => importFiles([new File(['x'], 'IMG_1.png', { type: 'image/png' })]));
+  await expect(page.locator('#toast')).toContainText('still being read on the battle log');
+  await page.evaluate(() => { BATTLE_IMPORT = false; RUNNING = false; evtOpen = false; endCard(); });
+  await expect(page.locator('#impfloat')).toBeHidden();
+  // a screenshot import is the Scans page's card again, and the battle log's card stays down
   await page.evaluate(() => { Planner.nav('#/scans'); progBox(true); status('Scanning IMG_1.png'); });
   await expect(page.locator('#prog')).toBeVisible();
-  // the loader's top row draws no line of its own: the events button's top border is the only divider
-  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#prog .prow')).borderBottomWidth)).toBe('0px');
-  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#impfloat .prow')).borderBottomWidth)).toBe('0px');
+  await expect(page.locator('#stat')).toHaveText('Scanning IMG_1.png');
+  await page.evaluate(() => Planner.nav('#/battles'));
+  await expect(page.locator('#bprog')).toBeHidden();
+  await expect(page.locator('#impfloat'), 'the scan import floats on the battle log instead').toBeVisible();
+  // one divider under each card's top row: the events button's own border
+  for (const sel of ['#prog .prow', '#impfloat .prow', '#bprog .prow'])
+    expect(await page.evaluate(s => getComputedStyle(document.querySelector(s)).borderBottomWidth, sel), sel).toBe('0px');
   expect(errors).toEqual([]);
 });
