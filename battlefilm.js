@@ -42,7 +42,7 @@ const NAME_HOLD = 2;
 /* A recording of a whole set is one file: three to five battles, fifteen or so card reads and twenty-five banners each.
    44 card reads across the recording ran out in the third battle of a three-battle test, which then lost a Pokémon.
    Every crop is kept as a JPEG, so these budgets cost a few MB rather than the hundreds a set's worth of canvases took. */
-const MAX_OCR = 150, MAX_BANNERS = 200;              // gaps in the HUD kept, across the recording; one match is easily 50
+const MAX_OCR = 150, MAX_BANNERS = 320;              // gaps in the HUD kept, across the recording; one match is easily 50
 /* v9.93 kept a single frame per gap — the one that scored best as text — and when that was the wrong frame, the move
    was gone. The v2 reader grabbed the fixed announcement band on a timer instead, and read moves this one missed. Both
    are kept now: the best-scoring line, and the band at the start of the gap and every second after, a few per gap.
@@ -255,23 +255,23 @@ let SCAN = null;
 /* The strongest line of type in the band: rows are scored by how many hard edges they carry that touch near-white
    (a stroke of the white lettering against the dark outline or overlay). Sky and cloud are smooth, a Pokémon model
    has soft shading: neither scores like a sentence does. Returns the line's centre as a fraction of H, and a score. */
-function textLine(ctx, W, H, band) {
-  const B = band || BANNER;
+function textLine(ctx, W, H, band, edge) {
+  const B = band || BANNER, E = edge || 80;
   const y0 = Math.round(H * B[0]), bh = Math.round(H * (B[1] - B[0]));
   const sw = Math.min(SCAN_W, W), sh = Math.max(8, Math.round(bh * sw / W));
   if (!SCAN) SCAN = document.createElement('canvas');
   if (SCAN.width !== sw || SCAN.height !== sh) { SCAN.width = sw; SCAN.height = sh; }
   const g = SCAN.getContext('2d', {willReadFrequently: true});
   g.drawImage(ctx.canvas, 0, y0, W, bh, 0, 0, sw, sh);
-  const d = g.getImageData(0, 0, sw, sh).data, rows = new Float32Array(sh), cx = new Float32Array(sh);
+  const d = g.getImageData(0, 0, sw, sh).data, rows = new Float32Array(sh), cx = new Float32Array(sh), lo = new Int16Array(sh), hi = new Int16Array(sh);
   for (let y = 0; y < sh; y++) {
-    let n = 0, pv = -1, sx = 0;
+    let n = 0, pv = -1, sx = 0, a = sw, b = -1;
     for (let x = 0; x < sw; x++) {
       const i = (y * sw + x) * 4, v = (d[i] * 3 + d[i + 1] * 6 + d[i + 2]) / 10;
-      if (pv >= 0 && Math.abs(v - pv) > 80 && Math.max(v, pv) > 200) { n++; sx += x; }
+      if (pv >= 0 && Math.abs(v - pv) > E && Math.max(v, pv) > 200) { n++; sx += x; if (x < a) a = x; b = x; }
       pv = v;
     }
-    rows[y] = n / sw; cx[y] = sx;
+    rows[y] = n / sw; cx[y] = sx; lo[y] = a; hi[y] = b;
   }
   const win = Math.max(2, Math.round(LINE_H * H * sh / bh));
   let best = 0, at = -1, sum = 0;
@@ -281,9 +281,11 @@ function textLine(ctx, W, H, band) {
   }
   const score = best / win;
   if (at < 0) return {score: 0, y: 0, x: 0.5};
-  let n = 0, sx = 0;                                       // where along the line the strokes sit, as a fraction of W
-  for (let y = Math.max(0, Math.round(at - win / 2)); y < Math.min(sh, Math.round(at + win / 2)); y++) { n += rows[y] * sw; sx += cx[y]; }
-  return {score: score >= 0.025 ? score : 0, y: B[0] + (at / sh) * (B[1] - B[0]), x: n ? sx / n / sw : 0.5};
+  let n = 0, sx = 0, a = sw, b = -1;                       // where along the line the strokes sit, as a fraction of W
+  for (let y = Math.max(0, Math.round(at - win / 2)); y < Math.min(sh, Math.round(at + win / 2)); y++) {
+    n += rows[y] * sw; sx += cx[y]; if (hi[y] >= 0) { a = Math.min(a, lo[y]); b = Math.max(b, hi[y]); } }
+  return {score: score >= 0.02 ? score : 0, y: B[0] + (at / sh) * (B[1] - B[0]), x: n ? sx / n / sw : 0.5,
+          x0: b >= 0 ? a / sw : 0, x1: b >= 0 ? (b + 1) / sw : 1};
 }
 
 /* The announcement plate. Measured on a real recording (iPhone, 1170×2532): every sentence the game says — "Skeledirge
@@ -294,18 +296,22 @@ function textLine(ctx, W, H, band) {
    the plate appears is one episode, and each episode is read once, off its clearest frame. */
 const PLATE = [0.25, 0.40];
 const PLATE_GAP = 1.2;                                     // s without the plate that ends an episode
+const PLATE_WIN = 0.9;                                     // s: one frame kept per this much of a plate that stays up
 function watchPlate(ctx, W, H, t) {
   if (!S || S.plateT === t) return;
   S.plateT = t;
-  const ln = textLine(ctx, W, H, PLATE), on = ln.score >= 0.03 && Math.abs(ln.x - 0.5) < 0.14;
+  /* Measured on a daylight battle: over bright sky the plate is pale, the white letters stand only ~75 grey levels off
+     it, and at the 80 used elsewhere the Clodsire plate scored 0.028 against a bar of 0.03 — every one of its moves
+     was missed. Edges from 55 up count here. And the plate is up for many seconds at a stretch with one sentence after
+     another on it ("NICE!", "Lickilicky used Shadow Ball!", "Attack incoming!", "Clodsire used Sludge Bomb!"), so one
+     frame per stretch kept only one of them: the clearest frame of every second of it is kept instead. */
+  const ln = textLine(ctx, W, H, PLATE, 55), on = ln.score >= 0.02 && Math.abs(ln.x - 0.5) < 0.14;
   const E = S.ep;
-  // an episode ends when the plate has been gone a while — or when the line on it changes length, which is the next
-  // sentence ("Attack incoming!" straight into "Weezing used Sludge Bomb!")
-  if (E && (t - E.last > PLATE_GAP || (on && E.prev && Math.abs(ln.score - E.prev) > 0.3 * Math.max(ln.score, E.prev)))) flushPlate();
-  if (!on) { if (S.ep) S.ep.prev = 0; return; }
-  if (!S.ep) S.ep = {t0: t, last: t, score: 0, t: t, img: null, prev: 0};
-  S.ep.last = t; S.ep.prev = ln.score;
-  if (ln.score > S.ep.score) { S.ep.score = ln.score; S.ep.t = t; S.ep.img = bannerCrop(ctx, W, H, ln.y); }
+  if (E && (t - E.last > PLATE_GAP || (on && t - E.t0 > PLATE_WIN))) flushPlate();
+  if (!on) return;
+  if (!S.ep) S.ep = {t0: t, last: t, score: 0, t: t, img: null};
+  S.ep.last = t;
+  if (ln.score > S.ep.score) { S.ep.score = ln.score; S.ep.t = t; S.ep.img = bannerCrop(ctx, W, H, ln.y, ln.x0, ln.x1); }
 }
 function flushPlate() {
   const E = S && S.ep; if (!E) return;
@@ -316,14 +322,17 @@ function flushPlate() {
 /* The crop OCR gets: full width, two lines tall around the line found, upscaled, in colour. It is turned into
    something Tesseract reads only when it is read (inkOf / inverted), so the many frames that beat each other within
    one gap cost a drawImage each and nothing more. */
-function bannerCrop(ctx, W, H, yc) {
+function bannerCrop(ctx, W, H, yc, x0, x1) {
   const h = Math.round(H * LINE_H * 2.4), y = Math.max(0, Math.min(H - h, Math.round(yc * H - h / 2)));
+  // across only as far as the words go (plus a margin): the sky and cloud either side of the plate are what turned into
+  // stray letters in the OCR of a daylight battle
+  const xa = x0 === undefined ? 0 : Math.max(0, Math.round((x0 - 0.04) * W)), xb = x1 === undefined ? W : Math.min(W, Math.round((x1 + 0.04) * W)), cw = Math.max(8, xb - xa);
   const scale = Math.max(0.8, Math.min(2.5, 1100 / W));
   const c = document.createElement('canvas');
-  c.width = Math.round(W * scale); c.height = Math.round(h * scale);
+  c.width = Math.round(cw * scale); c.height = Math.round(h * scale);
   const g = c.getContext('2d');
   g.imageSmoothingQuality = 'high';
-  g.drawImage(ctx.canvas, 0, y, W, h, 0, 0, c.width, c.height);
+  g.drawImage(ctx.canvas, xa, y, cw, h, 0, 0, c.width, c.height);
   return c;
 }
 /* The lettering as black ink on white. A plain "white is ink" threshold makes a midday sky ink too — the words are

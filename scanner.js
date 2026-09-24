@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.2';
+const APP_VERSION='10.3';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -801,9 +801,10 @@ function del(i){ results.splice(i,1); save(); render(); }
 
 let IMPORTING=false, STICKY=false;                 // STICKY: the import is over but the card stays up — it failed, or the events are open
 function status(s){ $('stat').textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
+let CARD_FILM=false;                             // the card on screen belongs to a battle import: it never shows on the Scans page
 function progBox(on){                            // the Pokéball loader and status line: in the Scans page, and floating above the bottom bar on any other page
-  IMPORTING=on; if(on) STICKY=false;
-  $('prog').style.display=(on||STICKY)?'flex':'none'; pballState(on?'on':''); syncFloat();
+  IMPORTING=on; if(on){ STICKY=false; CARD_FILM=BATTLE_IMPORT; }
+  $('prog').style.display=(on||STICKY)&&!CARD_FILM?'flex':'none'; pballState(on?'on':''); syncFloat();
 }
 /* ---------- the loader's own feed: what this import has found so far, behind an expand button ----------
    The import log only appears once a file is finished, which is no help while a three-minute recording is being
@@ -949,7 +950,10 @@ async function scanVideo(file,trainer){
   // one frame of video time, ~3 per second: detect a held screen, read it once
   // film study (Share anything): keep a dozen small snapshots spread over the recording plus the last seconds, in case it is a battle
   const snaps=[], snapAt=[]; { const n=Math.min(12,Math.max(4,Math.round(dur/15))); for(let i=0;i<n;i++) snapAt.push(dur*(i+0.5)/n); for(let s=4;s>=1;s--) if(dur-s>0) snapAt.push(dur-s); snapAt.sort((a,b)=>a-b); }
-  let snapI=0, battleMode=false; const SN=document.createElement('canvas');
+  // a recording imported from the battle log is a battle: the status-screen reader is skipped outright, so it can never
+  // make (or change) a scan card out of a frame that happens to look like one
+  let snapI=0, battleMode=BATTLE_IMPORT; const SN=document.createElement('canvas');
+  if(BATTLE_IMPORT) mode+='battle';
   if(window.Film) Film.start(dur);                      // the on-device battle read watches every frame from here on
   const snapshot=(t)=>{ if(snapI>=snapAt.length||t<snapAt[snapI]) return; while(snapI<snapAt.length&&snapAt[snapI]<=t) snapI++;
     const s=Math.min(1,768/Math.max(cv.width,cv.height)); SN.width=Math.round(cv.width*s); SN.height=Math.round(cv.height*s); SN.getContext('2d').drawImage(cv,0,0,SN.width,SN.height);

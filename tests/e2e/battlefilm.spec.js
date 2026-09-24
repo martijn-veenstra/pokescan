@@ -519,3 +519,35 @@ test('a set of four battles in one recording: four entries, each with its own te
   });
   expect(errors).toEqual([]);
 });
+
+/* A daylight battle, read with the real OCR. Over bright sky the announcement plate is pale and its white letters sit
+   only ~75 grey levels off it: at the edge threshold the evening battle was tuned with, every one of Clodsire's
+   "used Sludge Bomb!" plates scored just under the bar and the match came back with five of its fifteen moves. */
+test('a real daylight recording: the pale plate over bright sky is still read', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.addInitScript(() => { localStorage.removeItem('battles'); localStorage.removeItem('bdraft'); localStorage.removeItem('roster'); });
+  const errors = await openApp(page, '#/battles');
+  const fx = {};
+  for (const k of ['day-hud', 'day-sludge'])
+    fx[k] = 'data:image/jpeg;base64,' + fs.readFileSync(path.join(FIXTURES, `film-${k}.jpg`)).toString('base64');
+  const out = await page.evaluate(async fx => {
+    const img = {};
+    for (const k of Object.keys(fx)) { const im = new Image(); im.src = fx[k]; await im.decode(); img[k] = im; }
+    const cv = document.createElement('canvas'); cv.width = img['day-hud'].width; cv.height = img['day-hud'].height;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const show = k => { ctx.drawImage(img[k], 0, 0); return ctx; };
+    const line = Film.textLine(show('day-sludge'), cv.width, cv.height, [0.25, 0.40], 55);
+    Film.start(30);
+    let t = 0;
+    const run = (k, n) => { for (let i = 0; i < n; i++) { Film.frame(show(k), cv.width, cv.height, t); t += 0.5; } };
+    run('day-hud', 8); run('day-sludge', 3); run('day-hud', 8);
+    const e = ((await Film.finish({ lastModified: Date.now() })) || [])[0];
+    return { line, e: e && { moves: e.moves, oppNames: e.oppNames, myNames: e.myNames } };
+  }, fx);
+  expect(out.line.score, 'the pale plate is found').toBeGreaterThan(0.02);
+  expect(out.e, 'the battle was read').toBeTruthy();
+  expect(out.e.oppNames).toContain('Clodsire');
+  expect(out.e.myNames).toContain('Lickilicky');
+  expect(out.e.moves.map(m => `${m.by} ${m.species} ${m.move}`)).toContain('opp Clodsire Sludge Bomb');
+  expect(errors).toEqual([]);
+});

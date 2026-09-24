@@ -206,6 +206,16 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **A daylight battle's moves, and battle imports kept off Scans** (v10.3): replayed against a second real recording
+  (a daylight loss, Lickilicky / Cramorant / Altaria vs Clodsire / Raichu / Skeledirge), which came back with five of
+  its fifteen announced moves. Over bright sky the plate is pale and its letters stand only ~75 grey levels off it, so
+  every Clodsire plate scored just under the bar: the plate detector now counts edges from 55. The plate also stays up
+  for many seconds with one sentence after another on it ("NICE!", "Lickilicky used Shadow Ball!", "Attack incoming!"),
+  so the clearest frame of every second is kept instead of one per stretch, and each crop is cut to the width of the
+  words so the sky beside the plate does not turn into letters. The evening recording still reads all eight of its
+  moves. An import started from the battle log goes straight to the battle reader (the screenshot reader never sees it,
+  so it cannot touch a scan card) and its card floats on every page but Scans & import. The Pro page's feature-row
+  style no longer leaks a second divider into the importing card.
 - **How to get a wild-only Pokémon, and no other apps named on screen** (v10.2): the How to get card knew only what the
   event schedule lists (raids, eggs, research, events, Rocket lineups), so a Pokémon that just spawns in the wild
   (Oranguru) got "not in raids, eggs, research or announced events" and nothing more. A species with nothing to evolve

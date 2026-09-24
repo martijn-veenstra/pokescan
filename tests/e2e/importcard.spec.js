@@ -109,3 +109,24 @@ test('the cross stops a recording part way through, and the log says it was stop
   await expect(page.locator('#battles .team.card.blog')).toContainText('stopped before it finished');
   expect(errors).toEqual([]);
 });
+
+/* An import started from the battle log is the battle log's: its card floats on the other pages but never shows on
+   Scans & import, and the recording never goes through the screenshot reader (so it cannot make a scan card). */
+test('a battle import stays off the Scans page, and the card has one divider', async ({ page }) => {
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(() => { BATTLE_IMPORT = true; EVT = []; progBox(true); renderEvents(); status('Video 12s / 224s · watching the battle…'); });
+  await expect(page.locator('#impfloat'), 'on the battle log the card floats').toBeVisible();
+  await page.evaluate(() => Planner.nav('#/scans'));
+  await expect(page.locator('#prog'), 'not on Scans').toBeHidden();
+  await expect(page.locator('#impfloat'), 'nor floating over it').toBeHidden();
+  await page.evaluate(() => Planner.nav('#/today'));
+  await expect(page.locator('#impfloat')).toBeVisible();
+  await page.evaluate(() => { BATTLE_IMPORT = false; endCard(); });
+  // a screenshot import is the Scans page's again
+  await page.evaluate(() => { Planner.nav('#/scans'); progBox(true); status('Scanning IMG_1.png'); });
+  await expect(page.locator('#prog')).toBeVisible();
+  // the loader's top row draws no line of its own: the events button's top border is the only divider
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#prog .prow')).borderBottomWidth)).toBe('0px');
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#impfloat .prow')).borderBottomWidth)).toBe('0px');
+  expect(errors).toEqual([]);
+});
