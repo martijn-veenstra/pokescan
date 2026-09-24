@@ -206,6 +206,10 @@ installable as a PWA: https://martijn-veenstra.github.io/pokescan/
   six Pokémon already read off the cards, the move against that species' own four or five, by how many letters
   survive in order — lists short enough that "S dge" is unambiguously Stone Edge, where a strict edit distance
   dropped it.
+- **Section subtitles under their titles, and a padded How to get card** (v10.5): every section header now puts its
+  subtitle on the line below the title instead of pushing it to the right edge, where a long one wrapped into a
+  ragged column beside the title. The How to get card (and the other cards that are themselves an availability
+  block) kept a rule that zeroed their side padding and top border, so the text ran into the edges of the box.
 - **The battle log has its own loader** (v10.4): a recording imported from the battle log reads out in a card on the
   battle log itself — its own Pokéball, status line, events and stop button — and no longer shares the Scans page's
   card or writes into its status line. Away from the battle log a small copy floats above the bottom bar (never over
