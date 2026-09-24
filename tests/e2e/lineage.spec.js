@@ -36,7 +36,7 @@ test('"No" keeps two cards and removes the offer', async ({ page }) => {
   });
   await importFile(page, 'stun-status.png');
   await page.click('#board .lin .no');
-  expect(await page.locator('#board .lin').count()).toBe(0);
+  await expect(page.locator('#board .lin')).toHaveCount(0);
   expect(await cards(page)).toHaveLength(2);
   expect(await page.evaluate(() => results.some(r => r.lineageHint))).toBe(false);
 });

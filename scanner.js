@@ -1226,7 +1226,7 @@ function lineageBanner(r){                        // one-tap merge offer on a sc
 var RENDER_T=null;                                 // var: render() is called during start-up, before this line runs
 function render(){
   const draw=()=>{ RENDER_T=null; if(window.Planner&&Planner.renderRoster&&$('view-roster')&&$('view-roster').classList.contains('on')) Planner.renderRoster(); };
-  let busy=false; try{ busy=IMPORTING; }catch(e){}   // during start-up IMPORTING is not declared yet
+  let busy=false; try{ busy=RUNNING; }catch(e){}   // batch only while the pipeline reads files (not while its card lingers); during start-up RUNNING is not declared yet
   if(!busy){ if(RENDER_T){ clearTimeout(RENDER_T); } draw(); return; }
   if(!RENDER_T) RENDER_T=setTimeout(draw,120);
 }
