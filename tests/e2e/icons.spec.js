@@ -8,10 +8,10 @@ test('Pokémon icons sit next to names: scan cards, the species page head, ranki
     const mk = (sp, lv, shadow) => { const b = DATA.stats[sp][0], m = cpmAt(lv); const r = { species: sp, cp: calcCP(b, 10, 14, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 10, 14, 15, b]], appraisal: [10, 14, 15], txt: '', cpCandidates: [], shadow: shadow || undefined }; r.key = `${sp}|${r.cp}|${r.hp}|${lv}|${shadow ? 's' : ''}`; return r; };
     results.length = 0; results.push(mk('AZUMARILL', 30), mk('FORRETRESS', 25, true)); save(); render(); Planner.refresh();
   });
-  const cards = page.locator('#out .mon');
+  const cards = page.locator('#board .mon');
   await expect(cards.nth(0).locator('img.pi.l')).toHaveAttribute('src', /icons\/pokemon\/(azumarill|forretress_shadow)\.webp$/);
-  await expect(page.locator('#out img.pi[src$="forretress_shadow.webp"]')).toHaveCount(1);
-  await expect(page.locator('#out img.pi[src$="azumarill.webp"]')).toHaveCount(1);
+  await expect(page.locator('#board img.pi[src$="forretress_shadow.webp"]')).toHaveCount(1);
+  await expect(page.locator('#board img.pi[src$="azumarill.webp"]')).toHaveCount(1);
   // the icon files exist and are served as WebP
   const res = await page.request.get('/icons/pokemon/melmetal.webp');
   expect(res.status()).toBe(200); expect(res.headers()['content-type']).toContain('image/webp');

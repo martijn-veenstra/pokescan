@@ -15,8 +15,8 @@ test('a rescanned power-up offers a one-tap merge into the old card', async ({ p
   let got = await cards(page);
   expect(got).toHaveLength(2);
   expect(got.find(c => c.cp !== 794).superseded, 'old card archived by the power-up detector').toBe(true);
-  await expect(page.locator('#out .lin .q')).toContainText(/Is this your Stunfisk \d+ CP powered up\?/);
-  await page.click('#out .lin .yes');
+  await expect(page.locator('#board .lin .q')).toContainText(/Is this your Stunfisk \d+ CP powered up\?/);
+  await page.click('#board .lin .yes');
   got = await cards(page);
   expect(got).toHaveLength(1);
   expect(got[0]).toMatchObject({ species: 'STUNFISK', cp: 794, hp: 126, ivs: [5, 9, 13], moves: ['METAL_CLAW', 'EARTHQUAKE'], secondMove: false, superseded: false });
@@ -35,8 +35,8 @@ test('"No" keeps two cards and removes the offer', async ({ page }) => {
     results.length = 0; results.push({ species: 'STUNFISK', cp, hp, level: lv, dust: null, combos: [[lv, 5, 9, 13, b]], appraisal: [5, 9, 13], txt: '', cpCandidates: [], key: `STUNFISK|${cp}|${hp}|${lv}|` }); save(); render();
   });
   await importFile(page, 'stun-status.png');
-  await page.click('#out .lin .no');
-  expect(await page.locator('#out .lin').count()).toBe(0);
+  await page.click('#board .lin .no');
+  expect(await page.locator('#board .lin').count()).toBe(0);
   expect(await cards(page)).toHaveLength(2);
   expect(await page.evaluate(() => results.some(r => r.lineageHint))).toBe(false);
 });

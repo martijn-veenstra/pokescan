@@ -35,51 +35,16 @@
 <div id="view-team" class="view"><div id="team"></div></div>
 <div id="view-meta" class="view"><h2 class="ptitle">Meta teams<small>the best trios in the current meta</small></h2><div id="meta"><div class="note">Loading battle data…</div></div></div>
 
-<div id="view-scans" class="view"><h2 class="ptitle">Scans & import<small>screenshots and screen recordings</small></h2>
+<div id="view-battle" class="view"><div id="battle"></div></div>
+<div id="view-mon" class="view"><div id="mon"></div></div>
+<div id="view-roster" class="view"><h2 class="ptitle">Roster<small>every Pokémon you scanned, and the ones you are building</small></h2>
 <button class="btn" onclick="document.getElementById('file').click()">＋ Import scans <span style="display:block;font-weight:500;font-size:12px;opacity:.75">screenshots or a screen recording</span></button>
 <input type="file" id="file" accept="video/*,image/*" multiple hidden>
 <div id="shared"></div>
 <input type="file" id="imp" accept=".json,application/json" hidden>
 <input type="file" id="pfile" accept="image/*" hidden>
-<div class="row" style="gap:6px">
-  <input id="q" placeholder="Search species" oninput="render()" style="flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:8px 10px">
-  <select id="filter" onchange="render()">
-    <option value="all">All</option>
-    <option value="gl">GL eligible (≤1500)</option>
-    <option value="power">Needs power-up</option>
-    <option value="ready">Ready for GL</option>
-    <option value="appr">Appraised</option>
-    <option value="fav">Favourites</option>
-    <option value="bench">Benched</option>
-    <option value="arch">Archived (superseded)</option>
-  </select>
-</div>
-<div class="row">
-  <label>Sort</label>
-  <select id="sort" onchange="render()" style="background:var(--card);color:var(--ink);border:1px solid #2a3850;border-radius:8px;padding:8px">
-    <option value="new">Newest first</option>
-    <option value="pct">Best IV%</option>
-    <option value="cp">Highest CP</option>
-    <option value="name">Name</option>
-    <option value="gl">Best GL rank</option>
-    <option value="meta">GL meta</option>
-  </select>
-  <span id="count" style="color:var(--dim);font-size:13px"></span>
-</div>
-
 <div id="prog"><div class="prow"><div class="pball" aria-hidden="true"></div><div id="stat" role="status" aria-live="polite"></div><button type="button" class="pcx" onclick="cancelImport()" title="Stop this import" aria-label="Stop this import">✕</button></div><button type="button" class="pex" id="pevx" onclick="toggleEvents()" aria-expanded="false"></button><div class="pev" id="pevl" hidden></div></div>
 <div id="implog"></div>
-<div id="empty" class="empty" style="display:none"><b>No scans on this device yet.</b><br>
-Tap <b>＋ Import scans</b> and pick Pokémon status-screen screenshots (or a screen recording of you swiping through them). Set your trainer level once via the <b>Profile</b> button at the top.
-Everything is solved on the phone and kept here until you delete it — you never need to rescan a Pokémon unless you power it up or evolve it.<br>
-Scanned before on another browser or the home-screen app? Use <b>Backup</b> there and <b>Restore</b> here (both under the <b>Profile</b> button), or connect sync on both.
-Or skip scanning and go to <b>Roster → ⋮ → Load saved roster</b>. <a href="#" onclick="toggleHelp();return false" style="color:var(--green)">Read the help</a>.</div>
-<div id="out"></div>
-</div>
-
-<div id="view-battle" class="view"><div id="battle"></div></div>
-<div id="view-mon" class="view"><div id="mon"></div></div>
-<div id="view-roster" class="view"><h2 class="ptitle">Roster<small>every Pokémon you scanned</small></h2>
   <div class="note" id="datainfo"></div>
   <div id="board"><div class="note">Loading battle data…</div></div>
   <datalist id="species"></datalist>
@@ -123,7 +88,7 @@ Or skip scanning and go to <b>Roster → ⋮ → Load saved roster</b>. <a href=
 <h3>1 · Scan your Pokémon</h3>
 <ul>
 <li>In Pokémon GO open a Pokémon's status screen and take a screenshot, or screen-record while swiping through your storage.</li>
-<li>Tap <b>Profile</b> (top right) once and set your trainer level, or read it from a screenshot of your trainer profile. Then open <b>≡ → Scans &amp; import</b>, tap <b>＋ Import scans</b> and pick the screenshots or the recording.</li>
+<li>Tap <b>Profile</b> (top right) once and set your trainer level, or read it from a screenshot of your trainer profile. Then open <b>Roster</b>, tap <b>＋ Import scans</b> and pick the screenshots or the recording.</li>
 <li>Each card shows the solved IVs, Great/Ultra League IV rank, the level and stardust needed to reach the 1500 cap, meta rank, and what its evolution would be.</li>
 <li><b>Moves:</b> scroll the status screen down to the attacks and screenshot that too (or keep recording while you scroll). The moves land on the card, and "NEW ATTACK" tells the app the second charged move is still locked. Today then suggests Fast/Charged TMs and second moves for your team members, and a rescan of the attacks clears them.</li>
 <li><b>Exact IVs:</b> screenshot (or record) the appraisal screen with the three orange bars. It shows name, CP, HP and the level arc too, so on its own it already makes a complete card with exact IVs. If a card for that Pokémon exists, the appraisal is attached to it instead; no duplicates either way.</li>

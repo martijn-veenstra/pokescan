@@ -119,7 +119,7 @@ function rocket(d, t) {
     : good.length ? `Worth catching: Shadow ${good[0].name} ranks #${good[0].rank} in ${P ? P.leagueAbbr() : 'this league'}.`
     : `Skip unless you need candy: none of ${names.join(', ') || 'these'} rank for your league.`;
   const line = `${who}${r.quote ? ` · "${r.quote}"` : ''}${names.length ? ` · you will meet Shadow ${names.join(' / ')}` : ''} · ${verdict}`;
-  return {kind: 'rocket', t, line, toast: `${who}: ${verdict}`, go: '#/scans', who, quote: r.quote || (lu && lu.quote) || '', names, cands, verdict, known: !!lu};
+  return {kind: 'rocket', t, line, toast: `${who}: ${verdict}`, go: '#/roster', who, quote: r.quote || (lu && lu.quote) || '', names, cands, verdict, known: !!lu};
 }
 
 /* ---- cards on the Scans page ---- */
@@ -152,7 +152,7 @@ async function drainInbox() {
   if (!('caches' in window)) return 0;
   const c = await caches.open('share-inbox'), keys = await c.keys(), files = [];
   for (const k of keys) { const r = await c.match(k); if (!r) continue; const blob = await r.blob(); files.push(new File([blob], decodeURIComponent(r.headers.get('x-name') || 'shared.jpg'), {type: blob.type || r.headers.get('content-type') || 'image/jpeg'})); await c.delete(k); }
-  if (files.length && typeof importFiles === 'function') { if (window.Planner) Planner.nav('#/scans'); await importFiles(files); }
+  if (files.length && typeof importFiles === 'function') { if (window.Planner) Planner.nav('#/roster'); await importFiles(files); }
   return files.length;
 }
 window.Share = {fromScan, fromFrames, render, dismiss, drainInbox, list: () => SHARES, route, ask};

@@ -82,8 +82,6 @@ function leagueSlug(){ return localStorage.getItem('league')||'great'; }
 function applyLeague(l){ Object.assign(LEAGUE,{slug:l.slug,cp:l.cp,title:l.title,short:(l.title||'').replace(' League','').replace(' Cup',''),abbr:ABBR[l.slug]||(l.cp+' CP'),cup:l.cup,rules:l.rules||null}); paintLeague(); }
 function paintLeague(){
   const lb=$('leaguelbl'); if(lb) lb.textContent=LEAGUE.title;
-  const f=$('filter'); if(f){ const o=k=>f.querySelector(`option[value="${k}"]`); if(o('gl')) o('gl').text=`${LEAGUE.abbr} eligible (≤${LEAGUE.cp})`; if(o('ready')) o('ready').text=`Ready for ${LEAGUE.abbr}`; }
-  const so=$('sort'); if(so){ const o=k=>so.querySelector(`option[value="${k}"]`); if(o('gl')) o('gl').text=`Best ${LEAGUE.abbr} rank`; if(o('meta')) o('meta').text=`${LEAGUE.abbr} meta`; }
 }
 function setLeague(slug){ if(slug===leagueSlug()&&APP) return; localStorage.setItem('league',slug); status(`Switching to ${slug}…`); loadMeta(); }
 function showLoadError(msg){
@@ -738,7 +736,7 @@ let BATTLE_IMPORT=false, FILM_REPORT=null;         // an import started from the
 let RUNNING=false;                                 // the pipeline itself, not the card: a finished card lingers a moment and must not block
 function busyImport(){                             // one import at a time: they share the video decoder and the OCR worker
   if(!RUNNING) return false;
-  toast(CARD_FILM?'A recording is still being read on the battle log: let it finish or stop it first':'An import is still running on Scans & import: let it finish or stop it first');
+  toast(CARD_FILM?'A recording is still being read on the battle log: let it finish or stop it first':'An import is still running on the Roster: let it finish or stop it first');
   return true;
 }
 function importFilmFiles(files){                   // called by the battle log's own import button
@@ -897,8 +895,8 @@ function pballState(st){ document.querySelectorAll('.pball:not(.rv)').forEach(el
 function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
   const f=$('impfloat'); if(!f) return;
   const on=id=>{ const v=$(id); return !!v&&getComputedStyle(v).display!=='none'; };
-  // not on the page whose own card is showing it, and a battle import never over the Scans page either
-  const home=CARD_FILM?on('view-battles'):on('view-scans'), scans=on('view-scans');
+  // not on the page whose own card is showing it, and a battle import never over the Roster page (where the scan loader lives) either
+  const home=CARD_FILM?on('view-battles'):on('view-roster'), scans=on('view-roster');
   f.hidden=!((IMPORTING||STICKY)&&!home&&!(CARD_FILM&&scans));
 }
 window.addEventListener('hashchange', ()=>setTimeout(syncFloat,0));   // after the router has switched the view
@@ -1224,39 +1222,29 @@ function lineageBanner(r){                        // one-tap merge offer on a sc
   const k=r.key.replace(/'/g,''), what=h.kind==='evolution'?`your ${nice(h.species)} (${h.cp} CP) evolved`:`your ${nice(h.species)} ${h.cp} CP powered up`;
   return `<div class="lin" onclick="event.stopPropagation()"><span class="q">Is this ${what}?</span><span class="a"><button class="yes" onclick="Planner.lineageMerge('${k}')">Yes, one card</button><button class="no" onclick="Planner.lineageDismiss('${k}')">No, another one</button></span>${h.multi?'<div class="dim" style="font-size:11.5px;margin-top:4px">More than one older card fits; this merges with the first. Use ⋮ → Update this Pokémon on the right card if it is not that one.</div>':''}</div>`;
 }
+/* the scan list lives on the Roster page: render() redraws it there, batched while an import runs so forty screenshots do not redraw forty times */
+var RENDER_T=null;                                 // var: render() is called during start-up, before this line runs
 function render(){
-  $('count').textContent=results.length+' scanned';
-  const em=$('empty'); if(em) em.style.display=results.length?'none':'block';
-  const mode=($('sort')||{}).value||'new', q=(($('q')||{}).value||'').trim().toUpperCase(), flt=($('filter')||{}).value||'all';
-  const glOf=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return null; const b=bestOf2(r); return pvpRank(b[4]||DATA.stats[r.species][0],b[1],b[2],b[3],LEAGUE.cp); };
-  const bestCopy={}; results.forEach((r,i)=>{ const g=glOf(r); if(g&&r.cp<=LEAGUE.cp&&!r.bench&&(!(r.species in bestCopy)||g.n<bestCopy[r.species].n)) bestCopy[r.species]={n:g.n,i}; });
-  const order=results.map((r,i)=>i).filter(i=>{ const r=results[i];
-    if(q&&!(r.species||'').includes(q)) return false;
-    const g=glOf(r), b=r.combos.length?bestOf2(r):null;
-    if(flt==='gl') return r.cp&&r.cp<=LEAGUE.cp&&g;
-    if(flt==='power') return g&&r.cp<=LEAGUE.cp&&b&&g.lv>b[0]&&g.lv<=40;
-    if(flt==='ready') return g&&r.cp<=LEAGUE.cp&&b&&g.lv<=b[0];
-    if(flt==='appr') return !!r.appraisal;
-    if(flt==='fav') return !!r.fav;
-    if(flt==='bench') return !!r.bench;
-    if(flt==='arch') return !!r.superseded;
-    return !r.superseded; });
-  if(mode==='new') order.sort((a,b)=>(results[b].fav?1:0)-(results[a].fav?1:0));
-  const bp=r=>r.combos.length?Math.max(...r.combos.map(pct)):-1;
-  if(mode==='pct') order.sort((a,b)=>bp(results[b])-bp(results[a]));
-  if(mode==='cp') order.sort((a,b)=>(results[b].cp||0)-(results[a].cp||0));
-  if(mode==='name') order.sort((a,b)=>(results[a].species||'').localeCompare(results[b].species||''));
-  if(mode==='meta'){ const mr=r=>{const m=metaFor(r.species); return m?m[0]:9999;};
-    order.sort((a,b)=>mr(results[a])-mr(results[b])); }
-  if(mode==='gl'){
-    const gr=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return 9999;
-      return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],LEAGUE.cp).n)); };
-    order.sort((a,b)=>gr(results[a])-gr(results[b]));
-  }
-  $('out').innerHTML=order.map(i=>cardHTML(results[i], i, bestCopy)).join('');
+  const draw=()=>{ RENDER_T=null; if(window.Planner&&Planner.renderRoster&&$('view-roster')&&$('view-roster').classList.contains('on')) Planner.renderRoster(); };
+  let busy=false; try{ busy=IMPORTING; }catch(e){}   // during start-up IMPORTING is not declared yet
+  if(!busy){ if(RENDER_T){ clearTimeout(RENDER_T); } draw(); return; }
+  if(!RENDER_T) RENDER_T=setTimeout(draw,120);
 }
-/* one card per Pokémon, shared by the Scans list and the Roster page: scan facts (CP, IVs, rank) plus what the planner says it still needs */
-function cardHTML(r, i, bestCopy, open){          // open: click handler override (the roster opens the Pokémon page, Scans the scan page)
+function glOfScan(r){ if(!r.combos.length||!DATA.stats[r.species]) return null; const b=bestOf2(r); return pvpRank(b[4]||DATA.stats[r.species][0],b[1],b[2],b[3],LEAGUE.cp); }
+function bestCopies(){                              // species -> the index of its best copy under the cap, for the "best copy" chip
+  const out={}; results.forEach((r,i)=>{ if(r.superseded) return; const g=glOfScan(r); if(g&&r.cp<=LEAGUE.cp&&!r.bench&&(!(r.species in out)||g.n<out[r.species].n)) out[r.species]={n:g.n,i}; });
+  return out;
+}
+function scanSort(mode){                            // comparator on scans for the Roster's sort menu; null keeps the roster order
+  const bp=r=>r.combos.length?Math.max(...r.combos.map(pct)):-1;
+  const gr=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return 9999; return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],LEAGUE.cp).n)); };
+  const mr=r=>{ const m=metaFor(r.species); return m?m[0]:9999; };
+  const at=r=>{ const i=results.indexOf(r); return i<0?-1:i; };
+  return {new:(a,b)=>at(b)-at(a), pct:(a,b)=>bp(b)-bp(a), cp:(a,b)=>(b.cp||0)-(a.cp||0), name:(a,b)=>(a.species||'').localeCompare(b.species||''),
+    gl:(a,b)=>gr(a)-gr(b), meta:(a,b)=>mr(a)-mr(b)}[mode]||null;
+}
+/* one card per scanned Pokémon on the Roster page: scan facts (CP, IVs, rank) plus what the planner says it still needs */
+function cardHTML(r, i, bestCopy, open){          // open: click handler override (default: this copy's own page)
   const ps=r.combos.map(pct), lo=ps.length?Math.min(...ps):0, hi=ps.length?Math.max(...ps):0;
   const cls=hi>=90?'g':hi>=70?'m':'b';
   const mt=metaFor(r.species);
@@ -1334,9 +1322,10 @@ function planFor(r,best){                       // the evolution chain of a scan
 }
 
 const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups','battles','battle','pro'];
-const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','scans','matchups','battles'];
+const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','matchups','battles'];
 const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',battles:'builder',battle:'builder',roster:'roster',scans:'roster',mon:'roster',meta:'',rank:'',raids:'',pro:''};
 function showView(t){                              // switch the visible page; navigation goes through Planner.nav so the URL hash stays in step
+  if(t==='scans') t='roster';                       // Scans & import is part of the Roster page now
   if(!PAGES.includes(t)) t='today';
   for(const k of PAGES){ const v=$('view-'+k); if(v) v.classList.toggle('on',k===t); }
   for(const k of ['today','builder','roster']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',BAR_FOR[t]===k); }

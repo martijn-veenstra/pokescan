@@ -63,26 +63,37 @@ test('a scanned Meditite shows where Medicham would rank in every league before 
   await page.evaluate(k => Planner.openScan(k), key);
   const card = page.locator('#mon .team.evot');
   await expect(card).toContainText('Medicham');
-  await expect(card).toContainText('CP right after evolving');
   // wait for the rankings of all leagues to load, then compare with the app's own maths
-  await expect(card.locator('tbody tr').first()).not.toContainText('…');
+  await expect(card).not.toContainText('…');
   const want = await page.evaluate(async () => {
     const eb = Planner.evoStats('medicham'), out = {};
     const d = await (await fetch('data/pvpoke-rankings.json')).json();
     for (const [k, cp] of [['little', 500], ['great', 1500], ['ultra', 2500]]) {
       const rk = pvpRank(eb, 5, 13, 12, cp), meta = (d.leagues[k].rankings.find(x => x.speciesId === 'medicham') || {}).rank;
-      out[k] = { n: rk.n, meta: meta ? '#' + meta : '—', over: calcCP(eb, 5, 13, 12, cpmAt(results[0].level)) > cp };
+      out[k] = { n: rk.n, meta: meta ? 'meta #' + meta : 'not in meta', over: calcCP(eb, 5, 13, 12, cpmAt(results[0].level)) > cp };
     }
     return out;
   });
-  const rows = await card.locator('tbody tr').allInnerTexts();
-  expect(rows[0]).toMatch(/^Little/);
-  expect(rows[1]).toMatch(/^Great/);
-  expect(rows[2]).toMatch(/^Ultra/);
+  // one cell per cap: Little, Great (any 1500 cup plays the same), Ultra; no power-up cost prose
+  const cells = await card.locator('.evx').allInnerTexts();
+  expect(cells).toHaveLength(3);
+  expect(cells[0]).toMatch(/^Little/i);
+  expect(cells[1]).toMatch(/^Great/i);
+  expect(cells[2]).toMatch(/^Ultra/i);
   for (const [i, k] of ['little', 'great', 'ultra'].entries()) {
-    if (want[k].over) { expect(rows[i]).toContain('over the cap'); continue; }
-    expect(rows[i], k).toContain('#' + want[k].n);
-    expect(rows[i], k).toContain(want[k].meta);
+    if (want[k].over) { expect(cells[i]).toContain('over'); continue; }
+    expect(cells[i], k).toContain('#' + want[k].n);
+    expect(cells[i], k).toContain(want[k].meta);
+  }
+  await expect(card).not.toContainText('dust');
+  await expect(card).not.toContainText('tops out');
+  // a themed 1500 cup adds no cell of its own
+  const cup = await page.evaluate(() => { const c = JSON.parse(localStorage.getItem('cups') || '[]').find(x => x.kind === 'cup' && x.cp === 1500); return c ? c.slug : null; });
+  if (cup) {
+    await page.evaluate(s => Planner.setLeague(s), cup);
+    await expect.poll(() => page.evaluate(() => APP.league.slug)).toBe(cup);
+    await page.evaluate(k => Planner.openScan(k), key);
+    await expect(card.locator('.evx')).toHaveCount(3);
   }
   await card.screenshot({ path: '/tmp/claude-0/-home-user-pokescan/b55cac74-a03b-5534-a7f1-62ddf86efdf8/scratchpad/shot-evo.png' });
   expect(errors).toEqual([]);

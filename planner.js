@@ -62,7 +62,7 @@ function rosterOwned() {
   const own = {};
   if (!APP) return own;
   for (const r of results) {
-    const s = scanId(r); if (!s || !s.id || !r.cp || r.cp > LEAGUE.cp || r.bench || ROSTER.exclude.includes(s.id)) continue;
+    const s = scanId(r); if (!s || !s.id || !r.cp || r.cp > LEAGUE.cp || r.bench || r.superseded || ROSTER.exclude.includes(s.id)) continue;   // an archived card is not in your roster
     const {best, base, id} = s;
     // a pre-evolution whose evolution fits under the cap is a pending piece, not a team member
     if ((APP.pokemon[id].evo || []).some(ev => { const eb = APP.pokemon[ev] && evoBaseStats(ev);
@@ -251,7 +251,7 @@ function onNewScan(s) {                        // called by the scanner after a 
 function updateScan(key, from) {               // "Update this Pokémon": the next import belongs to this card (power-up, evolution, appraisal, attacks)
   const r = results.find(x => x.key === key); if (!r) return;
   UI.updateKey = key; UI.updateFrom = from === 'mon' ? UI.mon : null; status(`Updating ${nice(r.species)} ${r.cp} CP: pick its new screenshots`);
-  if (from !== 'mon') nav('#/scans');
+  if (from !== 'mon') nav('#/roster');
   $('file').click();
 }
 function updateDone(card) {
@@ -291,7 +291,7 @@ function onUpdated(target, old) {              // called by the scanner after up
 function scanProof(moveId) {                   // "Scan proof" on a next move: remember what should clear, open the importer
   const m = M(), mv = openMoves(m).find(x => x.id === moveId);
   UI.expect = {id: moveId, title: mv ? mv.title : moveId, before: openMoves(m).map(x => x.id)};
-  nav('#/scans'); $('file').click();
+  nav('#/roster'); $('file').click();
 }
 function beforeImport() { UI.before = openMoves(M()).map(x => ({id: x.id, title: x.title})); UI.touched = []; }
 function onMovesScan(r) {                       // a moves screen updated a card
@@ -328,7 +328,7 @@ function snooze(id) { ROSTER.snooze[id] = Date.now() + WEEK; saveRoster(); refre
 function unsnooze(id) { delete ROSTER.snooze[id]; saveRoster(); refresh(); }
 function undoDone(id) { delete ROSTER.done[id]; ROSTER.log = ROSTER.log.filter(e => !(e.id === id && e.kind === 'manual')); saveRoster(); refresh(); }
 function toggleMore() { UI.showAll = !UI.showAll; renderToday(); }
-function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) return; nav('#/scans'); $('filter').value = r.superseded ? 'arch' : 'all'; $('q').value = r.species; render(); }
+function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) return; UI.rosterSt = r.superseded ? 'arch' : ''; UI.rosterQ = nice(r.species).toLowerCase(); nav('#/roster'); renderRoster(); }
 
 /* ---------- rendering: Today ---------- */
 const chip = (t, cls) => `<span class="chip ${cls || ''}">${esc(t)}</span>`;
@@ -620,7 +620,7 @@ function renderTeamsInner(el) {
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
 const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'battle', 'pro'];
-const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Scans & import', matchups: 'Matchups', battles: 'Battle log', battle: 'Battle'};
+const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Roster', matchups: 'Matchups', battles: 'Battle log', battle: 'Battle'};
 const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
@@ -1285,6 +1285,8 @@ function rosterFit(m, id) {                    // what this species does for the
 }
 function openMon(id) {
   if (!APP || !APP.pokemon[id]) return;
+  const o = M().own[id];                       // a Pokémon you scanned has one page: its best copy's, with the species below it
+  if (o && o.key && !o.manual && results.some(x => x.key === o.key)) { openScan(o.key); return; }
   nav('#/mon/' + id);
 }
 function openScan(key) {                       // a scanned card's own page: this copy first, then the species
@@ -1311,7 +1313,7 @@ function route() {
   if (p === 'mon' && seg[1]) { if (cur !== 'mon') leave(); if (UI.mon !== seg[1]) UI.ivOpen = false; UI.mon = seg[1]; UI.scan = null; showView('mon'); window.scrollTo(0, 0); return; }
   if (p === 'scan' && seg[1]) {
     const key = seg.slice(1).join('/'), r = results.find(x => x.key === key);
-    if (!r) { nav('#/scans'); return; }
+    if (!r) { nav('#/roster'); return; }
     if (cur !== 'mon') leave();
     const sid = scanId(r); UI.scan = key; UI.mon = sid && sid.id && APP && APP.pokemon[sid.id] ? sid.id : null;
     showView('mon'); window.scrollTo(0, 0); return;
@@ -1327,9 +1329,9 @@ function route() {
     if (cur !== 'battle') leave();
     UI.battle = seg[1]; showView('battle'); window.scrollTo(0, 0); return;
   }
-  if (p === 'inbox') { if (window.Share) Share.drainInbox(); nav('#/scans'); return; }   // files shared to the app (Web Share Target)
+  if (p === 'inbox') { if (window.Share) Share.drainInbox(); nav('#/roster'); return; }   // files shared to the app (Web Share Target)
   if (p === 'mon' || p === 'scan' || p === 'team' || p === 'battle') { nav('#/' + (localStorage.getItem('tab') || 'today')); return; }
-  const page = PAGES.includes(p) ? p : 'today';
+  const page = p === 'scans' ? 'roster' : PAGES.includes(p) ? p : 'today';   // Scans & import is part of the Roster page now
   if (['builder', 'meta', 'rank', 'raids'].includes(page)) UI.metaPanel = {builder: 'build', meta: 'teams', rank: 'rank', raids: 'raids'}[page];
   UI.mon = null; UI.scan = null; UI.team = null; UI.battle = null;
   if (page === 'pro') renderPro(); else if (PRO_POLL) { clearInterval(PRO_POLL); PRO_POLL = null; }
@@ -1834,10 +1836,10 @@ const liveScans = () => results.filter(r => !r.superseded);
 function startSteps(m, best) {
   const underCap = Object.keys(m.own).length, hl = (window.Sync && Sync.health()) || {};
   const steps = [
-    {k: 'scan', title: 'Import a status screenshot', sub: 'one Pokémon\'s status screen from Pokémon GO', done: liveScans().length > 0, go: "Planner.nav('#/scans');setTimeout(()=>document.getElementById('file').click(),150)"},
-    {k: 'appr', title: 'Add the appraisal screen', sub: 'exact IVs instead of a range', done: results.some(r => r.appraisal), go: "Planner.nav('#/scans')"},
-    {k: 'moves', title: 'Scan the attacks', sub: 'the moves decide the rank', done: results.some(r => r.moves && r.moves.length), go: "Planner.nav('#/scans')"},
-    {k: 'three', title: `Three Pokémon under ${LEAGUE.cp} CP`, sub: best ? 'Today builds your first team' : `${Math.min(3, underCap)} of 3 · Today builds your first team`, done: !!best, go: "Planner.nav('#/scans')"},
+    {k: 'scan', title: 'Import a status screenshot', sub: 'one Pokémon\'s status screen from Pokémon GO', done: liveScans().length > 0, go: "Planner.nav('#/roster');setTimeout(()=>document.getElementById('file').click(),150)"},
+    {k: 'appr', title: 'Add the appraisal screen', sub: 'exact IVs instead of a range', done: results.some(r => r.appraisal), go: "Planner.nav('#/roster')"},
+    {k: 'moves', title: 'Scan the attacks', sub: 'the moves decide the rank', done: results.some(r => r.moves && r.moves.length), go: "Planner.nav('#/roster')"},
+    {k: 'three', title: `Three Pokémon under ${LEAGUE.cp} CP`, sub: best ? 'Today builds your first team' : `${Math.min(3, underCap)} of 3 · Today builds your first team`, done: !!best, go: "Planner.nav('#/roster')"},
     {k: 'level', title: 'Set your trainer level', sub: 'power-up costs and the level cap depend on it', done: !!localStorage.getItem('tname') || (localStorage.getItem('trainer') || '40') !== '40', go: 'toggleProfile()'},
     {k: 'party', title: 'Save your in-game party', sub: 'name a trio in the Builder; Today then checks the team you actually run', done: Object.values(ROSTER.tagged).some(v => v.length === 3), go: "Planner.nav('#/builder')"},
     {k: 'battle', title: 'Log a battle', sub: 'record one match and import it: the app reads both teams and the result', done: BATTLES.length > 0, go: "Planner.nav('#/battles')"},
@@ -1938,7 +1940,7 @@ function renderPro() {
 }
 const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Matchups', '⚑'], ['battles', 'Battle log', '◔']]],
                 ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
-                ['Collection', [['roster', 'Roster', '◎'], ['scans', 'Scans & import', '⌗']]]];
+                ['Collection', [['roster', 'Roster', '◎']]]];
 function drawer(open) { const d = $('drawer'); if (!d) return; d.classList.toggle('open', !!open); if (open) paintDrawer(); }
 function paintDrawer() {
   const el = $('dr'), d = $('drawer'); if (!el || !d || !d.classList.contains('open')) return;
@@ -2019,30 +2021,25 @@ function evoTable(r, best) {
   const chain = from ? evoChain(from + (r.shadow && !/_shadow$/.test(from) ? '_shadow' : '')) : [];
   if (!chain.length) return '';
   if (!LRANKS) loadLeagueRanks();
-  const leagues = EVO_LEAGUES.slice();
-  // the cup you are planning for, when it is not one of the three (Retro Cup, a themed 1500 cup): its own meta rank
-  if (!leagues.some(l => l.k === LEAGUE.slug) && LEAGUE.slug !== 'master') leagues.push({k: LEAGUE.slug, abbr: LEAGUE.title, cp: LEAGUE.cp, cup: true});
-  const [lv, ia, id, is] = best, meta = (L, eid) => {
-    if (L.cup) { const e = APP.pokemon[eid] || APP.pokemon[eid.replace(/_shadow$/, '')]; return e ? `#${e.rank}` : '—'; }
-    if (!LRANKS) return '…';
-    const t = LRANKS[L.k] && (LRANKS[L.k].m[eid] || null); return t ? `#${t.rank}` : '—';
-  };
+  const [lv, ia, id, is] = best;                 // a themed 1500 cup plays like Great League here: one cell per cap
+  const meta = (L, eid) => !LRANKS ? null : ((LRANKS[L.k] && LRANKS[L.k].m[eid]) || {}).rank || 0;
   const cards = chain.map(({id: eid, from: pre, branch}) => {
     const eb = evoStatsFor(eid); if (!eb) return '';
     const cpNow = calcCP(eb, ia, id, is, cpmAt(lv)), candy = branch && branch.candy, need = evoShort(branch);
     const name = nm(eid) !== eid ? nm(eid) : ((LRANKS && LRANKS.great.m[eid]) ? eid : nice(eid.split('_')[0].toUpperCase()));
-    const rows = leagues.map(L => {
-      if (cpNow > L.cp) return `<tr><td>${esc(L.abbr)} <span class="dim">${L.cp}</span></td><td colspan="3"><span class="no">over the cap</span> <span class="dim">· ${cpNow} CP as soon as it evolves</span></td></tr>`;
-      const rk = pvpRank(eb, ia, id, is, L.cp), c = costTo(lv, rk.lv), under = calcCP(eb, ia, id, is, cpmAt(maxL() / 2)) < L.cp;
-      const cost = rk.lv > lv ? `${fmt(c.dust)} dust · ${c.candy} candy${c.xl ? ` · ${c.xl} XL` : ''}` : 'no power-up';
-      return `<tr><td>${esc(L.abbr)} <span class="dim">${L.cp}</span></td><td>L${rk.lv} · ${rk.cp} CP<div class="dim">${under ? `tops out under ${L.cp} · ` : ''}${cost}</div></td><td><b>#${rk.n}</b><div class="dim">${rk.pct.toFixed(1)}%</div></td><td>${meta(L, eid)}</td></tr>`;
+    const via = pre !== from && pre.replace(/_shadow$/, '') !== from.replace(/_shadow$/, '') ? ` <span class="dim">via ${esc(nm(pre))}</span>` : '';
+    const cells = EVO_LEAGUES.map(L => {
+      const head = `<div class="evl">${esc(L.abbr)} <span>${L.cp}</span></div>`;
+      if (cpNow > L.cp) return `<div class="evx over">${head}<b class="no">over</b><div class="dim">${cpNow} CP on evolving</div></div>`;
+      const rk = pvpRank(eb, ia, id, is, L.cp), mr = meta(L, eid);
+      const mc = mr === null ? '<span class="dim">…</span>' : mr ? `<span class="chip meta1 mini">meta #${mr}</span>` : '<span class="dim">not in meta</span>';
+      return `<div class="evx${mr ? ' hit' : ''}">${head}<b>#${rk.n}</b><div class="dim">${rk.pct.toFixed(1)}% · L${rk.lv}${rk.lv > 40 ? ' <span class="xl">XL</span>' : ''}</div><div class="evm">${mc}</div></div>`;
     }).join('');
-    return `<div class="evc"><div class="evh"><b>${esc(name)}</b>${pre !== from && pre.replace(/_shadow$/, '') !== from.replace(/_shadow$/, '') ? ` <span class="dim">via ${esc(nm(pre))}</span>` : ''}<div class="dim">${cpNow} CP right after evolving${candy ? ` · ${candy} candy` : ''}${need ? ` · needs ${esc(need)}` : ''}</div></div>
-      <table class="evtab"><thead><tr><th>League</th><th>At the cap</th><th>IV rank</th><th>Meta</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="evc"><div class="evh">${icon(eid, 's')}<b>${esc(name)}</b>${via}<span class="dim">${cpNow} CP${candy ? ` · ${candy} candy` : ''}</span></div>${need ? `<div class="dt">needs ${esc(need)}</div>` : ''}<div class="evg">${cells}</div></div>`;
   }).join('');
   if (!cards) return '';
-  const unsure = r.combos.length > 1 ? `<div class="dt warnt">${r.combos.length} IV spreads fit this scan: these ranks are for the best one. Scan the appraisal to pin it down.</div>` : '';
-  return `<div class="sec">If you evolve it <small>its IVs stay the same: where the evolution ranks in each league, before you spend the candy</small></div><div class="team evot" style="cursor:default">${unsure}${cards}<div class="dt" style="margin-top:6px">IV rank: this spread among the 4096 possible ones for the evolution at that league's cap (#1 is the best). Meta: the evolution's place in that league's rankings; — means it is not ranked there.</div></div>`;
+  const unsure = r.combos.length > 1 ? `<div class="dt warnt">${r.combos.length} IV spreads fit: best one shown</div>` : '';
+  return `<div class="sec">If you evolve it <small>IVs carry over · IV rank of 4096 at each cap · meta rank in that league</small></div><div class="team evot" style="cursor:default">${unsure}${cards}</div>`;
 }
 function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
@@ -2061,7 +2058,9 @@ function scanSection(m, r) {
   let h = lineageBanner(r) + `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.shadow ? chip('shadow', 'ul') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
   const hid = scanId(r);
   h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon(hid && hid.id, 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
-  const rows = [];
+  const rows = [], mine = hid && hid.id && m.own[hid.id] && m.own[hid.id].key === r.key ? hid.id : null;   // the copy your roster plays
+  if (mine && best) h += cpMeter(r, best);
+  if (mine) h += todoList(m, mine);
   if (best) {
     const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp), ul = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp === 2500 ? 1500 : 2500);
     const barRow = (l, v) => `<span>${l}</span><span class="tr"><i class="${v === 15 ? 'max' : ''}" style="width:${v / 15 * 100}%"></i></span><span class="iv">${v}</span>`;
@@ -2102,7 +2101,7 @@ function scanSection(m, r) {
   h += kv(rows) + (best ? evoTable(r, best) : '') + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, ${LEAGUE.abbr} rank and ${LEAGUE.cp === 2500 ? 'GL' : 'UL'} rank mean?</div>`;
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
-  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Poké Genie shows the same rank; its "Rank %" is the share of spreads below this one ${g0 ? ` (${(100 - g0.n / 40.96).toFixed(1)}% here)` : ''} and its "Stat Prod" is our percentage. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
+  if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Put another way, ${g0 ? `${(100 - g0.n / 40.96).toFixed(1)}%` : 'the share'} of all spreads rank below this one. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
   h += `</div>`;
   if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in the meta</div>`;
   else h += `<div class="note">${esc(nice(r.species))} is not in the ${esc(LEAGUE.title)} rankings, so there is no meta page for it.</div>`;
@@ -2129,7 +2128,7 @@ function deleteScan(key) {
   const i = results.findIndex(x => x.key === key); if (i < 0) return;
   if (!confirm(`Delete this ${nice(results[i].species)} scan?`)) return;
   results.splice(i, 1); save(); render(); refresh(); UI.scan = null; UI.mon = null;
-  nav('#/scans');
+  nav('#/roster');
 }
 /* ---------- Best IVs for the league: the ranked spreads of this species at the cap, behind a tap ---------- */
 const IV_FLOORS = [[0, 'any IVs', 'wild catches'], [10, '10+', 'raids, eggs, research'], [12, '12+', 'lucky trades']];
@@ -2207,7 +2206,7 @@ function monInner(m, id, noHead) {
     const status = o.toLevel > o.level ? (o.toLevel > 40 ? [`needs L${o.toLevel}`, 'XL candy needed'] : [`power up to L${o.toLevel}`, `${fmt(c.dust)} dust · ${c.candy} candy`]) : ['ready for GL', `${o.cp} CP at L${o.level}`];
     h += `<div class="kpis"><div><small>IVs</small><b>${o.ivs.join('/')}${appraised ? ' <span class="okc">✓</span>' : ''}</b><span class="sub">${appraised ? 'from the appraisal' : 'solved from CP and HP'}</span></div><div><small>GL rank</small><b>#${o.glRank}</b><span class="sub">${o.glPct.toFixed(1)}% stat product</span></div><div><small>Status</small><b>${status[0]}</b><span class="sub">${status[1]}</span></div></div>`;
   } else if (!noHead && o && o.manual) h += `<div class="note" style="margin:0">Added by hand, no scan: import a screenshot of this Pokémon for its IVs, level and moves.</div>`;
-  else if (!noHead && a) { const need = evoShort(evoBranch(a.fromId, id)); h += `<div class="note" style="margin:0">Evolves from your <b>${esc(a.from)}</b>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.${need ? ` Needs: ${esc(need)}.` : ''}</div>`; }
+  else if (!noHead && a) { const need = evoShort(evoBranch(a.fromId, id)); h += `<div class="note" style="margin:0">Evolves from your <a href="#" onclick="Planner.openScan(${attr(a.fromKey)});return false"><b>${esc(a.from)}</b></a>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.${need ? ` Needs: ${esc(need)}.` : ''}</div>`; }
   else if (!noHead && !o && sc) h += `<div class="note" style="margin:0">Catch a <b>${esc(nm(pre))}</b> ≤ <b>${sc.safe}</b> CP: it evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs).</div>`;
   if (!noHead && !o) h += `<div class="notown"><div><b>Not in your roster yet</b><span class="dt">${a ? `You own its pre-evolution, not ${esc(e.name)} itself. ` : ''}Once you have one, screenshot its status screen in Pokémon GO and add it: IVs, level and moves are read from it and this page fills in.</span></div><button class="btn sec" onclick="Planner.scanFor('${id}')">＋ Add a scan of this Pokémon</button></div>`;
   if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0"><button class="btn sec" style="margin:0" onclick="Planner.updateScan(${attr(o.scan.key)},'mon')">⟳ Update with a new scan</button></div><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this copy is updated, no second card.</div>`;
@@ -2216,8 +2215,7 @@ function monInner(m, id, noHead) {
   const tab = UI.monTab === 'pve' ? 'pve' : 'pvp';
   h += `<div class="tabs sub seg montabs" style="margin:10px 0 6px"><button class="${tab === 'pvp' ? 'on' : ''}" onclick="Planner.monTab('pvp')">PvP</button><button class="${tab === 'pve' ? 'on' : ''}" onclick="Planner.monTab('pve')">PvE · raids</button></div>`;
   if (tab === 'pve') return h + pveTab(m, id, known, o);
-  if (!noHead) {
-    // moves card
+  if (!noHead) {                                 // moves card: under a scan the scan's own moves rows stand in for it
     const cur = (known || []).filter(Boolean), secondOpen = !known || cur.length < 3;
     const src = known ? (o ? (o.scan && o.scan.movesSeen ? 'read from your screenshot' : 'set by hand') : 'set for planning') : (o && !o.manual ? 'not scanned yet' : 'not set yet');
     const mrows = moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set');
@@ -2226,7 +2224,8 @@ function monInner(m, id, noHead) {
     if (cnt && cnt.charged.length) mrows.push(['Counts', `<b>${esc(mvName(cnt.fast))}</b> ${cnt.gain} energy per ${cnt.turns} turn${cnt.turns > 1 ? 's' : ''} → ${cnt.charged.map(c => `<b>${esc(mvName(c.id))}</b> in ${c.first} <span class="dim">(${c.seq}, ${c.turns} turns)</span>`).join(' · ')}`]);
     if (secondOpen && e.thirdMove) mrows.push(['Unlock', `2nd charged move: ${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · or walk ${e.buddy} km as buddy` : ''}`]);
     h += `<div class="sec">Moves <small>${src}</small></div><div class="team card" style="cursor:default">${kv(mrows)}${moveUsage(id, known || [])}${raidUsage(id, known || [])}</div>`;
-    // roster card
+  }
+  {                                              // roster card
     const rrows = [
       ['Status', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${benched && st ? ' ' + chip('benched') : ''}${o && o.manual ? ' <span class="dim">added by hand</span>' : ''}`],
       ['In teams', `${teamsIn} of ${rep.todayAll.length} buildable from your roster`],
@@ -2263,37 +2262,51 @@ function renderRoster() {
   const el = $('board'); if (!el) return;
   try { renderRosterInner(el); } catch (e) { el.innerHTML = errorCard('Roster', e); }
 }
+const ROSTER_SORTS = () => [['', 'Roster order'], ['new', 'Newest first'], ['pct', 'Best IV%'], ['cp', 'Highest CP'], ['name', 'Name'], ['gl', `Best ${LEAGUE.abbr} rank`], ['meta', `${LEAGUE.abbr} meta`]];
+function rosterSortMode() { if (UI.rosterSort == null) { try { UI.rosterSort = localStorage.getItem('rsort') || ''; } catch { UI.rosterSort = ''; } } return UI.rosterSort; }
+function rosterSort(v) { UI.rosterSort = v || ''; try { localStorage.setItem('rsort', UI.rosterSort); } catch {} renderRoster(); }
+function rosterItems(m) {                      // one entry per card: the roster tiles (each with the scan that stands for it), then every other scan
+  const items = [], shown = new Set(), sidOf = r => (scanId(r) || {}).id || null;
+  for (const t of tiles(m)) {
+    const o = m.own[t.id], a = t.st === 'pending' && m.auto[t.id];
+    let r = o && !o.manual && o.scan ? o.scan : a && a.fromKey ? results.find(x => x.key === a.fromKey) || null : null;
+    if (!r && t.st === 'bench') r = results.find(x => !x.superseded && !shown.has(x.key) && sidOf(x) === t.id) || null;
+    if (r && shown.has(r.key)) continue;         // a scanned Jigglypuff that could become several evolutions is one card
+    if (r) shown.add(r.key);
+    items.push({t, st: t.st, r});
+  }
+  // spare copies, scans over the cap or not ranked in this league, and the archive (listed only under its chip), newest first
+  for (const r of results.slice().reverse()) if (!shown.has(r.key)) items.push({t: null, st: r.superseded ? 'arch' : (r.bench || ROSTER.exclude.includes(sidOf(r))) ? 'bench' : 'extra', r});
+  return items;
+}
 function renderRosterInner(el) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading battle data…</div>'; return; }
-  const m = M(), ts = tiles(m);
-  const counts = {}; ts.forEach(t => counts[t.st] = (counts[t.st] || 0) + 1);
-  const lbl = {ready: 'ready', power: 'powering up', moves: 'need moves', manual: 'not scanned', pending: 'pending', wanted: 'wanted', xl: 'XL gated', bench: 'benched'};
-  const clsOf = {ready: 'ok', power: 'gold', moves: 'gold', manual: '', pending: 'gl', wanted: '', xl: 'warn', bench: ''};
-  const stSel = UI.rosterSt || '';
-  let h = `<div class="chips" style="margin:0 0 10px">${Object.entries(counts).map(([k, v]) => `<span class="chip ${clsOf[k]} ${stSel === k ? 'sel' : ''}" style="cursor:pointer" onclick="Planner.rosterStatus('${k}')">${v} ${lbl[k]}</span>`).join('')}${stSel ? `<span class="chip" style="cursor:pointer" onclick="Planner.rosterStatus('')">✕ all</span>` : ''}</div>`;
+  const m = M(), items = rosterItems(m), bestCopy = typeof bestCopies === 'function' ? bestCopies() : {};
+  const counts = {}; items.forEach(x => counts[x.st] = (counts[x.st] || 0) + 1);
+  const favs = items.filter(x => x.r && x.r.fav && x.st !== 'arch').length;
+  const lbl = {ready: 'ready', power: 'powering up', moves: 'need moves', manual: 'not scanned', pending: 'pending', wanted: 'wanted', xl: 'XL gated', bench: 'benched', extra: 'other scans', arch: 'archived'};
+  const clsOf = {ready: 'ok', power: 'gold', moves: 'gold', manual: '', pending: 'gl', wanted: '', xl: 'warn', bench: '', extra: '', arch: ''};
+  const stSel = UI.rosterSt || '', mode = rosterSortMode();
+  const chipOf = (k, text, cls) => `<span class="chip ${cls} ${stSel === k ? 'sel' : ''}" style="cursor:pointer" onclick="Planner.rosterStatus('${k}')">${text}</span>`;
+  let h = `<div class="chips" style="margin:0 0 10px">${Object.keys(lbl).filter(k => counts[k]).map(k => chipOf(k, `${counts[k]} ${lbl[k]}`, clsOf[k])).join('')}${favs ? chipOf('fav', `★ ${favs} favourite${favs === 1 ? '' : 's'}`, '') : ''}${stSel ? `<span class="chip" style="cursor:pointer" onclick="Planner.rosterStatus('')">✕ all</span>` : ''}</div>`;
   const live = results.filter(r => !r.superseded).length;
-  h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scans &amp; import</span><div class="dt">${live ? `${live} scanned Pokémon · add screenshots or a recording` : 'no scans yet · import status screenshots to fill this roster'}</div></span>${ctxMenu([['Add by name…', 'Planner.toggleAdd()'], ['Export roster JSON', 'Planner.exportRoster()'], ['Load saved roster', 'Planner.loadRepoRoster()'], ['Clear all scans…', 'clearAll()', true]])}</div>`;
-  h += `<div class="add" style="margin:0 0 10px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)"></div>`;
+  h += `<div class="add rsearch" style="margin:0 0 8px"><input id="rosterq" placeholder="Search your roster" value="${esc(UI.rosterQ || '')}" oninput="Planner.rosterSearch(this.value)">${ctxMenu([['Add by name…', 'Planner.toggleAdd()'], ['Export roster JSON', 'Planner.exportRoster()'], ['Load saved roster', 'Planner.loadRepoRoster()'], ['Clear all scans…', 'clearAll()', true]])}</div>`;
+  h += `<div class="row rsort"><label for="rsort">Sort</label><select id="rsort" onchange="Planner.rosterSort(this.value)">${ROSTER_SORTS().map(([k, l]) => `<option value="${k}" ${mode === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><span id="count">${live} scanned</span></div>`;
   // every card is rendered once with its searchable text in data-q; typing in the search box only hides and shows them (rosterSearch),
   // re-rendering forty cards per keystroke made the search crawl on a phone
   const q = (UI.rosterQ || '').trim().toLowerCase();
-  const shown = ts.filter(t => !stSel || t.st === stSel);
-  const qOf = t => `${nm(t.id)} ${t.id} ${t.st} ${t.txt || ''} ${(APP.pokemon[t.id].types || []).join(' ')}`.toLowerCase();
-  const hits = shown.filter(t => rosterMatch(qOf(t), q)).length;
-  if (!shown.length) h += `<div class="note">${stSel ? 'Nothing in your roster matches.' : `Your roster is empty: import status screenshots under Scans, or add Pokémon by name from the ⋮ menu. ${esc(nextHint('scans'))}.`}</div>`;
+  let shown = items.filter(x => stSel === 'fav' ? x.r && x.r.fav && x.st !== 'arch' : stSel ? x.st === stSel : x.st !== 'arch');
+  const cmp = typeof scanSort === 'function' ? scanSort(mode) : null;
+  if (cmp) shown = shown.slice().sort((a, b) => (a.r ? 0 : 1) - (b.r ? 0 : 1) || (a.r && b.r ? cmp(a.r, b.r) : 0));   // cards without a scan last
+  const qOf = x => { const id = x.t ? x.t.id : (x.r && scanId(x.r) || {}).id, e = id && APP.pokemon[id];
+    return `${x.r ? nice(x.r.species) + ' ' : ''}${id ? nm(id) + ' ' + id : ''} ${lbl[x.st] || x.st} ${x.t && x.t.txt || ''} ${e ? e.types.join(' ') : ''}`.toLowerCase(); };
+  const hits = shown.filter(x => rosterMatch(qOf(x), q)).length;
+  if (!results.length && !items.length) h += `<div class="empty"><b>Nothing in your roster yet.</b><br>Tap <b>＋ Import scans</b> above and pick Pokémon status-screen screenshots, or a screen recording of you swiping through them. Everything is solved on the phone and kept here until you delete it: you only rescan a Pokémon after a power-up or evolution.<br>Scanned before on another browser or the home-screen app? Use <b>Backup</b> there and <b>Restore</b> here (both under the <b>Profile</b> button), or connect sync on both. Or add Pokémon by name, or load a saved roster, from the ⋮ next to the search. ${esc(nextHint('scans'))}.</div>`;
+  else if (!shown.length) h += `<div class="note">Nothing in your roster matches.</div>`;
   else h += `<div class="note" id="rosternone" ${hits ? 'hidden' : ''}>Nothing in your roster matches.</div>`;
-  // one card per Pokémon: the same card as the Scans list for scanned copies (a scanned pre-evolution such as Jigglypuff stands for the
-  // evolution it becomes, so one scan is shown once even when it could evolve into several), a dashed card for pieces you do not hold yet
-  const seenScan = new Set();
-  h += shown.map(t => `<div class="rq" data-q="${esc(qOf(t))}" ${rosterMatch(qOf(t), q) ? '' : 'hidden'}>` + rosterCard(t) + '</div>').join('');
-  function rosterCard(t) {
-    const o = m.own[t.id];
-    if (o && !o.manual && o.scan) { const idx = results.indexOf(o.scan); return typeof cardHTML === 'function' && idx >= 0 ? cardHTML(o.scan, idx, null, `Planner.openMon('${t.id}')`) : ''; }
-    const a = t.st === 'pending' && m.auto[t.id];
-    if (a && a.fromKey && typeof cardHTML === 'function') {
-      const idx = results.findIndex(r => r.key === a.fromKey);
-      if (idx >= 0) { if (seenScan.has(a.fromKey)) return ''; seenScan.add(a.fromKey); return cardHTML(results[idx], idx, null, `Planner.openMon('${t.id}')`); }
-    }
+  h += shown.map(x => `<div class="rq" data-q="${esc(qOf(x))}" ${rosterMatch(qOf(x), q) ? '' : 'hidden'}>` + rosterCard(x) + '</div>').join('');
+  function rosterCard({t, r}) {                  // a scanned card opens that copy's page; a card without a scan the species page
+    if (r) { const idx = results.indexOf(r); return typeof cardHTML === 'function' && idx >= 0 ? cardHTML(r, idx, bestCopy) : ''; }
     const e = APP.pokemon[t.id], why = {manual: 'added by hand · not scanned', pending: t.txt, wanted: t.txt === 'wanted' ? 'wanted · nothing to catch yet' : `catch ${t.txt}`, bench: 'benched'}[t.st] || t.txt;
     const cls = {pending: 'gl', wanted: '', manual: '', bench: ''}[t.st] || '';
     return `<div class="mon compact ghost" onclick="Planner.openMon('${t.id}')"><div class="top"><span class="name">${icon(t.id, 'm ghost')}${esc(nm(t.id))}</span><span class="cp">#${e.rank} <span class="dim">· ${esc(e.types.join(' / '))}</span></span></div>
@@ -2371,7 +2384,7 @@ function renderBuilder(m, L) {
     const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct).sort((a, b) => rankOf(a) - rankOf(b));
     h += `<div class="sec">From your roster <small>tap to add</small></div>`;
     h += mine.length ? `<div class="tchips">${mine.map(p => `<span class="chip ${m.ri.owned[p] ? 'ok' : 'gl'}" onclick="Planner.fillSlot('${p}')">${esc(nm(p))}</span>`).join('')}</div>` : `<div class="note">Nothing left in your roster to add.</div>`;
-    if (Object.keys(m.own).length < 3) h += `<div class="team row" onclick="Planner.nav('#/scans')"><span class="tx"><span class="nm">Scan ${3 - Object.keys(m.own).length} more Pokémon under ${LEAGUE.cp} CP</span><div class="dt">then the builder can complete a team from your own roster</div></span><span class="go">›</span></div>`;
+    if (Object.keys(m.own).length < 3) h += `<div class="team row" onclick="Planner.nav('#/roster')"><span class="tx"><span class="nm">Scan ${3 - Object.keys(m.own).length} more Pokémon under ${LEAGUE.cp} CP</span><div class="dt">then the builder can complete a team from your own roster</div></span><span class="go">›</span></div>`;
     if (filled.length) {
       // weak spots of what is in the slots so far
       const holes = ev.holes.slice().sort((a, b) => rankOf(a) - rankOf(b));
@@ -2704,7 +2717,7 @@ async function loadRepoRoster() {
     saveRoster(); refresh();
   } catch (e) { status('Could not load data/roster-great.json'); }
 }
-function showScan(species) { nav('#/scans'); const q = $('q'); if (q) { q.value = species; render(); } }
+function showScan(species) { UI.rosterSt = ''; UI.rosterQ = nice(species).toLowerCase(); nav('#/roster'); renderRoster(); }
 function movesRowForScan(r, idx) {      // used by the Scans view: manual move selection on a card
   const s = scanId(r); if (!s || !s.id || !APP) return '';
   return movesRow(s.id, movesFor(r, s.id), `Planner.setScanMove(${idx},SLOT,this.value)`);
@@ -2719,6 +2732,6 @@ function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option v
 window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
-                  pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
+                  pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 route(); loadCups(); loadChanges(); loadEvo();
 })();

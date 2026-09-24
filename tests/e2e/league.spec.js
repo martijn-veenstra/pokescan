@@ -17,7 +17,7 @@ test('switching league changes cap, rankings and roster readiness', async ({ pag
   await expect(page.locator('#rank')).toContainText('Ultra League overall rankings');
   await page.evaluate(() => Planner.nav('#/roster'));
   await expect(page.locator('#board')).toContainText(/powering up|XL gated/);
-  expect(await page.evaluate(() => document.querySelector('#filter option[value=gl]').text)).toBe('UL eligible (≤2500)');
+  expect(await page.evaluate(() => document.querySelector('#rsort option[value=gl]').text)).toBe('Best UL rank');
   // a featured cup, when the index has one
   const cup = await page.evaluate(() => { const c = JSON.parse(localStorage.getItem('cups') || '[]').find(x => x.kind === 'cup'); return c ? c.slug : null; });
   if (cup) {
