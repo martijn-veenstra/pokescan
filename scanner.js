@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.9';
+const APP_VERSION='10.10';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -287,6 +287,12 @@ async function scanFrame(ctx, W, H, trainer){
   let flat=t.replace(/\n/g,' ');
   const parseHp=f=>{ const m2=f.match(/(\d+)\s*\/\s*(\d+)\s*HP/i); return m2?parseInt(m2[2]):undefined; };
   out.hp=parseHp(flat);
+  if(!out.hp){                                            // a status screen scrolled down to the attacks: the name and HP sit above the card region
+    const y0=Math.floor(0.10*H), bh=Math.floor(0.20*H);
+    c2.width=W; c2.height=bh; c2.getContext('2d').drawImage(ctx.canvas, 0, y0, W, bh, 0,0, W, bh);
+    const tu=(await wk.recognize(c2)).data.text.replace(/\n/g,' '), hu=parseHp(tu);
+    if(hu){ out.hp=hu; flat=tu+' '+flat; }                // the name is read first, before any candy or Mega Energy line
+  }
   if(!out.hp){                                            // small HP text on a video frame: look again at full scale
     c2.width=W; c2.height=ch; c2.getContext('2d').drawImage(ctx.canvas, 0, Math.floor(0.28*H), W, ch, 0,0, W, ch);
     const t2=(await wk.recognize(c2)).data.text.replace(/\n/g,' ');
@@ -295,9 +301,9 @@ async function scanFrame(ctx, W, H, trainer){
   m=flat.match(/CP\s*(\d{2,4})/i); if(m) out.cpCandidates.push(parseInt(m[1]));
   out.hints=[];
   const words=flat.toUpperCase().match(/[A-Z]{3,}/g)||[];
-  const candy=new Set(); words.forEach((w,i)=>{ if(DATA.stats[w] && /^CANDY|^SNOEP/.test(words[i+1]||'')) candy.add(w); });
-  for(const w2 of words){
-    if(!out.species && DATA.stats[w2] && !candy.has(w2)) out.species=w2;
+  const candy=new Set(), mega=new Set(); words.forEach((w,i)=>{ if(DATA.stats[w] && /^CANDY|^SNOEP/.test(words[i+1]||'')) candy.add(w); if(DATA.stats[w] && /^MEGA/.test(words[i+1]||'')) mega.add(w); });
+  for(const w2 of words){                                // "MEDICHAM MEGA ENERGY" on a Meditite's screen names the evolution, not this Pokémon
+    if(!out.species && DATA.stats[w2] && !candy.has(w2) && !mega.has(w2)) out.species=w2;
     if(TYPES.includes(w2) && !out.hints.includes(w2)) out.hints.push(w2);
   }
   out.candySpecies=[...candy][0]||null;
@@ -490,12 +496,16 @@ function seen(s){ return `${s.species||(s.candySpecies?'?('+s.candySpecies+' can
 const normTxt=t=>' '+String(t||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').trim()+' ';
 function readMoves(species, txt){                  // {fast, charged:[..], second:true|false|undefined, found}
   if(!APP||!species) return null;
-  const ids=[...new Set((DATA.stats[species]||[null]).map(b=>pvpokeIdFor(species,b)).filter(Boolean))]; if(!ids.length) return null;
+  const ids=[...new Set((DATA.stats[species]||[null]).map(b=>pvpokeIdFor(species,b)).filter(Boolean))];
+  if(!ids.length) return DATA.stats[species]?readMovesFor(species, null, txt):null;   // not ranked in this league (a Meditite in Great League): any move the game knows
   if(ids.length>1){ const best=ids.map(i=>readMovesFor(species,i,txt)).filter(Boolean).sort((a,b)=>b.found-a.found)[0]; return best||null; }   // regional forms: the one whose moves appear
   return readMovesFor(species, ids[0], txt);
 }
+function allMoves(){                               // every move in the league data, split by energy: fast moves gain it, charged moves spend it
+  const f=[],c=[]; for(const [k,v] of Object.entries(APP.moves||{})) (v.e>0?f:c).push(k); return {fast:f,charged:c};
+}
 function readMovesFor(species, id, txt){
-  const e=APP.pokemon[id], t=normTxt(txt);
+  const e=id?APP.pokemon[id]:allMoves(), t=normTxt(txt);
   const pos=m=>{ const n=APP.moves[m]?normTxt(APP.moves[m].n).trim():''; if(!n) return -1; const i=t.indexOf(' '+n+' '); return i; };
   const fast=e.fast.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
   const ch=e.charged.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
@@ -505,8 +515,8 @@ function readMovesFor(species, id, txt){
 }
 function applyMoves(r, mv){                        // merge what a moves screen showed into a card; returns true when something changed
   if(!mv||!r) return false;
-  const e=APP.pokemon[mv.id], cur=(r.moves&&r.moves.length)?r.moves.slice():[];
-  const fast=mv.fast||cur[0]||e.moveset[0];
+  const e=mv.id?APP.pokemon[mv.id]:null, cur=(r.moves&&r.moves.length)?r.moves.slice():[];
+  const fast=mv.fast||cur[0]||(e?e.moveset[0]:null);
   let charged=mv.charged.slice();
   if(charged.length<2 && mv.second!==false){ for(const m of cur.slice(1)) if(charged.length<2 && m && !charged.includes(m)) charged.push(m); }   // only what was seen before; never PvPoke's default as if it were on the Pokémon
   const next=[fast,...charged];
@@ -1120,7 +1130,7 @@ async function scanVideo(file,trainer){
 async function handleScan(ctx,W,H,trainer,skipKey){
   const s=await scanFrame(ctx,W,H,trainer);
   if(!s.species && s.hp && s.cpCandidates.length) s.species=inferSpecies(s);
-  if(!s.species || !s.hp){                            // status screens always show HP; a screen scrolled to the attacks may not
+  if(!s.species || !s.hp || !s.cpCandidates.length){  // status screens always show HP and CP; a screen scrolled to the attacks may show neither
     let sp=s.species;
     if(!sp){ const cands=speciesCandidates(s), prev=skipKey?results.find(x=>x.key===skipKey):null;
       if(prev && cands.includes(prev.species)) sp=prev.species; else { const c=results.find(x=>!x.superseded && cands.includes(x.species)); sp=c?c.species:s.candySpecies; } }
