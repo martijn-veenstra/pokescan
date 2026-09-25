@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, importFile } from './helpers.js';
 
 test('a scanned pre-evolution that PvPoke does not rank shows on the roster under its own name', async ({ page }) => {
   const errors = await openApp(page, '#/scans');
@@ -107,5 +107,24 @@ test('a scan page has one head, one menu, and the move lists in the PvP and Raid
   await expect(mon).toContainText('Raid moves');
   await expect(mon).not.toContainText('Moves by meta usage');
   await page.evaluate(() => Planner.monTab('pvp'));
+  expect(errors).toEqual([]);
+});
+
+/* "Newest first": a card an import just created or changed comes first; cards from before the timestamp keep list
+   order, where the importer puts new cards at the front (the sort used to read that backwards). */
+test('Newest first shows the card just imported, and a card an import just changed, on top', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('roster'); localStorage.setItem('rsort', 'new'); });
+  const errors = await openApp(page, '#/roster');
+  await page.evaluate(() => {
+    const mk = (sp, a, d, s, lv) => { const b = DATA.stats[sp][0], m = cpmAt(lv); const r = { species: sp, cp: calcCP(b, a, d, s, m), hp: calcHP(b, s, m), level: lv, dust: null, combos: [[lv, a, d, s, b]], appraisal: [a, d, s], txt: '', cpCandidates: [] }; r.key = `${sp}|${r.cp}|${r.hp}|${lv}|`; return r; };
+    results.length = 0; results.push(mk('AZUMARILL', 8, 15, 15, 38), mk('MEDICHAM', 15, 15, 15, 20)); save(); Planner.refresh();   // front of the list = newer
+  });
+  const names = async () => (await page.locator('#board .mon .name').allInnerTexts()).map(t => t.replace(/[☆★\s]+/g, ''));
+  await expect.poll(names).toEqual(['Azumarill', 'Medicham']);
+  await importFile(page, 'stun-status.png');
+  await expect.poll(async () => (await names())[0]).toContain('Stunfisk');
+  // an import that changes an older card (here: its moves) moves it to the top
+  await page.evaluate(() => { const r = results.find(x => x.species === 'MEDICHAM'); applyMoves(r, { id: 'medicham', fast: 'COUNTER', charged: ['ICE_PUNCH'], second: false }); save(); render(); });
+  await expect.poll(async () => (await names())[0]).toContain('Medicham');
   expect(errors).toEqual([]);
 });

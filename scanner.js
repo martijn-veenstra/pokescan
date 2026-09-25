@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.8';
+const APP_VERSION='10.9';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -390,7 +390,7 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
   if(s.inferred) note(`appraisal: name hidden, took ${s.inferred}`);
   const cp=s.cpCandidates.find(c=>c>=10), key=`${s.species}|${cp??''}|${s.hp??''}|${ivs.join('/')}`;
   if(key===skipKey) return key;
-  const attach=r=>{ gain('appr',r.species); applyAppraisal(r,ivs); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species} ${r.cp} CP`); return key; };
+  const attach=r=>{ gain('appr',r.species); applyAppraisal(r,ivs); r.seenAt=Date.now(); if(window.Planner) Planner.onNewScan(r); save(); render(); status(`Appraisal ${ivs.join('/')} → ${s.species} ${r.cp} CP`); return key; };
   if(UPDATE){ const target=results.find(x=>x.key===UPDATE); if(target && target.species===s.species) return attach(target); }
   const r=sameCopy(s.species, cp||null, s.hp||null);
   if(r) return attach(r);
@@ -415,7 +415,7 @@ async function handleAppraisal(ctx,W,H,trainer,ivs,skipKey){
       s.key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
       const twin=results.find(x=>x.species===s.species && x.cp===s.cp && x.hp===s.hp);   // the inferred CP points at a card we already have
       if(twin) return attach(twin);
-      results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s);
+      s.seenAt=Date.now(); results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s);
       status(`${s.species} ${s.cp} CP · appraised ${ivs.join('/')}`); return key;
     }
   }
@@ -512,6 +512,7 @@ function applyMoves(r, mv){                        // merge what a moves screen 
   const next=[fast,...charged];
   const changed=JSON.stringify(next)!==JSON.stringify(cur)||(mv.second!==undefined&&r.secondMove!==mv.second);
   r.moves=next; if(mv.second!==undefined) r.secondMove=mv.second; r.movesSeen=Date.now();
+  if(changed) r.seenAt=Date.now();                  // "Newest first" puts a card an import just changed on top
   return changed;
 }
 /* ---------- one card per physical Pokémon ----------
@@ -535,6 +536,7 @@ function dedupeScans(){                          // fold cards that describe the
   return n;
 }
 function mergeScan(keep, other){                  // keep takes everything the other card knew
+  if((other.seenAt||0)>(keep.seenAt||0)) keep.seenAt=other.seenAt;
   if(other.appraisal && !keep.appraisal){ applyAppraisal(keep, other.appraisal); }
   if(other.movesSeen && (!keep.movesSeen || other.movesSeen>keep.movesSeen)){ keep.moves=other.moves; keep.secondMove=other.secondMove; keep.movesSeen=other.movesSeen; }
   else if(!keep.moves && other.moves){ keep.moves=other.moves; keep.secondMove=other.secondMove; }
@@ -549,7 +551,7 @@ function updateCard(target, s, mvSeen){          // the same Pokémon after a po
   const keys=ivKeys(target), fit=s.combos.filter(c=>keys.has(c.slice(1,4).join('/')));
   if(!fit.length) return false;
   const old={t:Date.now(), species:target.species, cp:target.cp, hp:target.hp, level:target.level};
-  target.history=(target.history||[]).concat([old]).slice(-12);
+  target.history=(target.history||[]).concat([old]).slice(-12); target.seenAt=Date.now();
   target.species=s.species; target.cp=s.cp; target.hp=s.hp; target.combos=fit; target.dust=s.dust||null; target.txt=s.txt; target.cpInferred=!!s.cpInferred; target.superseded=null;
   const lv=[...new Set(fit.map(c=>c[0]))]; target.level=lv.length===1?lv[0]:null;
   if(target.appraisal) applyAppraisal(target,target.appraisal);
@@ -1166,14 +1168,14 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   }
   const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
   const dup=results.find(r=>r.key===key);
-  if(dup){ if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
+  if(dup){ dup.seenAt=Date.now(); save(); if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
   if(key===skipKey) return key;
   const same=sameCopy(s.species, s.cp, s.hp);   // the same physical Pokémon already has a card (its appraisal card, or an earlier scan)
-  if(same){ if(mvSeen&&applyMoves(same,mvSeen)){ save(); render(); gain('moves',same.species); if(window.Planner) Planner.onMovesScan(same); } note(`${seen(s)} → same copy as the ${same.cp} CP card`); return same.key; }
+  if(same){ same.seenAt=Date.now(); save(); if(mvSeen&&applyMoves(same,mvSeen)){ save(); render(); gain('moves',same.species); if(window.Planner) Planner.onMovesScan(same); } note(`${seen(s)} → same copy as the ${same.cp} CP card`); return same.key; }
   s.key=key; if(mvSeen) applyMoves(s,mvSeen);
   { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
     if(hit){ const ivs=APPR[hit]; ks.forEach(k=>delete APPR[k]); applyAppraisal(s,ivs); apKeys(s.species,s.cp,s.hp).forEach(k=>delete APPR[k]); saveAppr(); } }
-  results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s); note(`${seen(s)} → new card`);
+  s.seenAt=Date.now(); results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s); note(`${seen(s)} → new card`);
   return key;
 }
 
@@ -1240,7 +1242,9 @@ function scanSort(mode){                            // comparator on scans for t
   const gr=r=>{ if(!r.combos.length||!DATA.stats[r.species]) return 9999; return Math.min(...r.combos.map(c=>pvpRank(c[4]||DATA.stats[r.species][0],c[1],c[2],c[3],LEAGUE.cp).n)); };
   const mr=r=>{ const m=metaFor(r.species); return m?m[0]:9999; };
   const at=r=>{ const i=results.indexOf(r); return i<0?-1:i; };
-  return {new:(a,b)=>at(b)-at(a), pct:(a,b)=>bp(b)-bp(a), cp:(a,b)=>(b.cp||0)-(a.cp||0), name:(a,b)=>(a.species||'').localeCompare(b.species||''),
+  // newest: the last time an import created or changed the card (seenAt); older cards without it keep list order, where the front is newest
+  const newest=(a,b)=>(b.seenAt||0)-(a.seenAt||0)||at(a)-at(b);
+  return {new:newest, pct:(a,b)=>bp(b)-bp(a), cp:(a,b)=>(b.cp||0)-(a.cp||0), name:(a,b)=>(a.species||'').localeCompare(b.species||''),
     gl:(a,b)=>gr(a)-gr(b), meta:(a,b)=>mr(a)-mr(b)}[mode]||null;
 }
 /* one card per scanned Pokémon on the Roster page: scan facts (CP, IVs, rank) plus what the planner says it still needs */

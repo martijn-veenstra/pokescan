@@ -2290,7 +2290,8 @@ function rosterItems(m) {                      // one entry per card: the roster
     items.push({t, st: t.st, r});
   }
   // spare copies, scans over the cap or not ranked in this league, and the archive (listed only under its chip), newest first
-  for (const r of results.slice().reverse()) if (!shown.has(r.key)) items.push({t: null, st: r.superseded ? 'arch' : (r.bench || ROSTER.exclude.includes(sidOf(r))) ? 'bench' : 'extra', r});
+  const newest = typeof scanSort === 'function' ? scanSort('new') : null;
+  for (const r of (newest ? results.slice().sort(newest) : results)) if (!shown.has(r.key)) items.push({t: null, st: r.superseded ? 'arch' : (r.bench || ROSTER.exclude.includes(sidOf(r))) ? 'bench' : 'extra', r});
   return items;
 }
 function renderRosterInner(el) {
