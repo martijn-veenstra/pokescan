@@ -17,6 +17,9 @@ test('Best IVs: the ranked spreads behind a tap, raid and lucky floors, your own
   // show more
   await mon.locator('.ivt .xmore-row td').click();
   await expect(mon.locator('.ivt tbody tr:not([hidden]):not(.xmore-row):not(.sep)')).toHaveCount(30);
+  // a background load finishing redraws the page: the table stays open (it used to fold back to 10 rows)
+  await page.evaluate(() => Planner.renderMon());
+  await expect(mon.locator('.ivt tbody tr:not([hidden]):not(.xmore-row):not(.sep)')).toHaveCount(30);
   // the 10+ floor: every IV at least 10, and the best such spread is no longer #1
   await mon.locator('.ivc .chip:has-text("10+")').click();
   await expect(mon).toContainText(/Best you can get with 10\+ IVs: rank #\d+/);

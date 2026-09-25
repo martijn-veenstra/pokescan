@@ -1054,7 +1054,7 @@ function moveRows(id, moves, handler, placeholder) {  // Fast / Charged / 2nd ch
   const sel = (slot, list0, none) => `<select class="mvsel ${unknown ? 'empty' : ''}" onchange="${handler.replace('SLOT', slot)}">${unknown ? `<option value="" selected disabled>— ${placeholder} —</option>` : ''}${none && !unknown ? `<option value="" ${!moves[slot] ? 'selected' : ''}>no 2nd charged move</option>` : none ? `<option value="">no 2nd charged move</option>` : ''}${withCur(list0, slot).map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}${tag(mv)}</option>`).join('')}</select>`;
   return [['Fast', sel(0, e.fast)], ['Charged', sel(1, e.charged)], ['2nd charged', sel(2, e.charged, true)]];
 }
-function moveUsage(id, cur) {               // collapsible ranked table: how often PvPoke's simulations run each move
+function moveUsage(id, cur) {               // its own card on the PvP tab: how often the simulated meta battles run each move
   const e = APP.pokemon[id], use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
   if (!Object.keys(use).length) return '';
   const rows = (list, label) => {
@@ -1062,10 +1062,8 @@ function moveUsage(id, cur) {               // collapsible ranked table: how oft
     if (!ranked.length) return '';
     return `<div class="uh">${label}</div>` + ranked.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${esc(mvName(m))}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="bar"><i style="width:${Math.max(3, use[m])}%"></i></span><span class="pc">${use[m]}%</span></div>`).join('');
   };
-  return `<div class="note" style="margin:6px 0 0;cursor:pointer" onclick="Planner.toggleUse()">${UI.moveUse ? '▾' : '▸'} Best moves by meta usage</div>` +
-    (UI.moveUse ? `<div class="use">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> on this copy · <em class="s">★</em> in the moveset behind rank #${e.rank} · % = share of simulated meta battles using the move</div></div>` : '');
+  return `<div class="sec">Moves by meta usage <small>share of simulated meta battles running each move</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
 }
-function toggleUse() { UI.moveUse = !UI.moveUse; renderMon(); }
 
 /* ---------- readiness: a copy is ready for GL when it sits at the cap level and carries PvPoke's moves ---------- */
 function readiness(m, id) {
@@ -1264,8 +1262,9 @@ function availBlock(id, list, opts) {          // a species block for Today: nam
 function availLines(list, species) {           // the same bundle, for a Pokémon page
   return bundleAvail(list, species).map(l => `<div class="avl ${l.now ? 'now' : ''}"><span class="lb">${l.label}</span><span class="tx">${l.html}</span></div>`).join('');
 }
-function weakTo(id) {                          // attacking types that hit this Pokémon for more than neutral
-  const t = APP.pokemon[id].types; return TYPES18.filter(a => PVP.eff(a, t) > 1).sort((a, b) => PVP.eff(b, t) - PVP.eff(a, t));
+function weakTo(id) { return weakToTypes(APP.pokemon[id].types); }
+function weakToTypes(t) {                      // attacking types that hit these types for more than neutral
+  return TYPES18.filter(a => PVP.eff(a, t) > 1).sort((a, b) => PVP.eff(b, t) - PVP.eff(a, t));
 }
 function rosterFit(m, id) {                    // what this species does for the teams you can build
   const {L, rep, own, ri} = m, ownedIds = Object.keys(ri.owned), best = rep.today[0];
@@ -1310,7 +1309,7 @@ function route() {
   const seg = (location.hash || '').replace(/^#\/?/, '').split('/').map(x => { try { return decodeURIComponent(x); } catch { return x; } });
   const p = seg[0] || localStorage.getItem('tab') || 'today', cur = onView();
   const leave = () => { if (cur && cur !== 'mon' && cur !== 'team') { UI.monFrom = cur; } if (cur && cur !== 'team') UI.teamFrom = cur === 'mon' ? (UI.monFrom || 'teams') : cur; };
-  if (p === 'mon' && seg[1]) { if (cur !== 'mon') leave(); if (UI.mon !== seg[1]) UI.ivOpen = false; UI.mon = seg[1]; UI.scan = null; showView('mon'); window.scrollTo(0, 0); return; }
+  if (p === 'mon' && seg[1]) { if (cur !== 'mon') leave(); if (UI.mon !== seg[1]) { UI.ivOpen = false; UI.ivAll = false; } UI.mon = seg[1]; UI.scan = null; showView('mon'); window.scrollTo(0, 0); return; }
   if (p === 'scan' && seg[1]) {
     const key = seg.slice(1).join('/'), r = results.find(x => x.key === key);
     if (!r) { nav('#/roster'); return; }
@@ -1963,7 +1962,7 @@ function renderMon() {
   try {
     const m = M(), r = UI.scan ? results.find(x => x.key === UI.scan) : null;
     if (UI.scan && !r) { UI.scan = null; if (!UI.mon) { closeMon(); return; } }
-    el.innerHTML = (r ? scanSection(m, r) : '') + (UI.mon ? monInner(m, UI.mon, !!r) : '');
+    el.innerHTML = (r ? scanSection(m, r) : '') + (UI.mon ? monInner(m, UI.mon, r) : '');
   } catch (e) { el.innerHTML = errorCard('detail', e); }
 }
 const nice = sp => (sp || '?').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -2053,11 +2052,17 @@ function scanSection(m, r) {
     [r.shadow ? 'Mark as normal / purified' : 'Mark as Shadow', `toggleShadow(${idx});${rm}`],
     ['Update this Pokémon…', `Planner.updateScan('${key}')`],
     ['Correct a misread…', `Planner.editScan('${key}')`],
+    ...(UI.mon && APP.pokemon[UI.mon] ? speciesMenuItems(m, UI.mon, r) : []),
     ['Delete scan', `Planner.deleteScan('${key}')`, true],
   ]);
   let h = lineageBanner(r) + `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.shadow ? chip('shadow', 'ul') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
   const hid = scanId(r);
   h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon(hid && hid.id, 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
+  {                                              // types, weaknesses and the meta rank: the species facts in the same card
+    const e = UI.mon && APP.pokemon[UI.mon], form = best && best[4], types = e ? e.types : form ? [form[3], form[4]].filter(t => t && t !== 'none').map(t => t.toLowerCase()) : [];
+    const weak = types.length ? weakToTypes(types) : [];
+    if (types.length) h += `<div class="typerow"><span class="chips" style="margin:0">${types.map(t => chip(t, 't-' + t)).join('')}</span>${e ? `<span class="dim metar">meta #${e.rank} · ${e.score}</span>` : ''}</div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
+  }
   const rows = [], mine = hid && hid.id && m.own[hid.id] && m.own[hid.id].key === r.key ? hid.id : null;   // the copy your roster plays
   if (mine && best) h += cpMeter(r, best);
   if (mine) h += todoList(m, mine);
@@ -2076,7 +2081,7 @@ function scanSection(m, r) {
     rows.push(['Status', st]);
     if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} fit this CP and HP, best shown. An appraisal pins it down.<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
   } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋮ → Correct a misread</span>`]);
-  const mv = movesRowForScan(r, idx), sid0 = scanId(r); let usage = '';
+  const mv = movesRowForScan(r, idx), sid0 = scanId(r);
   if (mv) {
     const id0 = sid0.id, e0 = APP.pokemon[id0], known = knownMoves(r, id0), cur = known ? known.filter(Boolean) : [], rec = e0.moveset;
     const second = r.secondMove === false ? false : (r.secondMove === true || (r.moves && r.moves.filter(Boolean).length >= 3)) ? true : null;   // null: never scanned or set
@@ -2086,7 +2091,6 @@ function scanSection(m, r) {
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
     rows.push(...moveRows(id0, known, `Planner.setScanMove(${idx},SLOT,this.value)`));
     rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : known ? 'set by hand' : 'not scanned yet: screenshot the status screen scrolled to the attacks, or pick them. Teams are scored with the recommended moveset until then.'}</div>`]);
-    usage = moveUsage(id0, cur);
     const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
     rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">${r.movesSeen ? 'one charged move read, but the NEW ATTACK button was not in the shot: screenshot the attacks with that button visible, or pick the 2nd move in the third box' : 'not known yet: scan the attacks, or pick it in the third box'}${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
     rows.push(['Recommended', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
@@ -2099,13 +2103,12 @@ function scanSection(m, r) {
   }
   if (r.history && r.history.length) rows.push(['History', r.history.slice().reverse().map(h => `${when(h.t)}: ${h.species !== r.species ? esc(nice(h.species)) + ' · ' : ''}${h.cp} CP · L${h.level ?? '?'}`).join('<br>') + `<div class="dim" style="font-size:12px">now ${r.cp} CP · L${r.level ?? '?'}</div>`]);
   if (!r.superseded) rows.push(['', `<button class="btn sec" style="margin:4px 0 0" onclick="Planner.updateScan(${attr(r.key)},'mon')">⟳ Update with a new scan</button><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this card is updated, no second card.</div>`]);
-  h += kv(rows) + (best ? evoTable(r, best) : '') + usage + (sid0 && sid0.id && APP.pokemon[sid0.id] ? raidUsage(sid0.id, knownMoves(r, sid0.id) || []) : '');
+  h += kv(rows);
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, ${LEAGUE.abbr} rank and ${LEAGUE.cp === 2500 ? 'GL' : 'UL'} rank mean?</div>`;
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
   if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Put another way, ${g0 ? `${(100 - g0.n / 40.96).toFixed(1)}%` : 'the share'} of all spreads rank below this one. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
   h += `</div>`;
-  if (UI.mon) h += `<div class="sec">${esc(nm(UI.mon))} in the meta</div>`;
-  else h += `<div class="note">${esc(nice(r.species))} is not in the ${esc(LEAGUE.title)} rankings, so there is no meta page for it.</div>`;
+  if (!UI.mon) h += (best ? evoTable(r, best) : '') + `<div class="note">${esc(nice(r.species))} is not in the ${esc(LEAGUE.title)} rankings, so it has no PvP or raid pages of its own here.</div>`;
   return h;
 }
 function editScan(key) {
@@ -2134,11 +2137,12 @@ function deleteScan(key) {
 /* ---------- Best IVs for the league: the ranked spreads of this species at the cap, behind a tap ---------- */
 const IV_FLOORS = [[0, 'any IVs', 'wild catches'], [10, '10+', 'raids, eggs, research'], [12, '12+', 'lucky trades']];
 UI.ivFloor = parseInt(localStorage.getItem('ivfloor') || '0') || 0;
-function ivToggle() { UI.ivOpen = !UI.ivOpen; renderMon(); }
+function ivToggle() { UI.ivOpen = !UI.ivOpen; UI.ivAll = false; renderMon(); }
 function ivFloor(f) { UI.ivFloor = f; localStorage.setItem('ivfloor', String(f)); renderMon(); }
 function ivMore(td) {                           // the table's own fold: table rows cannot live inside fold()'s spans
   const tbody = td.closest('tbody'), rows = tbody.querySelectorAll('tr.more'), open = rows[0] && !rows[0].hidden;
   rows.forEach(r => { r.hidden = open; }); td.textContent = open ? `▸ show ${rows.length} more spreads` : '▾ show fewer';
+  UI.ivAll = !open;                              // remembered, so a redraw (a background data load finishing) keeps the table open
 }
 function myIvs(id) {                            // your copies of this species (and of its pre-evolutions, as this species): IVs and rank
   const b = baseFor(id); if (!b) return [];
@@ -2163,43 +2167,49 @@ function ivCard(id) {
   const trs = rows.map(r => row(r, mineKey.has(`${r.ia}/${r.id}/${r.is}`) ? ' <span class="chip ok mini">yours</span>' : ''));
   const shownKeys = new Set(rows.map(r => `${r.ia}/${r.id}/${r.is}`));
   const extra = mine.filter(x => !shownKeys.has(x.ivs.join('/'))).slice(0, 3).map(x => row({ia: x.ivs[0], id: x.ivs[1], is: x.ivs[2], n: x.rk.n, lv: x.rk.lv, cp: x.rk.cp, pct: x.rk.pct}, ' <span class="chip ok mini">yours</span>'));
-  const more = trs.length > 10 ? `${trs.slice(10).map(t => t.replace('<tr class="', '<tr hidden class="more ')).join('')}<tr class="xmore-row"><td colspan="5" onclick="Planner.ivMore(this)">▸ show ${trs.length - 10} more spreads</td></tr>` : '';
+  const more = trs.length > 10 ? `${trs.slice(10).map(t => t.replace('<tr class="', `<tr ${UI.ivAll ? '' : 'hidden '}class="more `)).join('')}<tr class="xmore-row"><td colspan="5" onclick="Planner.ivMore(this)">${UI.ivAll ? '▾ show fewer' : `▸ show ${trs.length - 10} more spreads`}</td></tr>` : '';
   const ivCols = [['#', 'Where the spread ranks among all 4,096 possible ones, by stat product.'], ['IVs', 'Attack / Defence / HP, 0 to 15 each — what the game shows when you appraise.'],
     ['Level', `The level the spread stops at under the ${LEAGUE.cp} CP cap.`], ['CP', 'Its CP at that level.'], ['%', 'Its stat product against the best spread, so 100 % is rank #1.']];
   h += `<div class="ivw"><table class="ivt"><thead><tr>${ivCols.map(([l, help]) => `<th>${esc(l)}<button class="chq" data-help="${esc(help)}" aria-label="What is ${esc(l)}?" onclick="Planner.colHelp(this)">&#9432;</button></th>`).join('')}</tr></thead><tbody>${trs.slice(0, 10).join('')}${more}${extra.length ? `<tr class="sep"><td colspan="5">your other copies</td></tr>${extra.join('')}` : ''}</tbody></table><div class="chx" hidden></div></div>`;
   h += `</div>`;
   return h;
 }
-function monInner(m, id, noHead) {
-  const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
-  const known = o ? (o.manual ? (ROSTER.moves[id] || null) : knownMoves(o.scan, id)) : (ROSTER.moves[id] || ri.pending[id] || null);
-  const moves = known || e.moveset;
-  const rec = e.moveset, notRec = known ? known.filter(Boolean).filter(mv => !rec.includes(mv)) : [];
-  const back = PAGE_LABEL[UI.monFrom] || 'Back';
-  const rm = 'Planner.renderMon()';
-  const menu = ctxMenu([
+function speciesMenuItems(m, id, scan) {      // the species' ⋮ items; on a scan page (scan given) only the ones that make sense next to a scanned copy
+  const {own, auto} = m, o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id), rm = 'Planner.renderMon()', onScan = !!scan;
+  return [
     ['Try in builder', `Planner.goBuilder('${id}')`],
-    o && o.scan && !noHead ? ['Update your copy…', `Planner.updateScan('${esc(o.scan.key)}')`] : null,
-    o && o.scan && !noHead ? ["Open the best copy's scan", `Planner.openScan('${esc(o.scan.key)}')`] : null,
-    !o && !noHead ? ['Add a scan of this Pokémon…', `Planner.scanFor('${id}')`] : null,
+    o && o.scan && !onScan ? ['Update your copy…', `Planner.updateScan('${esc(o.scan.key)}')`] : null,
+    o && o.scan && (!onScan || o.scan.key !== scan.key) ? ["Open the best copy's scan", `Planner.openScan('${esc(o.scan.key)}')`] : null,
+    !o && !onScan ? ['Add a scan of this Pokémon…', `Planner.scanFor('${id}')`] : null,
     !st && !benched ? ['Add to wanted', `Planner.want('${id}',true)`] : null,
-    !st && !benched ? ['Add as pending (building it)', `Planner.addAs('pending','${id}')`] : null,
-    !st && !benched ? ['I own one (no scan)', `Planner.addAs('owned','${id}')`] : null,
+    !st && !benched && !onScan ? ['Add as pending (building it)', `Planner.addAs('pending','${id}')`] : null,
+    !st && !benched && !onScan ? ['I own one (no scan)', `Planner.addAs('owned','${id}')`] : null,
     st === 'wanted' ? ['Got it: move to pending', `Planner.addAs('pending','${id}')`] : null,
     st === 'pending' && !a ? ['Built it: move to owned', `Planner.addAs('owned','${id}')`] : null,
-    o && !benched && !noHead ? ['Bench (keep out of teams)', `Planner.bench('${id}');${rm}`] : null,
+    o && !benched && !onScan ? ['Bench (keep out of teams)', `Planner.bench('${id}');${rm}`] : null,
     a && !benched ? ['Not evolving it (bench)', `Planner.bench('${id}');${rm}`] : null,
     benched ? ['Unbench', `Planner.unbench('${id}');${rm}`] : null,
     o && o.manual ? ['Remove from roster', `Planner.dropMon('owned','${id}')`, true] : null,
     ROSTER.pending[id] !== undefined && !o ? ['Remove from pending', `Planner.dropMon('pending','${id}')`, true] : null,
     ROSTER.candidates[id] !== undefined && !o ? ['Remove from wanted', `Planner.dropMon('candidates','${id}')`, true] : null,
-  ]);
+  ];
+}
+function monInner(m, id, scanR) {               // the species part; under a scan (scanR) without its own head, the tabs straight under the scan's card
+  const noHead = !!scanR;
+  const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
+  const known = scanR ? knownMoves(scanR, id) : o ? (o.manual ? (ROSTER.moves[id] || null) : knownMoves(o.scan, id)) : (ROSTER.moves[id] || ri.pending[id] || null);
+  const moves = known || e.moveset;
+  const rec = e.moveset, notRec = known ? known.filter(Boolean).filter(mv => !rec.includes(mv)) : [];
+  const back = PAGE_LABEL[UI.monFrom] || 'Back';
+  const rm = 'Planner.renderMon()';
+  const menu = ctxMenu(speciesMenuItems(m, id, null));
   let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st) || (!o ? chip('not owned', 'warn') : '')}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
-  h += `<div class="detail" style="gap:8px"><div class="dh"><span style="display:flex;align-items:center;gap:10px;min-width:0">${icon(id, 'xl')}<span class="nm" style="font-size:20px">${esc(e.name)}</span></span><span style="display:flex;align-items:center;gap:8px;margin-left:auto"><span class="dim">meta #${e.rank} · ${e.score}</span>${menu}</span></div>`;
+  const teamsIn = rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
+  if (!noHead) {
+  h += `<div class="detail" style="gap:8px"><div class="dh" style="flex-wrap:nowrap"><span style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">${icon(id, 'xl')}<span class="nm" style="font-size:20px">${esc(e.name)}</span></span>${menu}</div>`;
   if (!noHead && o) h += todoList(m, id);
   const weak = weakTo(id);
-  h += `<div class="typerow"><span class="chips" style="margin:0">${e.types.map(t => chip(t, 't-' + t)).join('')}</span></div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
-  const teamsIn = rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
+  h += `<div class="typerow"><span class="chips" style="margin:0">${e.types.map(t => chip(t, 't-' + t)).join('')}</span><span class="dim metar">meta #${e.rank} · ${e.score}</span></div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
   const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
   if (!noHead && o && !o.manual && o.scan && o.scan.combos && o.scan.combos.length) h += cpMeter(o.scan, bestOf2(o.scan));   // your best copy: the in-game arc, drag for power-up costs
   if (!noHead && o && !o.manual) {                // three tiles for your best copy
@@ -2212,9 +2222,10 @@ function monInner(m, id, noHead) {
   if (!noHead && !o) h += `<div class="notown"><div><b>Not in your roster yet</b><span class="dt">${a ? `You own its pre-evolution, not ${esc(e.name)} itself. ` : ''}Once you have one, screenshot its status screen in Pokémon GO and add it: IVs, level and moves are read from it and this page fills in.</span></div><button class="btn sec" onclick="Planner.scanFor('${id}')">＋ Add a scan of this Pokémon</button></div>`;
   if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0"><button class="btn sec" style="margin:0" onclick="Planner.updateScan(${attr(o.scan.key)},'mon')">⟳ Update with a new scan</button></div><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this copy is updated, no second card.</div>`;
   h += `</div>`;
+  }
   // the two faces of a Pokémon: what it does in GO Battle League, what it does in raids
   const tab = UI.monTab === 'pve' ? 'pve' : 'pvp';
-  h += `<div class="tabs sub seg montabs" style="margin:10px 0 6px"><button class="${tab === 'pvp' ? 'on' : ''}" onclick="Planner.monTab('pvp')">PvP</button><button class="${tab === 'pve' ? 'on' : ''}" onclick="Planner.monTab('pve')">PvE · raids</button></div>`;
+  h += `<div class="tabs sub seg montabs" style="margin:10px 0 6px"><button class="${tab === 'pvp' ? 'on' : ''}" onclick="Planner.monTab('pvp')">PvP</button><button class="${tab === 'pve' ? 'on' : ''}" onclick="Planner.monTab('pve')">Raids</button></div>`;
   if (tab === 'pve') return h + pveTab(m, id, known, o);
   if (!noHead) {                                 // moves card: under a scan the scan's own moves rows stand in for it
     const cur = (known || []).filter(Boolean), secondOpen = !known || cur.length < 3;
@@ -2224,8 +2235,10 @@ function monInner(m, id, noHead) {
     const cnt = PVP.counts ? PVP.counts(APP.moves, cur.length ? cur : rec) : null;
     if (cnt && cnt.charged.length) mrows.push(['Counts', `<b>${esc(mvName(cnt.fast))}</b> ${cnt.gain} energy per ${cnt.turns} turn${cnt.turns > 1 ? 's' : ''} → ${cnt.charged.map(c => `<b>${esc(mvName(c.id))}</b> in ${c.first} <span class="dim">(${c.seq}, ${c.turns} turns)</span>`).join(' · ')}`]);
     if (secondOpen && e.thirdMove) mrows.push(['Unlock', `2nd charged move: ${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · or walk ${e.buddy} km as buddy` : ''}`]);
-    h += `<div class="sec">Moves <small>${src}</small></div><div class="team card" style="cursor:default">${kv(mrows)}${moveUsage(id, known || [])}${raidUsage(id, known || [])}</div>`;
+    h += `<div class="sec">Moves <small>${src}</small></div><div class="team card" style="cursor:default">${kv(mrows)}</div>`;
   }
+  h += moveUsage(id, known || []);
+  if (scanR && scanR.combos.length) h += evoTable(scanR, bestOf2(scanR));   // where the evolution ranks: a PvP question
   {                                              // roster card
     const rrows = [
       ['Status', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${benched && st ? ' ' + chip('benched') : ''}${o && o.manual ? ' <span class="dim">added by hand</span>' : ''}`],
@@ -2510,17 +2523,6 @@ function raidCombos(id) {
   return out.map(x => Object.assign(x, {pct: Math.round(100 * x.dps / top)}));
 }
 const raidGrade = p => p >= 90 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D';
-function raidUsage(id, cur) {                  // collapsible table under the PvP usage box
-  if (!PVE) { loadPve(); return ''; }
-  const rows = raidCombos(id); if (!rows.length) return '';
-  cur = (cur || []).filter(Boolean);
-  const mine = x => x.f === cur[0] && cur.slice(1).includes(x.c);
-  const yours = rows.filter(mine), best = yours.length ? yours.reduce((a, b) => b.pct > a.pct ? b : a) : null;
-  const head = best ? `${best.pct}% · grade ${raidGrade(best.pct)}` : cur.length ? 'your set is not rated' : '';
-  return `<div class="note" style="margin:6px 0 0;cursor:pointer" onclick="Planner.toggleRaidUse()">${UI.raidUse ? '▾' : '▸'} Raid moves by damage${head ? ` <span class="dim">· yours ${esc(head)}</span>` : ''}</div>` +
-    (UI.raidUse ? `<div class="use raid">${rows.slice(0, 10).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('')}<div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, best pair = 100%, like Poké Genie's Moveset Rating. Which type you need depends on the boss: see Meta › Raids.</div></div>` : '');
-}
-function toggleRaidUse() { UI.raidUse = !UI.raidUse; renderMon(); }
 function monTab(k) { UI.monTab = k; renderMon(); const el = document.querySelector('#mon .montabs'); if (el) el.scrollIntoView({block: 'nearest'}); }
 function raidRowsHTML(rows, mine, n) {           // the ranked fast + charged pairs, shared by the moves card and the PvE tab
   return rows.slice(0, n).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('');
@@ -2543,7 +2545,7 @@ function pveTab(m, id, known, o) {             // generic raid-side page for any
   else h += `<div class="note">Outside the top attackers of every type. Fine for PvP, keep it out of raids.</div>`;
   // moves by damage
   h += `<div class="sec">Raid moves <small>${best ? 'best pair = 100%' : 'no rated pairs'}${yb ? ` · yours ${yb.pct}% grade ${raidGrade(yb.pct)}` : cur.length ? ' · your set is not rated' : ''}</small></div>`;
-  if (rows.length) h += `<div class="team card" style="cursor:default"><div class="use raid" style="margin:0">${raidRowsHTML(rows, mine, 8)}</div><div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, like Poké Genie's Moveset Rating. <em class="y">✓</em> on your copy.</div></div>`;
+  if (rows.length) h += `<div class="team card" style="cursor:default"><div class="use raid" style="margin:0">${raidRowsHTML(rows, mine, 8)}</div><div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, the same scale as the usual moveset ratings. <em class="y">✓</em> on your copy.</div></div>`;
   // your copy, for raids: the highest-CP scan of the species, any league
   const mineScan = pveOwned(e);
   if (mineScan) { const lv = mineScan.level || (mineScan.combos && mineScan.combos.length ? bestOf2(mineScan)[0] : null);
@@ -2730,8 +2732,8 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, toggleUse, coverage, coverageWith, closeSheet,
-                  metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, toggleRaidUse, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
+window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, coverage, coverageWith, closeSheet,
+                  metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
 route(); loadCups(); loadChanges(); loadEvo();

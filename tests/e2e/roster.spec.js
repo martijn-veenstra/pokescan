@@ -74,3 +74,38 @@ test('the roster holds every scan: import button, spare copies, archive, favouri
   await expect(page.locator('#mon')).toContainText('Best IVs for');
   expect(errors).toEqual([]);
 });
+
+/* A scanned copy's page has one head: the species' types, weaknesses and meta rank sit in the scan's card, one ⋮ menu
+   holds both the scan's and the species' items, and the tabs (PvP, Raids) carry the move lists in cards of their own. */
+test('a scan page has one head, one menu, and the move lists in the PvP and Raids tabs', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('roster'); localStorage.setItem('league', 'great'); });
+  const errors = await openApp(page, '#/roster');
+  const key = await page.evaluate(() => {
+    const b = DATA.stats['RHYPERIOR'][0], lv = 30, m = cpmAt(lv); const r = { species: 'RHYPERIOR', cp: calcCP(b, 10, 10, 10, m), hp: calcHP(b, 10, m), level: lv, dust: null, combos: [[lv, 10, 10, 10, b]], appraisal: [10, 10, 10], txt: '', cpCandidates: [], moves: ['MUD_SLAP', 'SUPER_POWER'], movesSeen: true };
+    r.key = `RHYPERIOR|${r.cp}|${r.hp}|${lv}|`; results.length = 0; results.push(r); save(); Planner.refresh(); return r.key; });
+  await page.evaluate(() => Planner.monTab('pvp'));
+  await page.evaluate(k => Planner.openScan(k), key);
+  const mon = page.locator('#mon');
+  await expect(mon.locator('.scanhero')).toContainText('Rhyperior');
+  await expect(mon.locator('.scanhero .typerow').first()).toContainText(/ground[\s\S]*rock/);
+  await expect(mon.locator('.scanhero .metar')).toContainText(/meta #\d+/);
+  await expect(mon.locator('.scanhero')).toContainText(/weak to[\s\S]*water/);
+  await expect(mon.locator('.detail .dh')).toHaveCount(0);                // no second head card
+  await expect(mon).not.toContainText('in the meta');
+  await expect(mon.locator('.ctx .dots')).toHaveCount(1);                 // one ⋮ menu
+  const items = await mon.locator('.monhead .ctx .menu button').allInnerTexts();
+  expect(items).toEqual(expect.arrayContaining(['Mark as Shadow', 'Try in builder', 'Add to wanted']));
+  expect(items).not.toContain('I own one (no scan)');
+  expect(items[items.length - 1]).toBe('Delete scan');
+  // PvP: the meta-usage table is open in its own card, the raid list is not here
+  await expect(mon.locator('.montabs button')).toHaveText(['PvP', 'Raids']);
+  await expect(mon).toContainText('Moves by meta usage');
+  expect(await mon.locator('.use .ur').count()).toBeGreaterThan(2);
+  await expect(mon).not.toContainText('Raid moves by damage');
+  // Raids: the raid moves card, with the scan's own moves ticked
+  await mon.locator('.montabs button:has-text("Raids")').click();
+  await expect(mon).toContainText('Raid moves');
+  await expect(mon).not.toContainText('Moves by meta usage');
+  await page.evaluate(() => Planner.monTab('pvp'));
+  expect(errors).toEqual([]);
+});

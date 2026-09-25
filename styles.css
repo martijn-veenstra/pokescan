@@ -98,6 +98,7 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
 .ivrow .okc{color:var(--green);font-weight:700}.g .pctc{color:var(--green)}.m .pctc{color:var(--gold)}.b .pctc{color:var(--coral)}
 .scanhero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 15px;margin:8px 0}
 .scanhero .bars{margin-top:10px}.scanhero .kpis{margin-top:10px}
+.scanhero .typerow{margin-top:8px}.scanhero .typerow+.typerow{margin-top:6px}.typerow .metar{margin-left:auto;font-size:12.5px;white-space:nowrap}
 .gloss{font-size:12px;color:var(--dim);line-height:1.5;margin:6px 0 0}
 .kv{display:grid;grid-template-columns:78px minmax(0,1fr);gap:9px 12px;align-items:start;font-size:13.5px;margin-top:12px;line-height:1.45}
 .kv .k{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:3px}.kv .v{min-width:0}.kv .v .mv{margin:0}.kv .v b{font-weight:600}.kv .v .okc{color:var(--green);font-weight:700}

@@ -98,7 +98,7 @@ test('Oranguru: a wild spawn says so, with the weather that boosts it; a legenda
 test('no page names another app or site', async ({ page }) => {
   const errors = await openApp(page, '#/today');
   await page.evaluate(() => Sources.load(true));
-  const rx = /pvpoke|leek ?duck|scrapedduck|pokeminers|pokebattler|silph|gamepress/i;
+  const rx = /pvpoke|leek ?duck|scrapedduck|pokeminers|pokebattler|silph|gamepress|pok[eé] ?genie/i;
   const seen = [];
   for (const h of ['#/today', '#/builder', '#/teams', '#/roster', '#/meta', '#/rank', '#/raids', '#/scans', '#/matchups', '#/battles', '#/pro', '#/mon/oranguru', '#/mon/ninetales_shadow', '#/mon/azumarill']) {
     await page.evaluate(h => Planner.nav(h), h);
@@ -106,6 +106,15 @@ test('no page names another app or site', async ({ page }) => {
     const text = await page.evaluate(() => document.querySelector('.view.on').innerText + ' ' + [...document.querySelectorAll('.view.on a[href]')].map(a => a.href).join(' '));
     const m = text.match(rx); if (m) seen.push(`${h}: ${text.slice(Math.max(0, m.index - 60), m.index + 40)}`);
   }
+  // the Raids tab of a species page too (its raid-moves note used to name another app)
+  await page.evaluate(() => Planner.monTab('pve'));
+  for (const h of ['#/mon/azumarill', '#/mon/oranguru']) {
+    await page.evaluate(h => Planner.nav(h), h);
+    await expect(page.locator('#mon')).toContainText('Raid moves');
+    const text = await page.evaluate(() => document.querySelector('.view.on').innerText);
+    const m = text.match(rx); if (m) seen.push(`${h} Raids: ${text.slice(Math.max(0, m.index - 60), m.index + 40)}`);
+  }
+  await page.evaluate(() => Planner.monTab('pvp'));
   // the help sheet and the menu too
   const help = await page.evaluate(() => document.body.innerText);
   const hm = help.match(rx); if (hm) seen.push(`body: ${help.slice(Math.max(0, hm.index - 60), hm.index + 40)}`);

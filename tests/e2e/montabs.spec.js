@@ -35,8 +35,8 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   await expect(mon).toContainText('In your roster');
   await expect(mon.locator('button:has-text("Update with a new scan")')).toBeVisible();
   // PvE tab: raid moves by damage, the attacker ranking, the boss weaknesses
-  await mon.locator('.montabs button:has-text("PvE")').click();
-  await expect(mon.locator('.montabs button.on')).toContainText('PvE');
+  await mon.locator('.montabs button:has-text("Raids")').click();
+  await expect(mon.locator('.montabs button.on')).toContainText('Raids');
   await expect(mon).toContainText('As a raid attacker');
   await expect(mon).toContainText('Raid moves');
   await expect(mon.locator('.use.raid .ur').first()).toBeVisible();
@@ -45,7 +45,7 @@ test('a Pokémon you do not own gets the species page with PvP and PvE tabs; an 
   await expect(mon).not.toContainText('Against the common Pokémon');
   // the tab sticks across Pokémon; back to PvP
   await page.evaluate(() => Planner.openMon('azumarill'));
-  await expect(mon.locator('.montabs button.on')).toContainText('PvE');
+  await expect(mon.locator('.montabs button.on')).toContainText('Raids');
   await mon.locator('.montabs button:has-text("PvP")').click();
   // an owned copy: the update button is there and hands the next import to that card
   await page.evaluate(() => { const b = DATA.stats['AZUMARILL'][0], lv = 30, m = cpmAt(lv); const r = { species: 'AZUMARILL', cp: calcCP(b, 8, 15, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 8, 15, 15, b]], appraisal: [8, 15, 15], txt: '', cpCandidates: [] }; r.key = `AZUMARILL|${r.cp}|${r.hp}|${lv}|`; results.push(r); save(); render(); Planner.refresh(); Planner.openMon('azumarill'); });
