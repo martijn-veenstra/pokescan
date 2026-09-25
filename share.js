@@ -48,6 +48,10 @@ async function fromScan(file, cv) {
   status(`${file.name}: reading with Claude…`);
   try {
     const data = await ask(await shrink(cv, 1568));
+    if (data && (data.kind === 'status' || data.kind === 'appraisal') && data.pokemon && typeof applyVisionScan === 'function') {
+      const placed = applyVisionScan(data.pokemon);   // what Claude read goes onto the card, like an on-device read would
+      if (placed) { gain('note', `read by Claude: ${placed.what}`); status(`${file.name}: ${placed.what}`); if (typeof toast === 'function') toast(`Read by Claude · ${placed.what}`); return true; }
+    }
     const card = route(data, file);
     gain('note', `read by Claude: ${card.line}`);
     pushCard(card); render();

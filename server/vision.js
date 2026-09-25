@@ -26,6 +26,14 @@ the facts listed below. Answer with ONE JSON object and nothing else, no markdow
     "quote": the taunt text as written | null,
     "pokemon": [names visible, if any]
   },
+  "pokemon": {                      // only for kind status or appraisal, else null
+    "name": the species as the game shows it, form in parentheses when visible | null,
+    "cp": the CP number | null when it is not on screen (a screen scrolled down to the attacks),
+    "hp": current HP | null, "hpMax": maximum HP (the number after the slash) | null,
+    "fast": the fast attack's name as shown | null, "charged": [the charged attacks' names as shown, 0..2],
+    "newAttack": true when the NEW ATTACK button to unlock a second charged attack is visible, else false,
+    "ivs": [attack, defense, hp], each 0..15, only on the appraisal overlay and only when the bars are clearly readable | null
+  },
   "summary": one short sentence about what the screenshot shows,
   "notes": []                       // only for a recording (several frames): see below
 }

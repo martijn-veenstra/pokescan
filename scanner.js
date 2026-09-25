@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.10';
+const APP_VERSION='10.11';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -505,7 +505,9 @@ function allMoves(){                               // every move in the league d
   const f=[],c=[]; for(const [k,v] of Object.entries(APP.moves||{})) (v.e>0?f:c).push(k); return {fast:f,charged:c};
 }
 function readMovesFor(species, id, txt){
-  const e=id?APP.pokemon[id]:allMoves(), t=normTxt(txt);
+  const e=id?APP.pokemon[id]:allMoves(); let t=normTxt(txt);
+  const ft=((DATA.stats[species]||[])[0]||[]).slice(3,5).filter(Boolean).map(x=>String(x).toLowerCase());   // the type label, e.g. " fighting psychic "
+  if(ft.length){ const lab=' '+ft.join(' ')+' ', i=t.indexOf(lab); if(i>=0) t=t.slice(0,i)+' '+t.slice(i+lab.length); }
   const pos=m=>{ const n=APP.moves[m]?normTxt(APP.moves[m].n).trim():''; if(!n) return -1; const i=t.indexOf(' '+n+' '); return i; };
   const fast=e.fast.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
   const ch=e.charged.map(m=>[pos(m),m]).filter(x=>x[0]>=0).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
@@ -524,6 +526,51 @@ function applyMoves(r, mv){                        // merge what a moves screen 
   r.moves=next; if(mv.second!==undefined) r.secondMove=mv.second; r.movesSeen=Date.now();
   if(changed) r.seenAt=Date.now();                  // "Newest first" puts a card an import just changed on top
   return changed;
+}
+/* ---------- a status screen the on-device reader missed, read by Claude (PokeScan Pro): put what it read on the card ----------
+   p = {name, cp, hp, hpMax, fast, charged:[..], newAttack}. The card being updated from its page comes first, then the same
+   copy by CP and HP, then the only card of that species; a readable CP and HP without any such card make a new one. */
+function visionSpecies(name){
+  const base=String(name||'').replace(/\(.*?\)/g,'').replace(/^(mega|shadow|purified)\s+/i,'').trim().toUpperCase();
+  const k=base.replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return DATA.stats[k]?k:DATA.stats[k.replace(/_/g,'')]?k.replace(/_/g,''):null;
+}
+function visionMoves(sp, p){
+  const byName={}; for(const [k,v] of Object.entries(APP.moves||{})) byName[normTxt(v.n).trim()]=k;
+  const id=(k=>k&&normTxt(k).trim())(p.fast), fast=id&&byName[id]&&APP.moves[byName[id]].e>0?byName[id]:null;
+  const charged=(p.charged||[]).map(n=>byName[normTxt(n).trim()]).filter(k=>k&&APP.moves[k].e<0).slice(0,2);
+  if(!fast&&!charged.length) return null;
+  const pid=pvpokeIdFor(sp,(DATA.stats[sp]||[])[0]);
+  return {id:pid&&APP.pokemon[pid]?pid:null, fast, charged, second:charged.length>=2?true:(p.newAttack?false:undefined), found:(fast?1:0)+charged.length};
+}
+function applyVisionScan(p){                      // returns {key, what} or null when nothing could be placed
+  const sp=visionSpecies(p&&p.name); if(!sp) return null;
+  const hp=p.hpMax||p.hp||null, mv=visionMoves(sp,p), live=results.filter(x=>!x.superseded);
+  const upd=UPDATE?results.find(x=>x.key===UPDATE):null;
+  const tid=upd?pvpokeIdFor(upd.species,(DATA.stats[upd.species]||[])[0]):null, fam=upd&&(upd.species===sp||(tid&&evosOf(tid).map(x=>x.split('_')[0].toUpperCase()).includes(sp)));
+  const same=live.filter(x=>x.species===sp);
+  const target=(fam?upd:null)||sameCopy(sp,p.cp||null,hp)||(same.length===1?same[0]:null);
+  const solved=p.cp&&hp?solve(sp,p.cp,hp,null,null):[];
+  if(target){
+    if(solved.length&&(p.cp!==target.cp||sp!==target.species)){   // a power-up or an evolution of that card
+      const s={species:sp,cp:p.cp,hp,combos:solved,dust:null,txt:''};
+      if(updateCard(target,s,mv)) return {key:target.key,what:`updated the ${target.species} card: ${target.cp} CP`};
+    }
+    target.seenAt=Date.now();
+    const changed=mv?applyMoves(target,mv):false; save(); render();
+    if(changed){ gain('moves',target.species); if(window.Planner) Planner.onMovesScan(target); }
+    const names=mv?[mv.fast,...mv.charged].filter(Boolean).map(m=>APP.moves[m].n).join(' · '):'';
+    return {key:target.key,what:mv?`${target.species} moves: ${names}${changed?'':' (unchanged)'}`:`same ${target.species} card, nothing new`};
+  }
+  if(solved.length){
+    const lv=[...new Set(solved.map(c=>c[0]))];
+    const s={species:sp,cp:p.cp,hp,level:lv.length===1?lv[0]:null,dust:null,combos:solved,txt:'',cpCandidates:[p.cp]};
+    s.key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|`;
+    if(mv) applyMoves(s,mv);
+    s.seenAt=Date.now(); results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s);
+    return {key:s.key,what:`new card: ${sp} ${p.cp} CP`};
+  }
+  return null;
 }
 /* ---------- one card per physical Pokémon ----------
    Identity = species + CP + HP (both as shown on the status screen). Every path (status screen, appraisal, attacks screen,

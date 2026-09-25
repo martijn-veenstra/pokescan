@@ -100,3 +100,27 @@ test('free plan: the screenshot stays on the device and a Pro teaser appears ins
   expect((await page.evaluate(() => JSON.parse(localStorage.getItem('scanlog'))[0].msg))).toContain('PokeScan Pro reads battle results');
   expect(errors).toEqual([]);
 });
+
+/* When the on-device reader misses a status screen, Claude's read of it is not just a note: its name, HP and attacks go
+   onto the matching card (here a Meditite whose screen was scrolled down, so the CP is off screen), and a readable CP
+   and HP of a Pokémon without a card make a new card. */
+test('Pro: a status screen Claude reads updates the card, or makes one', async ({ page }) => {
+  const answers = [];
+  const { posts, errors } = await setup(page, 'pro', answers);
+  await page.evaluate(() => { const b = DATA.stats['MEDITITE'][0], lv = 10, m = cpmAt(lv), r = { species: 'MEDITITE', cp: calcCP(b, 5, 13, 12, m), hp: calcHP(b, 12, m), level: lv, dust: null, combos: [[lv, 5, 13, 12, b]], appraisal: [5, 13, 12], txt: '', cpCandidates: [] }; r.key = `MEDITITE|${r.cp}|${r.hp}|${lv}|`; results.length = 0; results.push(r); save(); Planner.refresh(); });
+  answers.push({ kind: 'status', confidence: 0.9, pokemon: { name: 'Meditite', cp: null, hp: 48, hpMax: 48, fast: 'Confusion', charged: ['Psyshock'], newAttack: true }, summary: 'Status screen for a Meditite' });
+  await share(page, 'IMG_2167.png'); await done(page);
+  expect(posts).toHaveLength(1);
+  expect(await page.evaluate(() => results.map(r => [r.species, r.moves, r.secondMove]))).toEqual([['MEDITITE', ['CONFUSION', 'PSYSHOCK'], false]]);
+  await expect(page.locator('#toast')).toContainText(/Read by Claude · MEDITITE moves: Confusion · Psyshock/);
+  // a Pokémon with no card yet: CP and HP make one
+  const azu = await page.evaluate(() => { const b = DATA.stats['AZUMARILL'][0], m = cpmAt(20); return { cp: calcCP(b, 8, 15, 15, m), hp: calcHP(b, 15, m) }; });
+  answers.push({ kind: 'status', confidence: 0.9, pokemon: { name: 'Azumarill', cp: azu.cp, hp: azu.hp, hpMax: azu.hp, fast: 'Bubble', charged: ['Ice Beam', 'Play Rough'], newAttack: false }, summary: 'Status screen for an Azumarill' });
+  await share(page, 'IMG_3000.png'); await done(page);
+  const a = await page.evaluate(() => results.find(r => r.species === 'AZUMARILL'));
+  expect(a).toBeTruthy();
+  expect(a.cp).toBe(azu.cp);
+  expect(a.moves).toEqual(['BUBBLE', 'ICE_BEAM', 'PLAY_ROUGH']);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('shares') || '[]').length)).toBe(0);   // placed on cards, no leftover note card
+  expect(errors).toEqual([]);
+});
