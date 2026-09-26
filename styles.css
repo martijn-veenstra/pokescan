@@ -552,3 +552,6 @@ a.bmon.mine{text-decoration-color:rgba(72,213,151,.6)}
 .evx .no{color:var(--coral);font-size:15px}.evx .xl{color:var(--gold);font-weight:700}
 .evx .evm{margin-top:5px;font-size:11.5px}.evx.over{opacity:.8}
 .team.evot .warnt{color:var(--gold);margin-bottom:6px}
+
+.team .work{margin-top:4px;font-size:12.5px;color:var(--dim)}.team .work b{color:var(--ink);font-weight:600}.team .work .short{color:var(--coral)}
+.note.have input,.have input{width:84px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:4px 6px}

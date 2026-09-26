@@ -3,7 +3,7 @@
    pvpRank, costTo, maxLevelUnderCap, pct, bestOf2, planFor, refixScan, toggleFav, toggleBench, shareFile, status, pvpokeIdFor, evoBaseStats, showTab. */
 (function () {
 'use strict';
-const ROSTER = Object.assign({owned: {}, pending: {}, candidates: {}, tagged: {}, moves: {}, exclude: [], done: {}, snooze: {}, log: [], seen: {}},
+const ROSTER = Object.assign({owned: {}, pending: {}, candidates: {}, tagged: {}, moves: {}, exclude: [], done: {}, snooze: {}, log: [], seen: {}, have: {}},
                              JSON.parse(localStorage.getItem('roster') || '{}'));
 const UI = {selected: null, showAll: false, expect: null, mon: null, scan: null, monFrom: 'roster',
             build: JSON.parse(localStorage.getItem('build') || '{"slots":[null,null,null],"moves":{}}'), metaPanel: 'build', rankQ: '', rankType: '', rankLimit: 50};
@@ -383,7 +383,7 @@ function teamRow(m, ids, name, extra, badge) {  // one compact line per team; ta
   const {L} = m, ev = L.evaluate(ids), owned = ids.every(id => ownership(m, id) === 'owned');
   const weak = coverText(ev, L);
   const members = ids.map(id => esc(nm(id))).join(' / '), rv = reviewFor(ids);
-  return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc${badge ? ' rk' : ''}">${badge || ev.score.toFixed(0)}</span>${trio(ids, m)}<span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${owned ? ' <span class="chip ok mini">you can build this</span>' : ''}${rv ? `<div class="ai">✦ ${esc(verdictOf(rv))}</div>` : ''}${extra ? ' · ' + extra : ''}</div></span><span class="go">›</span></div>`;
+  return `<div class="team row" onclick="Planner.openTeam(${attr(ids)},${attr(name)})"><span class="sc${badge ? ' rk' : ''}">${badge || ev.score.toFixed(0)}</span>${trio(ids, m)}<span class="tx"><span class="nm">${name ? esc(name) : members}</span><div class="dt">${name ? members + ' · ' : ''}${weak}${owned && !(extra && extra.startsWith('<div')) ? ' <span class="chip ok mini">you can build this</span>' : ''}${rv ? `<div class="ai">✦ ${esc(verdictOf(rv))}</div>` : ''}${extra ? (extra.startsWith('<div') ? extra : ' · ' + extra) : ''}</div></span><span class="go">›</span></div>`;
 }
 function coverText(ev, L) {                   // one plain line per team: how many of the common Pokémon it has a winning answer to
   const total = L.meta.length, beats = total - ev.holes.length, pct = beats / total;
@@ -582,6 +582,74 @@ function searchBlock(ids) {                    // for a team page: one string fo
 }
 
 /* ---------- Teams page and team detail ---------- */
+/* ---------- what a team still costs: stardust, candy and XL against what you have ----------
+   Status screens show the player's stardust and the family's candy and XL (read by readHave in scanner.js); the newest
+   read wins, since both are spent as you power up. A family nobody has scanned since then is "unknown", and counts as
+   affordable so nothing disappears before it has been scanned. */
+function noteHave(h) {
+  if (!h) return; const t = Date.now(), H = ROSTER.have = ROSTER.have || {};
+  if (h.dust != null) H.dust = {v: h.dust, t};
+  if (h.family && (h.candy != null || h.xl != null)) { const f = H.fam = H.fam || {}, cur = f[h.family] || {};
+    f[h.family] = {candy: h.candy != null ? h.candy : (cur.candy ?? null), xl: h.xl != null ? h.xl : (cur.xl ?? null), t}; }
+  saveRoster(); dirty = true;
+}
+function setHave(key, field, val) {            // typed in by hand: a family's candy or XL, or (key null) the stardust
+  const v = String(val).trim() === '' ? null : parseInt(String(val).replace(/[^0-9]/g, ''), 10), H = ROSTER.have = ROSTER.have || {};
+  if (!key) H.dust = v == null ? undefined : {v, t: Date.now(), hand: true};
+  else { const f = H.fam = H.fam || {}, cur = f[key] || {candy: null, xl: null}; cur[field] = Number.isFinite(v) ? v : null; cur.t = Date.now(); cur.hand = true; f[key] = cur; }
+  saveRoster(); refresh();
+}
+function familyKey(id) {                        // the candy a Pokémon uses is named after the first of its family: Medicham → MEDITITE
+  let cur = String(id || '').replace(/_shadow$/, '');
+  for (let i = 0; i < 4; i++) { const pr = (APP.prevo || {})[cur]; if (!pr) break; cur = pr.replace(/_shadow$/, ''); }
+  return cur.split('_')[0].toUpperCase();
+}
+const haveOf = key => ((ROSTER.have || {}).fam || {})[key] || null;
+const kdust = d => d >= 1000 ? `${Math.round(d / 1000)}k` : String(d);
+function memberWork(m, id) {                    // what one member still needs before it battles, and what that costs
+  const o = m.own[id], a = m.auto[id], e = APP.pokemon[id];
+  const w = {id, fam: familyKey(a ? a.fromId : id), dust: 0, candy: 0, xl: 0, acts: [], ready: false, known: true};
+  if (o && !o.manual) {
+    if (o.toLevel > o.level) { const c = costTo(o.level, o.toLevel); w.dust += c.dust; w.candy += c.candy; w.xl += c.xl; w.acts.push(`${nm(id)} L${o.level} → ${o.toLevel}`); }
+    if (o.scan && o.scan.secondMove === false) { const c = e.thirdMove || [75000, 75]; w.dust += c[0]; w.candy += c[1]; w.acts.push(`${nm(id)} 2nd move`); }
+    const rd = readiness(m, id); w.ready = !!(rd && rd.ready);
+    if (!w.ready && !w.acts.length) w.acts.push(`${nm(id)} ${rd && rd.items[0] ? rd.items[0].t.toLowerCase() : 'moves'}`);
+  } else if (a) {
+    const br = evoBranch(a.fromId, id), c = costTo(a.level, a.toLevel);
+    w.candy += (br && br.candy) || 0; w.dust += c.dust; w.candy += c.candy; w.xl += c.xl;
+    w.acts.push(`evolve your ${a.from}${a.toLevel > a.level ? ` · L${a.level} → ${a.toLevel}` : ''}`);
+  } else { w.known = false; w.acts.push(o ? `${nm(id)} not scanned` : `get ${nm(id)}`); }
+  return w;
+}
+function teamWork(m, ids) {
+  const ws = ids.map(id => memberWork(m, id)), H = ROSTER.have || {}, fams = {};
+  let dust = 0;
+  for (const w of ws) { dust += w.dust; const f = fams[w.fam] = fams[w.fam] || {candy: 0, xl: 0, ids: []}; f.candy += w.candy; f.xl += w.xl; f.ids.push(w.id); }
+  const short = [], unknown = [];
+  for (const [k, f] of Object.entries(fams)) {
+    if (!f.candy && !f.xl) continue;
+    const h = haveOf(k), who = f.ids.map(nm).join(' + ');
+    if (f.candy) { if (!h || h.candy == null) unknown.push(nice(k)); else if (f.candy > h.candy) short.push(`${who} ${f.candy - h.candy} more candy`); }
+    if (f.xl) { if (!h || h.xl == null) unknown.push(nice(k) + ' XL'); else if (f.xl > h.xl) short.push(`${who} ${f.xl - h.xl} more XL`); }
+  }
+  const dh = H.dust ? H.dust.v : null;
+  if (dust && dh != null && dust > dh) short.push(`${kdust(dust - dh)} more stardust`);
+  const candy = Object.values(fams).reduce((n, f) => n + f.candy, 0), xl = Object.values(fams).reduce((n, f) => n + f.xl, 0);
+  return {ws, dust, candy, xl, short, unknown: [...new Set(unknown)], dustUnknown: !!dust && dh == null, ready: ws.every(w => w.ready), missing: ws.some(w => !w.known)};
+}
+const TEAM_FILTERS = [['ready', 'Ready now', 'at the cap with the right moves'], ['afford', 'Affordable', 'the power-ups fit your stardust and candy'], ['all', 'All', 'everything you can build']];
+function teamFilter() { if (!UI.tfilt) { try { UI.tfilt = localStorage.getItem('tfilt') || 'afford'; } catch { UI.tfilt = 'afford'; } } return UI.tfilt; }
+function setTeamFilter(k) { UI.tfilt = k; try { localStorage.setItem('tfilt', k); } catch {} renderTeams(); }
+const passes = (tw, f) => f === 'ready' ? tw.ready : f === 'afford' ? !tw.short.length && !tw.missing : true;
+function workLine(tw) {                          // one line under a team: ready, or what is left to do and whether you have it
+  if (tw.ready) return `<div class="work"><span class="okc">✓</span> ready now: nothing to spend</div>`;
+  const acts = tw.ws.filter(w => !w.ready || w.acts.length).flatMap(w => w.acts);
+  const cost = [tw.dust ? `${kdust(tw.dust)} dust` : '', tw.candy ? `${tw.candy} candy` : '', tw.xl ? `${tw.xl} XL` : ''].filter(Boolean).join(' · ');
+  const verdict = tw.missing ? '' : tw.short.length ? `<span class="short">short: ${esc(tw.short.join(', '))}</span>`
+    : tw.unknown.length || tw.dustUnknown ? `<span class="dim">${tw.unknown.length ? `${esc(tw.unknown.join(', '))} candy unknown` : 'stardust unknown'} · scan any of them</span>`
+    : cost ? `<span class="okc">✓</span> you have it` : '';
+  return `<div class="work">${esc(acts.join(' · '))}${cost ? ` · <b>${cost}</b>` : ''}${verdict ? ` · ${verdict}` : ''}</div>`;
+}
 function renderTeams() {
   const el = $('teams'); if (!el) return;
   try { renderTeamsInner(el); } catch (e) { el.innerHTML = errorCard('Teams', e); }
@@ -594,27 +662,36 @@ function secondTeam(m, ids) {                   // best trio sharing no species 
 }
 function renderTeamsInner(el) {
   if (!APP || !window.PVP) { el.innerHTML = '<div class="note">Loading battle data…</div>'; return; }
-  const m = M(), {rep} = m, best = rep.today[0];
+  const m = M(), {rep} = m, F = teamFilter(), H = ROSTER.have || {};
   const parties = Object.entries(ROSTER.tagged).filter(([, v]) => v.length === 3 && v.every(x => APP.pokemon[x]));
-  let h = '';
-  if (best) {
-    const ids = best.members.map(x => x.speciesId);
-    h += `<div class="sec">Recommended <small>best of ${rep.todayAll.length >= 12 ? '12+' : rep.todayAll.length} buildable from your roster</small></div>` + colHead(teamCols(m)) + teamRow(m, ids, null, 'run this one');
-  } else h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under ${LEAGUE.cp} CP, or add them by name in Roster.</div>`;
+  const all = rep.todayAll.map(t => ({t, ids: t.members.map(x => x.speciesId)})).map(x => Object.assign(x, {tw: teamWork(m, x.ids)}));
+  const pass = all.filter(x => passes(x.tw, F)), top = pass[0] || null, fl = TEAM_FILTERS.find(f => f[0] === F);
+  let h = `<div class="tchips mf" style="margin:0 0 6px">${TEAM_FILTERS.map(([k, l]) => `<span class="chip ${F === k ? 'sel' : ''}" onclick="Planner.setTeamFilter('${k}')">${l} <span style="opacity:.7">${all.filter(x => passes(x.tw, k)).length}</span></span>`).join('')}</div>`;
+  const fams = Object.keys(H.fam || {}).length;
+  h += `<div class="note have">Stardust <input id="hdust" inputmode="numeric" placeholder="type it" value="${H.dust ? H.dust.v : ''}" onchange="Planner.setHave(null,'dust',this.value)"> · candy known for ${fams} famil${fams === 1 ? 'y' : 'ies'} · read off your status screenshots${H.dust && !H.dust.hand ? `, last ${when(H.dust.t)}` : ''}</div>`;
+  if (!all.length) h += `<div class="empty"><b>No team yet.</b><br>Scan at least three Pokémon at or under ${LEAGUE.cp} CP, or add them by name in Roster.</div>`;
+  else {
+    h += `<div class="sec">Best you can run <small>${fl[1].toLowerCase()}: ${fl[2]}</small></div>` + colHead(teamCols(m));
+    if (top) h += teamRow(m, top.ids, null, workLine(top.tw));
+    else h += `<div class="note">Nothing you can build is ${F === 'ready' ? 'ready yet: every trio still needs a power-up or a move' : 'affordable yet with the stardust and candy the app knows of'}. <a href="#" onclick="Planner.setTeamFilter('all');return false">Show all</a>.</div>`;
+    const best = all[0];
+    if (top && best !== top) h += `<div class="note">Better once you have the resources: <b>${esc(best.ids.map(nm).join(' / '))}</b> scores ${best.t.teamScore.toFixed(0)} (${esc(best.tw.short.join(', ') || best.tw.ws.flatMap(w => w.acts).join(', '))}).</div>`;
+  }
   h += `<div class="sec">Your in-game parties <small>as you built them in the game</small></div>`;
-  h += parties.length ? colHead(teamCols(m)) + parties.map(([name, v]) => teamRow(m, v, name)).join('') : `<div class="note">None yet. Build a trio in the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a>, give it a name, and it lands here.</div>`;
-  if (best) {
-    const ids = best.members.map(x => x.speciesId), second = secondTeam(m, ids);
-    if (second) {
-      const sids = second.members.map(x => x.speciesId), extra = sids.filter(id => !m.own[id]).map(nm);
-      h += `<div class="sec">Second team, no overlap <small>for rotating</small></div>` + colHead(teamCols(m)) + teamRow(m, sids, null, extra.length ? `once you have ${esc(extra.join(', '))}` : '');
-    }
-    const others = rep.todayAll.filter(t => t.members.map(x => x.speciesId).join() !== ids.join() && (!second || t.members.map(x => x.speciesId).join() !== second.members.map(x => x.speciesId).join()));
-    if (others.length) {
-      const shown = UI.teamsAll ? others : others.slice(0, 5);
-      h += `<div class="sec">More from your roster <small>other buildable trios, best first</small></div>` + colHead(teamCols(m)) + shown.map(t => teamRow(m, t.members.map(x => x.speciesId), null)).join('');
-      if (others.length > 5) h += `<div class="note" style="cursor:pointer" onclick="Planner.toggleTeamsAll()">${UI.teamsAll ? '▾ show fewer' : `▸ show ${others.length - 5} more`}</div>`;
-    }
+  h += parties.length ? colHead(teamCols(m)) + parties.map(([name, v]) => teamRow(m, v, name, workLine(teamWork(m, v)))).join('') : `<div class="note">None yet. Build a trio in the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a>, give it a name, and it lands here.</div>`;
+  // what to do next: trios better than what you can run, reached by work you have not done yet, and Pokémon to get
+  const base = top ? top.t.teamScore : 0, next = [];
+  for (const x of all) { if (x === top || passes(x.tw, F) || x.t.teamScore <= base) continue; next.push({ids: x.ids, gain: x.t.teamScore - base, line: workLine(x.tw)}); if (next.length >= 3) break; }
+  for (const g of rep.gains || []) { if (g.bestTrio.teamScore <= base || next.length >= 5) continue; const ids = g.bestTrio.members.map(x => x.speciesId);
+    if (next.some(n => n.ids.join() === ids.join())) continue; const a = m.auto[g.speciesId];
+    next.push({ids, gain: g.bestTrio.teamScore - base, line: `<div class="work">${a ? `evolve your ${esc(a.from)} into ${esc(nm(g.speciesId))}` : `get ${esc(nm(g.speciesId))}`}</div>`}); }
+  next.sort((a, b) => b.gain - a.gain);
+  if (next.length) h += `<div class="sec">Worth building next <small>what lifts your team the most above the one you can run</small></div>` + colHead(teamCols(m)) + next.slice(0, 3).map(n => teamRow(m, n.ids, null, n.line, '+' + n.gain.toFixed(0))).join('');
+  const others = pass.filter(x => x !== top);
+  if (others.length) {
+    const shown = UI.teamsAll ? others : others.slice(0, 5);
+    h += `<div class="sec">More you can run <small>${fl[1].toLowerCase()}, best first</small></div>` + colHead(teamCols(m)) + shown.map(x => teamRow(m, x.ids, null, workLine(x.tw))).join('');
+    if (others.length > 5) h += `<div class="note" style="cursor:pointer" onclick="Planner.toggleTeamsAll()">${UI.teamsAll ? '▾ show fewer' : `▸ show ${others.length - 5} more`}</div>`;
   }
   h += `<div class="note">Tap a team for its roles, what it loses to, swaps and what its members still need.</div>`;
   el.innerHTML = h;
@@ -2274,6 +2351,8 @@ function monInner(m, id, scanR) {               // the species part; under a sca
       ['In teams', `${teamsIn} of ${rep.todayAll.length} buildable from your roster`],
     ];
     rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span><div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under ${LEAGUE.cp} CP; the catch string for a pre-evolution is under How to get</div>`]);
+    { const fk = familyKey(a ? a.fromId : id), hv = haveOf(fk);
+      rrows.push(['Candy', `<span class="have"><input inputmode="numeric" placeholder="?" value="${hv && hv.candy != null ? hv.candy : ''}" onchange="Planner.setHave('${fk}','candy',this.value)"> ${esc(nice(fk))} candy · <input inputmode="numeric" placeholder="?" value="${hv && hv.xl != null ? hv.xl : ''}" onchange="Planner.setHave('${fk}','xl',this.value)"> XL</span><div class="dim" style="font-size:12px">${hv ? `${hv.hand ? 'set by hand' : 'read from a status screen'} ${when(hv.t)}` : 'read off the next status screenshot of any of them, or type it'}</div>`]); }
     h += `<div class="sec">In your roster</div><div class="team card" style="cursor:default">${kv(rrows)}</div>`;
     h += ivCard(id);
   }
@@ -2762,7 +2841,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

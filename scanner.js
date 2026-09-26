@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.13';
+const APP_VERSION='10.14';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -234,6 +234,49 @@ async function dustFromPill(ctx, W, H){
   }
   return null;
 }
+/* stardust, candy and XL off a status screen. The recogniser reads the icons next to the numbers as stray characters
+   ("99.340" came out as "199.340"), so each number is read again on its own: the label words ("STARDUST", "MEDITITE
+   CANDY") are found by position, the row right above each is cut out, and only the digits' teal-grey is kept, which the
+   pink dust, the blue outline and the brown or beige candy icons never are. The first candy label on the stardust line
+   is the candy, the next one (beside it, or on the line below) the XL. */
+async function readHave(ctx, W, H, words, map){
+  const ws=(words||[]).map(w=>({t:String(w.text||'').toUpperCase().replace(/[^A-Z]/g,''), x0:w.bbox.x0*map.sx, x1:w.bbox.x1*map.sx, y0:w.bbox.y0*map.sy+map.oy, y1:w.bbox.y1*map.sy+map.oy})).filter(w=>w.t);
+  const dust=ws.find(w=>/^(STARDUST|STERRENSTOF)$/.test(w.t)); if(!dust) return null;
+  const labels=[]; ws.forEach((w,i)=>{ const p=ws[i-1]; if(/^(CANDY|SNOEP)$/.test(w.t) && p && DATA.stats[p.t] && Math.abs(p.y0-w.y0)<(w.y1-w.y0)) labels.push({sp:p.t, x0:p.x0, x1:w.x1, y0:Math.min(p.y0,w.y0), y1:Math.max(p.y1,w.y1)}); });
+  const lh=dust.y1-dust.y0, onLine=l=>Math.abs((l.y0+l.y1)/2-(dust.y0+dust.y1)/2)<lh;
+  const ci=labels.findIndex(onLine), candy=ci>=0?labels[ci]:null, xl=ci>=0?labels[ci+1]||null:null;
+  const wk=await getWorker();
+  const num=async lab=>{
+    const h=lab.y1-lab.y0, cx=(lab.x0+lab.x1)/2, hw=0.65*(lab.x1-lab.x0)+h;
+    const x0=Math.max(0,Math.round(cx-hw)), x1=Math.min(W,Math.round(cx+hw)), y0=Math.max(0,Math.round(lab.y0-4.6*h)), y1=Math.round(lab.y0-0.1*h);
+    if(x1-x0<8||y1-y0<8) return null;
+    const d=ctx.getImageData(x0,y0,x1-x0,y1-y0), w=x1-x0, hh=y1-y0, px=new Uint8Array(w*hh);
+    for(let i=0;i<w*hh;i++){ const r=d.data[i*4], g=d.data[i*4+1], b=d.data[i*4+2], lum=0.3*r+0.59*g+0.11*b; if(lum<165 && g-r>=12 && Math.abs(g-b)<=30) px[i]=1; }
+    // keep the digits only: blobs of digit height that do not touch the crop's edge (the card's border line, a speck of an icon)
+    const lab2=new Int32Array(w*hh).fill(-1), comps=[], q=new Int32Array(w*hh);
+    for(let s0=0;s0<w*hh;s0++){ if(!px[s0]||lab2[s0]>=0) continue; const id=comps.length; let hd=0,tl=0; q[tl++]=s0; lab2[s0]=id; let cx0=w,cx1=0,cy0=hh,cy1=0,n=0;
+      while(hd<tl){ const p=q[hd++], x=p%w, y=(p/w)|0; n++; if(x<cx0)cx0=x; if(x>cx1)cx1=x; if(y<cy0)cy0=y; if(y>cy1)cy1=y;
+        for(const nb of [p-1,p+1,p-w,p+w]){ if(nb<0||nb>=w*hh||!px[nb]||lab2[nb]>=0) continue; if(Math.abs(nb%w-x)>1) continue; lab2[nb]=id; q[tl++]=nb; } }
+      comps.push({x0:cx0,x1:cx1,y0:cy0,y1:cy1,n,h:cy1-cy0+1}); }
+    const inner=comps.filter(c=>c.x0>0&&c.y0>0&&c.x1<w-1&&c.y1<hh-1&&c.n>=20); if(!inner.length) return null;
+    const dh=Math.max(...inner.map(c=>c.h)), keep=new Set(); inner.forEach(c=>{ if(c.h>=0.55*dh) keep.add(comps.indexOf(c)); });
+    const ink=new Uint8Array(w*hh); let bx0=w,bx1=-1,by0=hh,by1=-1;
+    for(let i=0;i<w*hh;i++) if(px[i]&&keep.has(lab2[i])){ ink[i]=1; const x=i%w, y=(i/w)|0; if(x<bx0)bx0=x; if(x>bx1)bx1=x; if(y<by0)by0=y; if(y>by1)by1=y; }
+    if(bx1<0) return null;
+    const pad=6, cw=bx1-bx0+1+2*pad, chh=by1-by0+1+2*pad, cv=document.createElement('canvas'); cv.width=cw*2; cv.height=chh*2;
+    const tc=document.createElement('canvas'); tc.width=cw; tc.height=chh; const tg=tc.getContext('2d'), im=tg.createImageData(cw,chh);
+    for(let y=0;y<chh;y++) for(let x=0;x<cw;x++){ const sx=x+bx0-pad, sy=y+by0-pad, on=sx>=0&&sy>=0&&sx<w&&sy<hh&&ink[sy*w+sx]; const k=(y*cw+x)*4; im.data[k]=im.data[k+1]=im.data[k+2]=on?0:255; im.data[k+3]=255; }
+    tg.putImageData(im,0,0); const g2=cv.getContext('2d'); g2.imageSmoothingEnabled=true; g2.drawImage(tc,0,0,cw*2,chh*2);
+    let tx='';
+    for(const psm of ['7','8','10']){                  // one line; a lone digit ("5") is often only read as a single word or character
+      await wk.setParameters({tessedit_char_whitelist:'0123456789', tessedit_pageseg_mode:psm});
+      tx=((await wk.recognize(cv)).data.text||'').replace(/[^0-9]/g,''); if(tx) break; }
+    return tx&&tx.length<=9?parseInt(tx,10):null;
+  };
+  const out={dust:await num(dust), candy:candy?await num(candy):null, xl:xl?await num(xl):null, family:candy?candy.sp:(xl?xl.sp:null)};
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  return out.dust!=null||out.candy!=null||out.xl!=null?out:null;
+}
 async function scanFrame(ctx, W, H, trainer){
   const out={};
   // CP: sky-adaptive binarize, central text components only (v3)
@@ -283,7 +326,8 @@ async function scanFrame(ctx, W, H, trainer){
   const c2=document.getElementById('cv2');
   const ch=Math.floor(0.55*H); c2.width=Math.floor(W/2); c2.height=Math.floor(ch/2);
   c2.getContext('2d').drawImage(ctx.canvas, 0, Math.floor(0.28*H), W, ch, 0,0, c2.width, c2.height);
-  t=(await wk.recognize(c2)).data.text;
+  const rr=await wk.recognize(c2); t=rr.data.text;
+  const cardWords=rr.data.words||[], cardMap={sx:W/c2.width, sy:ch/c2.height, oy:Math.floor(0.28*H)};   // for readHave: where the labels sit on the full frame
   let flat=t.replace(/\n/g,' ');
   const parseHp=f=>{ const m2=f.match(/(\d+)\s*\/\s*(\d+)\s*HP/i); return m2?parseInt(m2[2]):undefined; };
   out.hp=parseHp(flat);
@@ -311,6 +355,7 @@ async function scanFrame(ctx, W, H, trainer){
     const hpAt=flat.toUpperCase().search(/\d\s*\/\s*\d+\s*HP/); const head=(hpAt>0?flat.slice(0,hpAt):flat).toUpperCase().match(/[A-Z]{4,}/g)||[];
     out.nameToken=head.find(w=>!DATA.stats[w])||null;
   }
+  out.have = await readHave(ctx, W, H, cardWords, cardMap).catch(()=>null);
   out.txt = flat.toLowerCase().replace(/[^a-z ]/g,' ').replace(/ +/g,' ').slice(0,300);
   out.dust = await dustFromPill(ctx, W, H);
   if(!out.dust) for(const n of flat.match(/\b\d{1,2}[.,]\d{3}\b|\b\d{3,4}\b/g)||[]){
@@ -1177,6 +1222,7 @@ async function scanVideo(file,trainer){
 
 async function handleScan(ctx,W,H,trainer,skipKey){
   const s=await scanFrame(ctx,W,H,trainer);
+  if(s.have&&window.Planner&&Planner.noteHave) Planner.noteHave(s.have);   // stardust, candy and XL: the newest read wins
   if(!s.species && s.hp && s.cpCandidates.length) s.species=inferSpecies(s);
   if(!s.species || !s.hp || !s.cpCandidates.length){  // status screens always show HP and CP; a screen scrolled to the attacks may show neither
     let sp=s.species;
