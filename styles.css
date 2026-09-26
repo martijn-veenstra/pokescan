@@ -556,3 +556,12 @@ a.bmon.mine{text-decoration-color:rgba(72,213,151,.6)}
 .team .work{margin-top:4px;font-size:12.5px;color:var(--dim)}.team .work b{color:var(--ink);font-weight:600}.team .work .short{color:var(--coral)}
 .note.have input,.have input{width:84px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:4px 6px}
 .team .work .unk{color:var(--gold)}
+
+.bcheck .bcg+.bcg{margin-top:10px}.bcheck .uh,.habits .uh{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.bck{display:flex;gap:8px;padding:5px 0;font-size:13px;line-height:1.35}.bck+.bck{border-top:1px solid var(--line)}
+.bck .bi{flex:0 0 18px;font-weight:700;text-align:center}.bck.bad .bi{color:var(--coral)}.bck.good .bi{color:var(--green)}.bck.warn .bi{color:var(--gold)}
+.bck .fx,.hab .fx{color:var(--ink);opacity:.85;margin-top:2px;font-size:12.5px}
+.bgrade{display:flex;align-items:center;gap:10px;margin:0 0 8px}.bgrade .gl{font-family:Sora,sans-serif;font-weight:800;font-size:26px;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--line)}
+.bgrade .ga,.bgrade .gb{color:var(--green)}.bgrade .gc{color:var(--gold)}.bgrade .gd,.bgrade .ge,.bgrade .gf{color:var(--coral)}
+.review .rsec.next{border-left:3px solid var(--green);padding-left:8px}
+.hab{display:flex;gap:10px;padding:6px 0;font-size:13px}.hab+.hab{border-top:1px solid var(--line)}.hab .hn{font-family:Sora,sans-serif;font-weight:800;font-size:20px;min-width:26px;color:var(--coral)}

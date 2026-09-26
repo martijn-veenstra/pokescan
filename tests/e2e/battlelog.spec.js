@@ -82,12 +82,12 @@ test('a battle review is asked for by hand, not spent automatically', async ({ p
   const errors = await openApp(page, '#/battles');
   await page.evaluate(async () => { await Sync.detect(); Planner.nav('#/battle/b1'); });
   const b = page.locator('#battle');
-  await expect(b.locator('.rvwait')).toContainText('Review this battle');
+  await expect(b.locator('.rvwait')).toContainText('Coach me on this battle');
   expect(posts, 'nothing is spent until asked').toHaveLength(0);
   // a card that is merely offering a review must not run the thinking spinner: it reads as a review that never lands
   expect(await b.locator('.pball.rv .ring').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 
-  await b.locator('a:has-text("Review this battle")').click();
+  await b.locator('a:has-text("Coach me on this battle")').click();
   await expect(b.locator('.team.card.review')).toContainText('You led Azumarill');
   expect(posts).toHaveLength(1);
   expect(posts[0].mode, 'the battle review uses its own server mode').toBe('battle');

@@ -913,7 +913,8 @@ const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
 const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
 const coachOn = () => !!(window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable());
 const TEAM_SECS = ['Verdict', 'Game plan', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
-const BATTLE_SECS = ['What happened', 'Turning point', 'Do differently', 'Matchup note'];
+const BATTLE_SECS = ['Grade', 'What happened', 'Mistakes', 'Moves', 'Matchups', 'Shields', 'Try this next time', 'Team tip',
+                     'Turning point', 'Do differently', 'Matchup note'];   // the last three: reviews written before the check existed
 function parseReview(text, secs) {             // the team prompt asks for Verdict / Game plan / Strengths / Weak spots / Swaps / Order; a battle review has its own four
   const out = {}, re = new RegExp('\\*\\*(' + (secs || TEAM_SECS).join('|') + ')\\*\\*:?\\s*', 'gi'), parts = text.split(re);
   if (parts.length < 3) return {Verdict: text.trim()};
@@ -951,6 +952,109 @@ async function askReview(ids, again) {         // one review, because the player
 }
 /* ---------- the AI review of one battle: on demand, Pro, and capped server-side at 5 an hour ---------- */
 BCOACH.battles = BCOACH.battles || {}; BCOACH.bBusy = {}; BCOACH.bFailed = {};
+/* ---------- Battle check: what the recording shows, judged with the type chart and the matchup ratings ----------
+   Computed on the phone, no AI. Each charged move is weighed against the Pokémon that was on the field when it landed
+   (the last one the recording saw sent out on that side), each of your sends against theirs, and the shields. The
+   findings are also what the AI review is built on, so it names real moments instead of guessing. */
+const tclock = t => `${Math.floor((t || 0) / 60)}:${String(Math.round(t || 0) % 60).padStart(2, '0')}`;
+function moveIdByName(name) {
+  const n = norm(name); if (!n) return null;
+  for (const src of [APP.moves || {}, ALT_MOVES]) for (const [k, v] of Object.entries(src)) if (norm(v.n) === n) return k;
+  return null;
+}
+const moveInfo = k => (APP.moves || {})[k] || ALT_MOVES[k] || null;
+const effWord = e => e >= 2.5 ? 'double super effective' : e > 1 ? 'super effective' : e >= 1 ? 'neutral' : e >= 0.6 ? 'not very effective' : 'resisted twice';
+function battleFacts(b) {
+  if (!APP || !window.PVP || !b) return null;
+  const fd = b.filmData || {}, reads = (fd.reads || []).slice().sort((x, y) => x.t - y.t);
+  const moves = (b.moves && b.moves.length ? b.moves : fd.moves || []).filter(m => m.by === 'my' || m.by === 'opp');
+  const idOf = name => { const id = battleMonId(b, name); return id && APP.pokemon[id] ? id : null; };
+  const activeAt = (side, t) => { let cur = null; for (const r of reads) { if (r.side === side && r.t <= t + 0.5) cur = r; } return cur ? idOf(cur.species) : null; };
+  const L = M().L, rate = (a, d) => { try { return Math.round(L.rating(a, d)); } catch { return null; } };
+  const mine = (b.ids || b.myIds || []).filter(id => APP.pokemon[id]);
+  const out = {moves: [], matchups: [], shields: [], lead: null, n: {bad: 0, good: 0}};
+  const add = (list, f) => { list.push(f); if (f.bad) out.n.bad++; else if (f.good) out.n.good++; };
+  // charged moves: what type went into what
+  for (const m of moves) {
+    const k = moveIdByName(m.move), info = k && moveInfo(k); if (!info || info.e > 0) continue;   // fast moves are not announced
+    const atk = idOf(m.species), def = activeAt(m.by === 'my' ? 'opp' : 'my', m.t); if (!def) continue;
+    const e = PVP.eff(info.t, APP.pokemon[def].types), who = m.by === 'my';
+    const f = {t: m.t, by: m.by, atk, def, move: info.n, type: info.t, eff: e, blocked: !!m.blocked};
+    if (who && e < 1) {                          // your charged move into a resist: which of its moves would have hit harder
+      const opts = (atk ? ((knownMoves((M().own[atk] || {}).scan, atk)) || APP.pokemon[atk].moveset) : []).slice(1).filter(Boolean)
+        .map(x => ({k: x, i: moveInfo(x)})).filter(x => x.i && x.i.e < 0 && x.k !== k).map(x => ({n: x.i.n, e: PVP.eff(x.i.t, APP.pokemon[def].types)})).sort((p, q) => q.e - p.e);
+      f.bad = true; f.fix = opts[0] && opts[0].e > e ? `${opts[0].n} is ${effWord(opts[0].e)} against ${nm(def)} (×${opts[0].e.toFixed(2)})` : `none of ${atk ? nm(atk) : 'its'} moves hits ${nm(def)} well: a switch or a shield bait fits better`;
+      f.text = `${atk ? nm(atk) : 'You'} threw ${info.n} (${info.t}) into ${nm(def)}: ${effWord(e)} (×${e.toFixed(2)})${f.blocked ? ', and it was shielded' : ''}`;
+    } else if (who && e > 1) { f.good = true; f.text = `${atk ? nm(atk) : 'You'} hit ${nm(def)} with ${info.n}: ${effWord(e)} (×${e.toFixed(2)})${f.blocked ? ', shielded' : ''}`; }
+    else if (!who && m.blocked && e < 1) { f.bad = true; f.text = `You shielded ${nm(atk || '') || 'their'} ${info.n}, which ${nm(def)} resists (×${e.toFixed(2)})`; f.fix = 'a resisted charged move is usually safe to take: keep the shield for one that hurts'; add(out.shields, f); continue; }
+    else if (!who && e > 1 && !m.blocked) { f.text = `${nm(atk || '') || 'They'} hit ${nm(def)} with ${info.n} unshielded: ${effWord(e)} (×${e.toFixed(2)})`; f.warn = true; }
+    else continue;
+    add(out.moves, f);
+  }
+  // your sends against theirs: the lead, then each switch-in
+  const myReads = reads.filter(r => r.side === 'my'), seen = new Set();
+  myReads.forEach((r, i) => {
+    const id = idOf(r.species), opp = activeAt('opp', r.t + 1); if (!id || !opp || seen.has(id + '>' + opp)) return; seen.add(id + '>' + opp);
+    const rt = rate(id, opp); if (rt == null) return;
+    const alts = mine.filter(x => x !== id).map(x => ({id: x, r: rate(x, opp)})).filter(x => x.r != null).sort((p, q) => q.r - p.r);
+    const f = {t: r.t, my: id, opp, rating: rt, lead: i === 0};
+    const verdict = rt >= 600 ? 'wins it' : rt >= 500 ? 'edges it' : rt >= 400 ? 'loses it narrowly' : 'loses it';
+    f.text = `${i === 0 ? 'Lead' : 'Sent in'} ${nm(id)} against ${nm(opp)}: ${verdict} (${rt})`;
+    if (rt < 450) { f.bad = true; if (alts[0] && alts[0].r > rt + 80) f.fix = `${nm(alts[0].id)} ${alts[0].r >= 500 ? 'wins' : 'does better in'} that matchup (${alts[0].r})${i === 0 ? '' : ': switch to it instead'}`; }
+    else if (rt >= 550) f.good = true;
+    if (i === 0) out.lead = f;
+    add(out.matchups, f);
+  });
+  // shields: left unused in a loss
+  const sh = b.shields || {};
+  if (b.result === 'L' && sh.me != null && sh.me < 2) add(out.shields, {bad: true, text: `You lost with ${2 - sh.me} shield${2 - sh.me === 1 ? '' : 's'} unused`, fix: 'a shield kept to the end is worth nothing: spend it to save the Pokémon that can still win'});
+  if (sh.me === 2 && sh.opp === 0 && b.result !== 'W') add(out.shields, {bad: true, text: 'You spent both shields and they kept theirs', fix: 'bait with your cheapest charged move before you throw the one that matters'});
+  if (sh.opp === 2 && sh.me === 0 && b.result === 'W') add(out.shields, {good: true, text: 'They spent both shields, you kept yours: you won the shield trade'});
+  return out;
+}
+/* ---------- Your habits: what keeps going wrong across your recent battles (Pro) ---------- */
+function battleHabits(limit) {
+  const list = BATTLES.filter(b => b.filmData || (b.moves && b.moves.length)).slice().sort((a, b) => b.t - a.t).slice(0, 20);
+  const c = {wrong: [], sends: [], shieldResist: 0, unused: 0, lead: {}, n: 0};
+  for (const b of list) {
+    let f; try { f = battleFacts(b); } catch { f = null; } if (!f) continue; c.n++;
+    for (const x of f.moves) if (x.bad && x.by === 'my') c.wrong.push(x);
+    for (const x of f.matchups) if (x.bad) c.sends.push(x);
+    c.shieldResist += f.shields.filter(x => x.bad && x.def).length;
+    if (f.shields.some(x => /unused/.test(x.text))) c.unused++;
+    if (f.lead && b.result) { const k = f.lead.my, r = c.lead[k] = c.lead[k] || {w: 0, l: 0, bad: 0}; if (b.result === 'W') r.w++; else if (b.result === 'L') r.l++; if (f.lead.bad) r.bad++; }
+  }
+  const lines = [], top = (arr, key) => { const m = {}; for (const x of arr) { const k = key(x); m[k] = (m[k] || 0) + 1; } return Object.entries(m).sort((a, b) => b[1] - a[1])[0]; };
+  if (c.wrong.length) { const t = top(c.wrong, x => `${x.atk ? nm(x.atk) + "'s " : ''}${x.move} into ${nm(x.def)}`);
+    lines.push({k: 'wrong', n: c.wrong.length, text: `${c.wrong.length} charged move${c.wrong.length === 1 ? '' : 's'} thrown into a resist`, most: t[1] > 1 ? `most often ${t[0]} (${t[1]}×)` : `e.g. ${t[0]}`,
+      tip: 'Before you throw, check the type of what is in front of you: bait with the move they do not resist, or switch.'}); }
+  if (c.sends.length) { const t = top(c.sends, x => `${nm(x.my)} into ${nm(x.opp)}`);
+    lines.push({k: 'sends', n: c.sends.length, text: `${c.sends.length} time${c.sends.length === 1 ? '' : 's'} you led or switched into a losing matchup`, most: t[1] > 1 ? `most often ${t[0]} (${t[1]}×)` : `e.g. ${t[0]}`,
+      tip: 'When their lead beats yours, switch early to the member that wins it, while your switch timer is still fresh.'}); }
+  if (c.shieldResist) lines.push({k: 'shield', n: c.shieldResist, text: `${c.shieldResist} shield${c.shieldResist === 1 ? '' : 's'} spent on a charged move you resist`, tip: 'Let resisted charged moves through: keep shields for the ones that are super effective or would faint you.'});
+  if (c.unused) lines.push({k: 'unused', n: c.unused, text: `${c.unused} loss${c.unused === 1 ? '' : 'es'} with a shield still unused`, tip: 'Shields do nothing after your last Pokémon falls: use them to save the one that can still turn it.'});
+  const leads = Object.entries(c.lead).map(([id, r]) => ({id, ...r})).filter(r => r.w + r.l >= 2).sort((a, b) => (b.w + b.l) - (a.w + a.l));
+  lines.sort((a, b) => b.n - a.n);
+  return {n: c.n, lines: lines.slice(0, limit || 6).map(l => `${l.text}${l.most ? ` (${l.most})` : ''}`), items: lines, leads};
+}
+function habitsCard() {
+  const pro = coachOn() || !(window.Sync && Sync.available());   // a server without accounts has no Pro to sell: everyone gets it
+  const hb = battleHabits(); if (hb.n < 2) return '';
+  if (!pro) return window.Sync && Sync.signedIn() && Sync.coachOffered() ? proTeaser('Your habits', `Across your last ${hb.n} battles: the mistakes you keep making (moves into a resist, losing leads and switches, shields spent on resisted moves) and the drill that fixes each.`) : '';
+  if (!hb.items.length) return `<div class="sec">Your habits <small>last ${hb.n} battles</small></div><div class="note">No repeat mistakes in your last ${hb.n} battles: the moves went into the right types, the sends held their matchups.</div>`;
+  const rows = hb.items.map(l => `<div class="hab"><div class="hn">${l.n}</div><div><b>${esc(l.text)}</b>${l.most ? `<div class="dim">${esc(l.most)}</div>` : ''}<div class="fx">→ ${esc(l.tip)}</div></div></div>`).join('');
+  const leads = hb.leads.length ? `<div class="uh" style="margin-top:8px">Leads</div>` + hb.leads.slice(0, 4).map(r => `<div class="dt">${esc(nm(r.id))}: ${r.w}–${r.l}${r.bad ? ` · lost the matchup ${r.bad}×` : ''}</div>`).join('') : '';
+  return `<div class="sec">Your habits <small>across your last ${hb.n} battles · what to drill</small></div><div class="team card habits" style="cursor:default">${rows}${leads}</div>`;
+}
+function battleCheckCard(b) {                    // the facts, free for everyone: the AI review builds on them
+  const f = battleFacts(b); if (!f) return '';
+  const all = [...f.moves, ...f.matchups, ...f.shields];
+  if (!all.length) return `<div class="sec">Battle check <small>from the recording, with the type chart and matchup ratings</small></div><div class="note">Not enough of the match was read to judge the moves and matchups: no charged move and send-out pair it could place.</div>`;
+  const row = x => `<div class="bck ${x.bad ? 'bad' : x.good ? 'good' : 'warn'}"><span class="bi">${x.bad ? '✕' : x.good ? '✓' : '!'}</span><span class="bt">${x.t != null ? `<span class="dim">${tclock(x.t)}</span> ` : ''}${esc(x.text)}${x.fix ? `<div class="fx">→ ${esc(x.fix)}</div>` : ''}</span></div>`;
+  const part = (title, list) => list.length ? `<div class="bcg"><div class="uh">${title}</div>${list.map(row).join('')}</div>` : '';
+  const sum = f.n.bad ? `${f.n.bad} thing${f.n.bad === 1 ? '' : 's'} to fix` : 'nothing obvious to fix';
+  return `<div class="sec">Battle check <small>${sum} · from the recording, with the type chart and matchup ratings</small></div><div class="team card bcheck" style="cursor:default">${part('Moves', f.moves)}${part('Matchups', f.matchups)}${part('Shields', f.shields)}</div>`;
+}
 function battleContext(b) {
   const ctx = coachContext(M());
   const who = (ids, names) => (ids && ids.length ? ids.map(nm) : names || []);
@@ -964,6 +1068,9 @@ function battleContext(b) {
     sentOut: (b.filmData && b.filmData.reads ? b.filmData.reads : []).map(r => ({at: r.t, side: r.side, name: nm(idByName(r.species) || '') || r.species, cp: r.cp})),
     seconds: b.filmData ? b.filmData.dur : undefined,
   };
+  const f = battleFacts(b);
+  if (f) ctx.battle.appChecks = [...f.moves, ...f.matchups, ...f.shields].map(x => ({at: x.t != null ? tclock(x.t) : undefined, kind: x.bad ? 'mistake' : x.good ? 'good' : 'note', what: x.text, better: x.fix}));
+  ctx.battle.history = battleHabits(4).lines;                // what keeps happening across this player's recent battles
   delete ctx.builder;
   return ctx;
 }
@@ -983,15 +1090,17 @@ async function askBattleReview(id) {
 }
 function battleReviewCard(b) {
   if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered()
-    ? proTeaser('Battle review', 'Claude reads this match from the timeline: the lead matchup, the shield trade, and the one thing to do differently.') : '';
+    ? proTeaser('Battle review', 'Claude coaches you through this match: a grade, the mistakes with their times, the moves and matchups to change, the shield trade, and what to try next time.') : '';
   const rv = BCOACH.battles[b.id], busy = BCOACH.bBusy[b.id], failed = BCOACH.bFailed[b.id];
   const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>Battle review <small>${extra}</small></span>${rv ? ctxMenu([['Ask again', `Planner.askBattleReview(${attr(b.id)})`]]) : ''}</div>`;
   const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
-  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is reading this match: the lead matchup, the shield trade and what to do differently.');
+  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is coaching this match: the grade, your mistakes, the moves and matchups, the shields and what to try next time.');
   if (failed && !rv) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">try again</a>`);
-  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">Review this battle</a> — Claude reads the timeline and says what to do differently. Up to 5 an hour.`);
-  const sec = parseReview(rv.text, BATTLE_SECS), order = BATTLE_SECS;
-  const body = order.filter(k => sec[k]).map(k => `<div class="rsec"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('') || `<div class="rsec">${linkNames(mdLite(rv.text))}</div>`;
+  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">Coach me on this battle</a> — a grade, your mistakes with their times, and what to try next time. Up to 5 an hour.`);
+  const sec = parseReview(rv.text, BATTLE_SECS), order = BATTLE_SECS.filter(k => k !== 'Grade');
+  const g = (sec.Grade || '').replace(/\*\*/g, '').trim(), gl = (g.match(/^[A-F][+-]?/) || [''])[0];
+  const grade = g ? `<div class="bgrade"><span class="gl g${(gl[0] || 'x').toLowerCase()}">${esc(gl || '?')}</span><span>${linkNames(mdLite(g.replace(/^[A-F][+-]?\s*[-—:·]?\s*/, '')))}</span></div>` : '';
+  const body = grade + order.filter(k => sec[k]).map(k => `<div class="rsec${k === 'Try this next time' ? ' next' : ''}"><b>${k}</b>${linkNames(mdLite(sec[k]))}</div>`).join('') || `<div class="rsec">${linkNames(mdLite(rv.text))}</div>`;
   return `<div class="team card review" style="cursor:default">${head(when(rv.t))}${body}</div>`;
 }
 // the review there is stays up until the new one lands: a refresh that hits the hourly limit must not leave nothing
@@ -1634,6 +1743,7 @@ function battlesInner() {
   }
   // the log itself comes before the widgets and the totals: it is what the page is for
   const recentB = st.all.slice().reverse().slice(0, 20);
+  h += habitsCard();
   if (recentB.length) h += `<div class="sec">Battles <small>tap one for the timeline and a review</small></div>`
     + recentB.map(b => battleRow(b)).join('');
   else if (!DRAFT) h += `<div class="empty"><b>No battles yet.</b><br>Record a Great League battle on your phone and import it above: the app reads both teams, the shields and the result off the recording.</div>`;
@@ -1768,7 +1878,7 @@ function battleInner() {
     ].concat(loose.length ? [['Side not read', `<div class="chips">${loose.map(chip).join('')}</div>`]] : []))}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
   }
   if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="filmt page">${linkFilm(b, b.film).map(l => `<div>${l}</div>`).join('')}</div>`;
-  h += battleReviewCard(b);
+  h += battleCheckCard(b) + battleReviewCard(b);
   h += `<div class="note">Read from a recording on this phone, so it can be wrong. Deleting it (⋮ above) takes it out of your record and the stats, with one tap to put it back.</div>`;
   return h;
 }
@@ -1986,7 +2096,8 @@ function paintMilestones() {
 
 /* ---------- PokeScan Pro: the plan that unlocks every AI feature ---------- */
 const PRO_NOW = [['AI review of every team', 'Builder and saved parties get a verdict, strengths, weak spots and one swap, written from your roster and your battle log.'],
-                 ['Film study', 'Record a GO Battle League match and import the recording: the battle is logged with both teams, their lead and the result, plus up to three timestamped notes on the decisions that decided it.'],
+                 ['Battle coach', 'Every battle you log gets a graded review: your mistakes with their times, the charged moves thrown into a resist, the leads and switches that lost their matchup, the shield trade, three things to try next time and a tip for the team.'],
+                 ['Your habits', 'Across your last 20 battles: the mistakes you keep repeating (moves into a resist, losing leads, shields spent on resisted moves, shields kept to the end) and the drill that fixes each.'],
                  ['Rocket taunts', 'Share a Team GO Rocket taunt and you learn which Shadow you will meet and whether your roster wants it.']];
 const PRO_NEXT = [['Share anything: storage grid and raid lobby', 'The same share fills the roster from your storage screenshots and picks counters from your own Pokémon for a raid lobby.'],
                   ['Replay what-ifs', 'Your logged battles re-run with a different lead or swap, so you see what would have won.'],
@@ -2018,7 +2129,7 @@ function renderPro() {
   }
   h += `<div class="sec">In Pro today</div>` + PRO_NOW.map(x => row(x, false)).join('');
   h += `<div class="sec">Coming to Pro <small>you get them the day they ship</small></div>` + PRO_NEXT.map(x => row(x, true)).join('');
-  h += `<div class="sec">Always free</div><div class="prow"><span class="tick full">✓</span><div><b>Everything else</b><div class="dt">Scanning, IV ranks, the roster, Today, the builder, matchups, meta teams, rankings, raids, the battle log and sync across devices stay free.</div></div></div>`;
+  h += `<div class="sec">Always free</div><div class="prow"><span class="tick full">✓</span><div><b>Everything else</b><div class="dt">Scanning, IV ranks, the roster, Today, the builder, matchups, meta teams, rankings, raids, the battle log with its battle check (moves into a resist, losing matchups, wasted shields) and sync across devices stay free.</div></div></div>`;
   h += `<div class="note">${hl.coach ? 'The AI runs on the PokeScan server with a Claude model; your roster summary is sent for the review and not kept by the model.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
   el.innerHTML = h;
 }
