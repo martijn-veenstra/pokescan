@@ -94,8 +94,8 @@ test('a scan page has one head, one menu, and the move lists in the PvP and Raid
   await expect(mon).not.toContainText('in the meta');
   await expect(mon.locator('.ctx .dots')).toHaveCount(1);                 // one ⋮ menu
   const items = await mon.locator('.monhead .ctx .menu button').allInnerTexts();
-  expect(items).toEqual(expect.arrayContaining(['Mark as Shadow', 'Try in builder', 'Add to wanted']));
-  expect(items).not.toContain('I own one (no scan)');
+  expect(items).toEqual(expect.arrayContaining(['★ Favourite', 'Correct a misread…', 'Try in builder', 'Add to wanted']));
+  for (const gone of ['I own one (no scan)', 'Update this Pokémon…', 'Bench (keep, but not for teams)', 'Archive', 'Mark as Shadow']) expect(items).not.toContain(gone);
   expect(items[items.length - 1]).toBe('Delete scan');
   // PvP: the meta-usage table is open in its own card, the raid list is not here
   await expect(mon.locator('.montabs button')).toHaveText(['PvP', 'Raids']);

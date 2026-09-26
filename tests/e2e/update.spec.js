@@ -19,6 +19,18 @@ test('a scrolled status screen of the card being updated attaches its attacks to
   expect(got).toHaveLength(1);
   expect(got[0].species).toBe('MEDITITE');
   expect(got[0].moves).toEqual(['CONFUSION', 'PSYSHOCK']);                 // not the type label "FIGHTING / PSYCHIC" as a third move
+  // the page shows them, although Great League does not rank Meditite: moves, usage and the unlock cost come from Little League
+  await page.evaluate(k => Planner.openScan(k), key);
+  const mon = page.locator('#mon');
+  await expect(mon).toContainText('Moves by meta usage');
+  await expect(mon).toContainText('in Little League');
+  const sels = mon.locator('.scanhero select.mvsel');
+  await expect(sels).toHaveCount(3);
+  expect(await sels.nth(0).evaluate(el => el.value)).toBe('CONFUSION');
+  expect(await sels.nth(1).evaluate(el => el.value)).toBe('PSYSHOCK');
+  await expect(mon.locator('.scanhero')).toContainText(/locked[\s\S]*50\.000 dust · 50 candy/);
+  await expect(mon.locator('.scanhero')).toContainText(/Recommended\s*Little League/);
+  expect(await mon.locator('.use .ur').count()).toBeGreaterThan(2);
   // the appraisal screenshot of the same Pokémon folds into the same card too
   await page.evaluate(k => Planner.updateScan(k, 'mon'), key);
   await importFile(page, 'meditite-appr.png');

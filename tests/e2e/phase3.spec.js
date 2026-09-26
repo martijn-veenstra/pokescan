@@ -10,13 +10,18 @@ test('a scan can be marked as Shadow and then maps to the shadow ranking', async
   expect(before).toBe('ninetales');
   await page.evaluate(k => Planner.openScan(k), key);
   await expect(page.locator('#mon')).toContainText('Shadow');
-  await page.click('#mon .monhead .ctx .dots');
-  await page.click('#mon .monhead .ctx .menu button:has-text("Mark as Shadow")');
+  // Shadow is set in "Correct a misread", not a menu item of its own
+  const setShadow = async on => {
+    await page.click('#mon .monhead .ctx .dots');
+    await page.click('#mon .monhead .ctx .menu button:has-text("Correct a misread")');
+    const box = page.locator('#sheet #esh'); if (on) await box.check(); else await box.uncheck();
+    await page.click('#sheet button:has-text("Re-solve")');
+  };
+  await setShadow(true);
   await expect.poll(() => page.evaluate(() => Planner.scanId(results[0]).id)).toBe('ninetales_shadow');
   await expect(page.locator('#mon .monhead .chips')).toContainText('shadow');
   await expect(page.locator('#mon')).toContainText(/shadow copy, meta #\d+/);
-  await page.click('#mon .monhead .ctx .dots');
-  await page.click('#mon .monhead .ctx .menu button:has-text("Mark as normal")');
+  await setShadow(false);
   await expect.poll(() => page.evaluate(() => Planner.scanId(results[0]).id)).toBe('ninetales');
   expect(errors).toEqual([]);
 });
@@ -106,13 +111,13 @@ test('a background data load does not close an open menu', async ({ page }) => {
   const key = await page.evaluate(seed);
   await page.evaluate(k => Planner.openScan(k), key);
   await page.click('#mon .monhead .ctx .dots');
-  const item = page.locator('#mon .monhead .ctx .menu button:has-text("Mark as Shadow")');
+  const item = page.locator('#mon .monhead .ctx .menu button:has-text("Favourite")');
   await expect(item).toBeVisible();
   // the schedule reloads (it notifies the page), and the evolution data arrives again
   await page.evaluate(async () => { await Sources.load(true); });
   await page.waitForTimeout(400);
   await expect(item, 'the menu is still open').toBeVisible();
   await item.click();
-  await expect.poll(() => page.evaluate(() => Planner.scanId(results[0]).id)).toBe('ninetales_shadow');
+  await expect.poll(() => page.evaluate(() => !!results[0].fav)).toBe(true);
   expect(errors).toEqual([]);
 });

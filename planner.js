@@ -24,7 +24,8 @@ const icon = (id, cls) => id
   ? `<img class="pi ${cls || ''}${/_shadow$/.test(id) ? ' sh' : ''}" src="${ICON_DIR}${id}.webp" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${ICON_DIR}_missing.svg'">`
   : `<img class="pi ${cls || ''}" src="${ICON_DIR}_missing.svg" alt="">`;
 const trio = (ids, m) => `<span class="trio">${ids.map(id => { const st = m ? ownership(m, id) : null; return icon(id, 's' + (st === 'owned' ? ' ow' : st === 'pending' ? ' pd' : m ? ' nt' : '')); }).join('')}</span>`;   // with a model: green ring = owned (ow), blue = pending (pd), dimmed = not yours (nt)
-const mvName = m => (APP.moves[m] || {n: m}).n;
+const ALT = {}, ALT_MOVES = {}, ALT_DATA = {};   // a species this league does not rank: its entry from another league's data (altEntry)
+const mvName = m => (APP.moves[m] || ALT_MOVES[m] || {n: m}).n;
 const fmt = n => n.toLocaleString('nl');
 const bestOf = r => r.combos.reduce((a, b) => pct(b) > pct(a) ? b : a);
 const norm = t => (t || '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/ +/g, ' ').trim();
@@ -1046,23 +1047,23 @@ function knownMoves(r, id) {                // moves we actually know: read from
   if (ROSTER.moves[id] && ROSTER.moves[id].length) return ROSTER.moves[id];
   return null;
 }
-function moveRows(id, moves, handler, placeholder) {  // Fast / Charged / 2nd charged as three full-width rows; moves null = nothing known yet
-  const e = APP.pokemon[id]; handler = handler || `Planner.setMove('${id}',SLOT,this.value)`;
+function moveRows(id, moves, handler, placeholder, e = APP.pokemon[id]) {  // Fast / Charged / 2nd charged as three full-width rows; moves null = nothing known yet
+  handler = handler || `Planner.setMove('${id}',SLOT,this.value)`;
   const unknown = !moves; moves = moves || []; placeholder = placeholder || 'not scanned';
   const use = e.use || {}, tag = mv => use[mv] ? ` (${use[mv]}%)` : '';
   const withCur = (list, slot) => moves[slot] && !list.includes(moves[slot]) ? [moves[slot], ...list] : list;
   const sel = (slot, list0, none) => `<select class="mvsel ${unknown ? 'empty' : ''}" onchange="${handler.replace('SLOT', slot)}">${unknown ? `<option value="" selected disabled>— ${placeholder} —</option>` : ''}${none && !unknown ? `<option value="" ${!moves[slot] ? 'selected' : ''}>no 2nd charged move</option>` : none ? `<option value="">no 2nd charged move</option>` : ''}${withCur(list0, slot).map(mv => `<option value="${mv}" ${moves[slot] === mv ? 'selected' : ''}>${esc(mvName(mv))}${tag(mv)}</option>`).join('')}</select>`;
   return [['Fast', sel(0, e.fast)], ['Charged', sel(1, e.charged)], ['2nd charged', sel(2, e.charged, true)]];
 }
-function moveUsage(id, cur) {               // its own card on the PvP tab: how often the simulated meta battles run each move
-  const e = APP.pokemon[id], use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
+function moveUsage(id, cur, e = APP.pokemon[id], league) {   // its own card on the PvP tab: how often the simulated meta battles run each move
+  const use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
   if (!Object.keys(use).length) return '';
   const rows = (list, label) => {
     const ranked = list.filter(m => use[m] !== undefined).sort((a, b) => (use[b] || 0) - (use[a] || 0));
     if (!ranked.length) return '';
     return `<div class="uh">${label}</div>` + ranked.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${esc(mvName(m))}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="bar"><i style="width:${Math.max(3, use[m])}%"></i></span><span class="pc">${use[m]}%</span></div>`).join('');
   };
-  return `<div class="sec">Moves by meta usage <small>share of simulated meta battles running each move</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
+  return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}share of simulated meta battles running each move</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
 }
 
 /* ---------- readiness: a copy is ready for GL when it sits at the cap level and carries PvPoke's moves ---------- */
@@ -2015,6 +2016,29 @@ function evoChain(id) {                        // every evolution below this id,
   if (!out.length && typeof evosOf === 'function') for (const e of evosOf(id)) out.push({id: e, from: id, depth: 1, branch: evoBranch(id, e)});
   return out;
 }
+const ALT_LEAGUES = [['little', 'Little League'], ['great', 'Great League'], ['ultra', 'Ultra League']];
+let ALT_BUSY = false;
+function altEntry(r) {                           // {id, e, title} from the first other league that ranks the species; null while loading or when none does
+  const id = unrankedId(r) || String(r.species || '').toLowerCase(); if (!id || APP.pokemon[id]) return null;
+  if (ALT[id] !== undefined) return ALT[id];
+  if (!ALT_BUSY) loadAlt(id);
+  return null;
+}
+async function loadAlt(id) {
+  ALT_BUSY = true; let hit = null;
+  try {
+    for (const [slug, title] of ALT_LEAGUES) {
+      if (slug === LEAGUE.slug) continue;
+      let d = ALT_DATA[slug];
+      if (!d) { const res = await fetch(`data/app-${slug}.json?v=` + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '')); if (!res.ok) continue;
+        d = ALT_DATA[slug] = await res.json(); for (const [k, v] of Object.entries(d.moves || {})) if (!ALT_MOVES[k]) ALT_MOVES[k] = v; }
+      const k = d.pokemon[id] ? id : Object.keys(d.pokemon).filter(x => x.split('_')[0] === id && !/_shadow$/.test(x))[0];
+      if (k) { hit = {id: k, e: d.pokemon[k], title}; break; }
+    }
+  } catch {}
+  ALT[id] = hit; ALT_BUSY = false;
+  if (onView() === 'mon') whenIdle(renderMon);
+}
 function evoTable(r, best) {
   const s0 = scanId(r), from = (s0 && s0.id) || unrankedId(r) || (r.species || '').toLowerCase();
   const chain = from ? evoChain(from + (r.shadow && !/_shadow$/.test(from) ? '_shadow' : '')) : [];
@@ -2047,11 +2071,9 @@ function scanSection(m, r) {
   const key = esc(r.key), rm = `Planner.renderMon()`;
   const menu = ctxMenu([
     [r.fav ? '☆ Remove favourite' : '★ Favourite', `toggleFav(${idx});${rm}`],
-    [r.bench ? 'Unbench' : 'Bench (keep, but not for teams)', `toggleBench(${idx});${rm}`],
-    r.superseded ? ['Unarchive', `results[${idx}].superseded=null;save();render();Planner.refresh();${rm}`] : ['Archive', `results[${idx}].superseded={why:'archived by hand',t:Date.now()};save();render();Planner.refresh();${rm}`],
-    [r.shadow ? 'Mark as normal / purified' : 'Mark as Shadow', `toggleShadow(${idx});${rm}`],
-    ['Update this Pokémon…', `Planner.updateScan('${key}')`],
-    ['Correct a misread…', `Planner.editScan('${key}')`],
+    r.bench ? ['Unbench', `toggleBench(${idx});${rm}`] : null,                 // benching and archiving by hand are gone; a card that is either can be restored
+    r.superseded ? ['Unarchive', `results[${idx}].superseded=null;save();render();Planner.refresh();${rm}`] : null,
+    ['Correct a misread…', `Planner.editScan('${key}')`],                      // Shadow is set there; updating is the button on the page
     ...(UI.mon && APP.pokemon[UI.mon] ? speciesMenuItems(m, UI.mon, r) : []),
     ['Delete scan', `Planner.deleteScan('${key}')`, true],
   ]);
@@ -2081,25 +2103,26 @@ function scanSection(m, r) {
     rows.push(['Status', st]);
     if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} fit this CP and HP, best shown. An appraisal pins it down.<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
   } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋮ → Correct a misread</span>`]);
-  const mv = movesRowForScan(r, idx), sid0 = scanId(r);
-  if (mv) {
-    const id0 = sid0.id, e0 = APP.pokemon[id0], known = knownMoves(r, id0), cur = known ? known.filter(Boolean) : [], rec = e0.moveset;
+  const sid0 = scanId(r), here = sid0 && sid0.id && APP.pokemon[sid0.id] ? sid0.id : null, alt = here ? null : altEntry(r);
+  const mid = here || (alt && alt.id), eAlt = alt && alt.e;
+  if (mid) {
+    const id0 = mid, e0 = APP.pokemon[id0] || eAlt, known = knownMoves(r, id0), cur = known ? known.filter(Boolean) : [], rec = e0.moveset;
     const second = r.secondMove === false ? false : (r.secondMove === true || (r.moves && r.moves.filter(Boolean).length >= 3)) ? true : null;   // null: never scanned or set
     const tips = [];
     if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
-    rows.push(...moveRows(id0, known, `Planner.setScanMove(${idx},SLOT,this.value)`));
+    rows.push(...moveRows(id0, known, `Planner.setScanMove(${idx},SLOT,this.value)`, undefined, e0));
     rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : known ? 'set by hand' : 'not scanned yet: screenshot the status screen scrolled to the attacks, or pick them. Teams are scored with the recommended moveset until then.'}</div>`]);
     const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
     rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">${r.movesSeen ? 'one charged move read, but the NEW ATTACK button was not in the shot: screenshot the attacks with that button visible, or pick the 2nd move in the third box' : 'not known yet: scan the attacks, or pick it in the third box'}${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
-    rows.push(['Recommended', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
+    rows.push([alt ? `Recommended <span class="dim">${esc(alt.title)}</span>` : 'Recommended', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
   }
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
   if (sid0 && sid0.id) {                        // the other form's standing: a shadow ranks differently from its purified/normal twin
     const isSh = /_shadow$/.test(sid0.id), alt = isSh ? sid0.id.replace(/_shadow$/, '') : sid0.id + '_shadow', ea = APP.pokemon[alt], e0 = APP.pokemon[sid0.id];
     if (r.shadow && !isSh) rows.push(['Shadow', `marked as Shadow; the rankings list only the normal ${esc(nm(sid0.id))} in ${esc(LEAGUE.title)}, so that is what the planner uses`]);
-    else if (ea && e0) rows.push(['Shadow', isSh ? `shadow copy, meta #${e0.rank} · purified it would be the normal ${esc(nm(alt))}, meta #${ea.rank}` : `normal copy, meta #${e0.rank} · the Shadow form ranks meta #${ea.rank} <span class="dim">(⋮ → Mark as Shadow if this one is)</span>`]);
+    else if (ea && e0) rows.push(['Shadow', isSh ? `shadow copy, meta #${e0.rank} · purified it would be the normal ${esc(nm(alt))}, meta #${ea.rank}` : `normal copy, meta #${e0.rank} · the Shadow form ranks meta #${ea.rank} <span class="dim">(⋮ → Correct a misread if this one is)</span>`]);
   }
   if (r.history && r.history.length) rows.push(['History', r.history.slice().reverse().map(h => `${when(h.t)}: ${h.species !== r.species ? esc(nice(h.species)) + ' · ' : ''}${h.cp} CP · L${h.level ?? '?'}`).join('<br>') + `<div class="dim" style="font-size:12px">now ${r.cp} CP · L${r.level ?? '?'}</div>`]);
   if (!r.superseded) rows.push(['', `<button class="btn sec" style="margin:4px 0 0" onclick="Planner.updateScan(${attr(r.key)},'mon')">⟳ Update with a new scan</button><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this card is updated, no second card.</div>`]);
@@ -2108,7 +2131,11 @@ function scanSection(m, r) {
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
   if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Put another way, ${g0 ? `${(100 - g0.n / 40.96).toFixed(1)}%` : 'the share'} of all spreads rank below this one. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
   h += `</div>`;
-  if (!UI.mon) h += (best ? evoTable(r, best) : '') + `<div class="note">${esc(nice(r.species))} is not in the ${esc(LEAGUE.title)} rankings, so it has no PvP or raid pages of its own here.</div>`;
+  if (!UI.mon) {                                  // not ranked here: the other league's move usage, then the evolutions
+    const known0 = mid ? knownMoves(r, mid) : null;
+    if (alt) h += moveUsage(alt.id, known0 || [], alt.e, alt.title);
+    h += (best ? evoTable(r, best) : '') + `<div class="note">${esc(nice(r.species))} is not ranked in ${esc(LEAGUE.title)}${alt ? `; its moves and their usage come from ${esc(alt.title)}, where it is #${alt.e.rank}` : ', so it has no PvP or raid pages of its own here'}.</div>`;
+  }
   return h;
 }
 function editScan(key) {
@@ -2118,12 +2145,14 @@ function editScan(key) {
     <div class="kv"><span class="k">Species</span><span class="v"><input id="esp" list="species" value="${esc(r.species || '')}" style="width:100%"></span>
     <span class="k">CP</span><span class="v"><input id="ecp" inputmode="numeric" value="${r.cp || ''}" style="width:100%"></span>
     <span class="k">HP</span><span class="v"><input id="ehp" inputmode="numeric" value="${r.hp || ''}" style="width:100%"></span>
-    <span class="k">Level</span><span class="v"><input id="elv" inputmode="decimal" placeholder="blank = unknown" value="${r.level || ''}" style="width:100%"></span></div>
+    <span class="k">Level</span><span class="v"><input id="elv" inputmode="decimal" placeholder="blank = unknown" value="${r.level || ''}" style="width:100%"></span>
+    <span class="k">Shadow</span><span class="v"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="esh" ${r.shadow ? 'checked' : ''}> a Shadow Pokémon (purified counts as normal)</label></span></div>
     <div class="acts" style="margin-top:14px"><button class="primary" onclick="Planner.resolveScan('${esc(key)}');Planner.closeSheet()">Re-solve</button><button onclick="Planner.closeSheet()">Cancel</button></div></div>`;
   $('sheet').classList.add('open');
 }
 function resolveScan(key) {
   const r = results.find(x => x.key === key); if (!r) return;
+  const sh = $('esh'); if (sh) r.shadow = sh.checked || undefined;
   const newKey = refixScan(r, {species: $('esp').value, cp: $('ecp').value, hp: $('ehp').value, level: $('elv').value});
   UI.scan = newKey; const sid = scanId(r); UI.mon = sid && sid.id && APP.pokemon[sid.id] ? sid.id : null;
   refresh(); renderMon();
@@ -2187,7 +2216,7 @@ function speciesMenuItems(m, id, scan) {      // the species' ⋮ items; on a sc
     st === 'wanted' ? ['Got it: move to pending', `Planner.addAs('pending','${id}')`] : null,
     st === 'pending' && !a ? ['Built it: move to owned', `Planner.addAs('owned','${id}')`] : null,
     o && !benched && !onScan ? ['Bench (keep out of teams)', `Planner.bench('${id}');${rm}`] : null,
-    a && !benched ? ['Not evolving it (bench)', `Planner.bench('${id}');${rm}`] : null,
+    a && !benched && !onScan ? ['Not evolving it (bench)', `Planner.bench('${id}');${rm}`] : null,
     benched ? ['Unbench', `Planner.unbench('${id}');${rm}`] : null,
     o && o.manual ? ['Remove from roster', `Planner.dropMon('owned','${id}')`, true] : null,
     ROSTER.pending[id] !== undefined && !o ? ['Remove from pending', `Planner.dropMon('pending','${id}')`, true] : null,
@@ -2727,8 +2756,8 @@ function movesRowForScan(r, idx) {      // used by the Scans view: manual move s
   return movesRow(s.id, movesFor(r, s.id), `Planner.setScanMove(${idx},SLOT,this.value)`);
 }
 function setScanMove(idx, slot, val) {
-  const r = results[idx], s = scanId(r); if (!s || !s.id) return;
-  const base = (knownMoves(r, s.id) || APP.pokemon[s.id].moveset).slice();   // first pick on an unscanned card: the other slots take PvPoke's moves
+  const r = results[idx], s = scanId(r), alt = s && s.id && APP.pokemon[s.id] ? null : altEntry(r), id = alt ? alt.id : s && s.id; if (!id) return;
+  const base = (knownMoves(r, id) || (APP.pokemon[id] || alt.e).moveset).slice();   // first pick on an unscanned card: the other slots take PvPoke's moves
   r.moves = place(base, slot, val); r.secondMove = r.moves.length >= 3; save(); render(); refresh(); if (UI.scan === r.key) renderMon();
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
