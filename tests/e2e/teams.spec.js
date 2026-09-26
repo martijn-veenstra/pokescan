@@ -26,7 +26,7 @@ test('Saved teams: ready now, affordable and all, with what each team still need
     results.length = 0;
     results.push(mk('AZUMARILL', 'azumarill'), mk('ALTARIA', 'altaria'), mk('MEDICHAM', 'medicham'), mk('LICKILICKY', 'lickilicky', true));
     save();
-    Planner.ROSTER.have = { dust: { v: 5000000, t: Date.now() }, fam: { AZURILL: { candy: 500, xl: 500 }, SWABLU: { candy: 500, xl: 500 }, MEDITITE: { candy: 500, xl: 500 }, LICKITUNG: { candy: 3, xl: 0 } } };
+    Planner.ROSTER.have = { dust: { v: 5000000, t: Date.now() }, fam: { MARILL: { candy: 500, xl: 500 }, SWABLU: { candy: 500, xl: 500 }, MEDITITE: { candy: 500, xl: 500 }, LICKITUNG: { candy: 3, xl: 0 } } };
     Planner.refresh(); return Planner.nameOf('lickilicky');
   });
   const teams = page.locator('#teams');
@@ -53,4 +53,25 @@ test('Saved teams: ready now, affordable and all, with what each team still need
   await teams.locator('.tchips .chip:has-text("Affordable")').click();
   await expect(teams).not.toContainText('short:');
   expect(await page.evaluate(() => localStorage.getItem('tfilt'))).toBe('afford');
+});
+
+/* Candy nobody has read is not affordable: a trio whose power-ups need it is listed as unknown, not as runnable */
+test('a trio whose candy is not known is not affordable', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.removeItem('roster'); localStorage.removeItem('tfilt'); });
+  await openApp(page, '#/teams');
+  await page.evaluate(() => {
+    const mk = (sp, id, lv) => { const b = DATA.stats[sp][0], m = cpmAt(lv); const r = { species: sp, cp: calcCP(b, 0, 15, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 0, 15, 15, b]], appraisal: [0, 15, 15], txt: '', cpCandidates: [], moves: APP.pokemon[id].moveset.slice(), secondMove: true, movesSeen: Date.now() }; r.key = `${sp}|${r.cp}|${r.hp}|${lv}|`; return r; };
+    results.length = 0; results.push(mk('AZUMARILL', 'azumarill', 15), mk('ALTARIA', 'altaria', 15), mk('MEDICHAM', 'medicham', 15)); save();
+    Planner.ROSTER.have = {}; Planner.refresh();
+  });
+  const teams = page.locator('#teams');
+  await expect(teams.locator('.tchips .chip.sel')).toHaveText(/Affordable\s*0/);
+  await expect(teams).toContainText('No trio is affordable on what the app knows');
+  await expect(teams).toContainText('The best you can build');
+  await expect(teams.locator('.work .unk').first()).toContainText('candy');
+  await expect(teams.locator('.work .unk').first()).toContainText('not known');
+  // with the candy and stardust known and enough, the same trio is affordable
+  await page.evaluate(() => { for (const k of ['MARILL', 'SWABLU', 'MEDITITE']) { Planner.setHave(k, 'candy', '999'); Planner.setHave(k, 'xl', '999'); } Planner.setHave(null, 'dust', '9000000'); });
+  await expect(teams.locator('.tchips .chip.sel')).toHaveText(/Affordable\s*1/);
+  await expect(teams.locator('.team.row').first()).toContainText('you have it');
 });

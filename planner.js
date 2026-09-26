@@ -637,16 +637,18 @@ function teamWork(m, ids) {
   const candy = Object.values(fams).reduce((n, f) => n + f.candy, 0), xl = Object.values(fams).reduce((n, f) => n + f.xl, 0);
   return {ws, dust, candy, xl, short, unknown: [...new Set(unknown)], dustUnknown: !!dust && dh == null, ready: ws.every(w => w.ready), missing: ws.some(w => !w.known)};
 }
-const TEAM_FILTERS = [['ready', 'Ready now', 'at the cap with the right moves'], ['afford', 'Affordable', 'the power-ups fit your stardust and candy'], ['all', 'All', 'everything you can build']];
+const TEAM_FILTERS = [['ready', 'Ready now', 'at the cap with the right moves'], ['afford', 'Affordable', 'the power-ups fit the stardust and candy you have'], ['all', 'All', 'everything you can build']];
 function teamFilter() { if (!UI.tfilt) { try { UI.tfilt = localStorage.getItem('tfilt') || 'afford'; } catch { UI.tfilt = 'afford'; } } return UI.tfilt; }
 function setTeamFilter(k) { UI.tfilt = k; try { localStorage.setItem('tfilt', k); } catch {} renderTeams(); }
-const passes = (tw, f) => f === 'ready' ? tw.ready : f === 'afford' ? !tw.short.length && !tw.missing : true;
+// affordable only on known numbers: a cost against candy nobody has read is not affordable, it is unknown
+const unknownCost = tw => tw.unknown.length > 0 || tw.dustUnknown;
+const passes = (tw, f) => f === 'ready' ? tw.ready : f === 'afford' ? tw.ready || (!tw.short.length && !tw.missing && !unknownCost(tw)) : true;
 function workLine(tw) {                          // one line under a team: ready, or what is left to do and whether you have it
   if (tw.ready) return `<div class="work"><span class="okc">✓</span> ready now: nothing to spend</div>`;
   const acts = tw.ws.filter(w => !w.ready || w.acts.length).flatMap(w => w.acts);
   const cost = [tw.dust ? `${kdust(tw.dust)} dust` : '', tw.candy ? `${tw.candy} candy` : '', tw.xl ? `${tw.xl} XL` : ''].filter(Boolean).join(' · ');
   const verdict = tw.missing ? '' : tw.short.length ? `<span class="short">short: ${esc(tw.short.join(', '))}</span>`
-    : tw.unknown.length || tw.dustUnknown ? `<span class="dim">${tw.unknown.length ? `${esc(tw.unknown.join(', '))} candy unknown` : 'stardust unknown'} · scan any of them</span>`
+    : unknownCost(tw) ? `<span class="unk">? ${esc([tw.unknown.length ? `${tw.unknown.join(', ')} candy` : '', tw.dustUnknown ? 'stardust' : ''].filter(Boolean).join(' and '))} not known · scan a status screen of each, or type it on its page</span>`
     : cost ? `<span class="okc">✓</span> you have it` : '';
   return `<div class="work">${esc(acts.join(' · '))}${cost ? ` · <b>${cost}</b>` : ''}${verdict ? ` · ${verdict}` : ''}</div>`;
 }
@@ -673,9 +675,14 @@ function renderTeamsInner(el) {
   else {
     h += `<div class="sec">Best you can run <small>${fl[1].toLowerCase()}: ${fl[2]}</small></div>` + colHead(teamCols(m));
     if (top) h += teamRow(m, top.ids, null, workLine(top.tw));
-    else h += `<div class="note">Nothing you can build is ${F === 'ready' ? 'ready yet: every trio still needs a power-up or a move' : 'affordable yet with the stardust and candy the app knows of'}. <a href="#" onclick="Planner.setTeamFilter('all');return false">Show all</a>.</div>`;
+    else {
+      const why = F === 'ready' ? 'Nothing you own is ready yet: every trio still needs a power-up or a move.'
+        : all.some(x => unknownCost(x.tw)) ? 'No trio is affordable on what the app knows: the candy or stardust it needs has not been read yet. Import a status screenshot of each member (it reads the candy, XL and stardust), or type them on its page.'
+        : 'No trio is affordable with the stardust and candy you have.';
+      h += `<div class="note">${why}</div>`;
+    }
     const best = all[0];
-    if (top && best !== top) h += `<div class="note">Better once you have the resources: <b>${esc(best.ids.map(nm).join(' / '))}</b> scores ${best.t.teamScore.toFixed(0)} (${esc(best.tw.short.join(', ') || best.tw.ws.flatMap(w => w.acts).join(', '))}).</div>`;
+    if (best !== top) h += `<div class="note">${top ? 'Better once you have the resources' : 'The best you can build'}: <b>${esc(best.ids.map(nm).join(' / '))}</b> scores ${best.t.teamScore.toFixed(0)}</div>` + (top ? '' : teamRow(m, best.ids, null, workLine(best.tw)));
   }
   h += `<div class="sec">Your in-game parties <small>as you built them in the game</small></div>`;
   h += parties.length ? colHead(teamCols(m)) + parties.map(([name, v]) => teamRow(m, v, name, workLine(teamWork(m, v)))).join('') : `<div class="note">None yet. Build a trio in the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a>, give it a name, and it lands here.</div>`;
