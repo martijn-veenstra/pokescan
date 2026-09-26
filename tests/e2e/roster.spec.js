@@ -88,7 +88,8 @@ test('a scan page has one head, one menu, and the move lists in the PvP and Raid
   const mon = page.locator('#mon');
   await expect(mon.locator('.scanhero')).toContainText('Rhyperior');
   await expect(mon.locator('.scanhero .typerow').first()).toContainText(/ground[\s\S]*rock/);
-  await expect(mon.locator('.scanhero .metar')).toContainText(/meta #\d+/);
+  await expect(mon.locator('.scanhero .metal')).toContainText(/meta #\d+ · [\d.]+ in Great League/);   // under the name, not beside the types
+  await expect(mon.locator('.scanhero')).toContainText(/strong against[\s\S]*(fire|flying|ice|poison|bug|electric)/);   // Rhyperior's Mud Slap and Superpower
   await expect(mon.locator('.scanhero')).toContainText(/weak to[\s\S]*water/);
   await expect(mon.locator('.detail .dh')).toHaveCount(0);                // no second head card
   await expect(mon).not.toContainText('in the meta');
@@ -127,4 +128,18 @@ test('Newest first shows the card just imported, and a card an import just chang
   await page.evaluate(() => { const r = results.find(x => x.species === 'MEDICHAM'); applyMoves(r, { id: 'medicham', fast: 'COUNTER', charged: ['ICE_PUNCH'], second: false }); save(); render(); });
   await expect.poll(async () => (await names())[0]).toContain('Medicham');
   expect(errors).toEqual([]);
+});
+
+/* The rankings carry no move-usage numbers for Cramorant in any league: the card lists its moves, recommended set starred */
+test('Moves by meta usage still shows for a species without usage numbers', async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('roster'));
+  await openApp(page, '#/roster');
+  const key = await page.evaluate(() => { const b = DATA.stats['CRAMORANT'][0], lv = 25.5, m = cpmAt(lv); const r = { species: 'CRAMORANT', cp: calcCP(b, 10, 11, 12, m), hp: calcHP(b, 12, m), level: lv, dust: null, combos: [[lv, 10, 11, 12, b]], appraisal: [10, 11, 12], txt: '', cpCandidates: [], moves: ['PECK', 'DIVE', 'FLY'], secondMove: true, movesSeen: Date.now() }; r.key = `CRAMORANT|${r.cp}|${r.hp}|${lv}|`; results.length = 0; results.push(r); save(); Planner.refresh(); return r.key; });
+  await page.evaluate(() => Planner.monTab('pvp'));
+  await page.evaluate(k => Planner.openScan(k), key);
+  const mon = page.locator('#mon');
+  await expect(mon).toContainText('Moves by meta usage');
+  await expect(mon).toContainText('no usage numbers for it yet');
+  await expect(mon.locator('.use .ur.mine')).toHaveCount(3);
+  await expect(mon.locator('.scanhero')).toContainText(/strong against[\s\S]*fighting/);   // Peck, Dive, Fly: flying hits fighting
 });

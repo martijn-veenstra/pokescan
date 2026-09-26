@@ -1250,7 +1250,10 @@ function moveRows(id, moves, handler, placeholder, e = APP.pokemon[id]) {  // Fa
 }
 function moveUsage(id, cur, e = APP.pokemon[id], league) {   // its own card on the PvP tab: how often the simulated meta battles run each move
   const use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
-  if (!Object.keys(use).length) return '';
+  if (!Object.keys(use).length) {              // the rankings carry no usage for it (Cramorant): list its moves, the recommended ones first
+    const list = (ks, label) => { const o = (ks || []).slice().sort((a, b) => (set.has(b) ? 1 : 0) - (set.has(a) ? 1 : 0)); return o.length ? `<div class="uh">${label}</div>` + o.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${esc(mvName(m))}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="pc dim">${esc(((moveInfo(m) || {}).t) || '')}</span></div>`).join('') : ''; };
+    return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}no usage numbers for it yet: the recommended set is starred</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${list(e.fast, 'Fast')}${list(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
+  }
   const rows = (list, label) => {
     const ranked = list.filter(m => use[m] !== undefined).sort((a, b) => (use[b] || 0) - (use[a] || 0));
     if (!ranked.length) return '';
@@ -1457,6 +1460,14 @@ function availLines(list, species) {           // the same bundle, for a Pokémo
   return bundleAvail(list, species).map(l => `<div class="avl ${l.now ? 'now' : ''}"><span class="lb">${l.label}</span><span class="tx">${l.html}</span></div>`).join('');
 }
 function weakTo(id) { return weakToTypes(APP.pokemon[id].types); }
+function strongVs(moveIds) {                  // defending types its moves hit super effectively, the hardest hit first
+  const ts = [...new Set((moveIds || []).filter(Boolean).map(k => (moveInfo(k) || {}).t).filter(Boolean))];
+  if (!ts.length) return [];
+  return TYPES18.map(d => ({d, e: Math.max(...ts.map(t => PVP.eff(t, [d])))})).filter(x => x.e > 1).sort((a, b) => b.e - a.e).map(x => x.d);
+}
+const typeRows = (types, weak, strong, from) => `<div class="typerow"><span class="chips" style="margin:0">${types.map(t => chip(t, 't-' + t)).join('')}</span></div>`
+  + `<div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`
+  + (strong ? `<div class="typerow"><span class="dim">strong against</span><span class="chips" style="margin:0">${strong.length ? strong.map(t => chip(t, 'strong')).join('') : '<span class="dim">nothing: its moves hit neutral at best</span>'}</span></div>` : '');
 function weakToTypes(t) {                      // attacking types that hit these types for more than neutral
   return TYPES18.filter(a => PVP.eff(a, t) > 1).sort((a, b) => PVP.eff(b, t) - PVP.eff(a, t));
 }
@@ -2277,8 +2288,10 @@ function scanSection(m, r) {
   h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon(hid && hid.id, 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
   {                                              // types, weaknesses and the meta rank: the species facts in the same card
     const e = UI.mon && APP.pokemon[UI.mon], form = best && best[4], types = e ? e.types : form ? [form[3], form[4]].filter(t => t && t !== 'none').map(t => t.toLowerCase()) : [];
-    const weak = types.length ? weakToTypes(types) : [];
-    if (types.length) h += `<div class="typerow"><span class="chips" style="margin:0">${types.map(t => chip(t, 't-' + t)).join('')}</span>${e ? `<span class="dim metar">meta #${e.rank} · ${e.score}</span>` : ''}</div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
+    const alt0 = e ? null : altEntry(r), known0 = knownMoves(r, (hid && hid.id) || (alt0 && alt0.id)), mv0 = known0 || (e ? e.moveset : alt0 ? alt0.e.moveset : []);
+    const meta = e ? `meta #${e.rank} · ${e.score} in ${LEAGUE.title}` : alt0 ? `not ranked in ${LEAGUE.title} · #${alt0.e.rank} in ${alt0.title}` : `not ranked in ${LEAGUE.title}`;
+    h += `<div class="metal">${esc(meta)}</div>`;
+    if (types.length) h += typeRows(types, weakToTypes(types), strongVs(mv0), known0 ? 'with its moves' : mv0.length ? 'with the recommended moves' : '');
   }
   const rows = [], mine = hid && hid.id && m.own[hid.id] && m.own[hid.id].key === r.key ? hid.id : null;   // the copy your roster plays
   if (mine && best) h += cpMeter(r, best);
@@ -2430,10 +2443,10 @@ function monInner(m, id, scanR) {               // the species part; under a sca
   let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st) || (!o ? chip('not owned', 'warn') : '')}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
   const teamsIn = rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
   if (!noHead) {
-  h += `<div class="detail" style="gap:8px"><div class="dh" style="flex-wrap:nowrap"><span style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">${icon(id, 'xl')}<span class="nm" style="font-size:20px">${esc(e.name)}</span></span>${menu}</div>`;
+  h += `<div class="detail" style="gap:8px"><div class="dh" style="flex-wrap:nowrap"><span style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">${icon(id, 'xl')}<span style="display:flex;flex-direction:column;min-width:0"><span class="nm" style="font-size:20px">${esc(e.name)}</span><span class="metal">meta #${e.rank} · ${e.score} in ${esc(LEAGUE.title)}</span></span></span>${menu}</div>`;
   if (!noHead && o) h += todoList(m, id);
   const weak = weakTo(id);
-  h += `<div class="typerow"><span class="chips" style="margin:0">${e.types.map(t => chip(t, 't-' + t)).join('')}</span><span class="dim metar">meta #${e.rank} · ${e.score}</span></div><div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`;
+  h += typeRows(e.types, weak, strongVs(known || e.moveset), known ? 'with your moves' : 'with the recommended moves');
   const pre = (APP.prevo || {})[id], sc = pre && DATA.stats[pre.split('_')[0].toUpperCase()] ? safeCap(pre, id) : null;
   if (!noHead && o && !o.manual && o.scan && o.scan.combos && o.scan.combos.length) h += cpMeter(o.scan, bestOf2(o.scan));   // your best copy: the in-game arc, drag for power-up costs
   if (!noHead && o && !o.manual) {                // three tiles for your best copy
