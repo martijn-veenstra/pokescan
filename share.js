@@ -45,21 +45,21 @@ async function fromScan(file, cv) {
   if (!window.Sync || !Sync.available() || !Sync.signedIn()) return false;
   if (Sync.visionOffered && Sync.visionOffered()) { gain('note', 'not a status screen · PokeScan Pro reads battle results and Rocket taunts from screenshots'); pushCard({kind: 'teaser', t: Date.now(), name: file.name}); render(); return true; }
   if (!Sync.visionAvailable || !Sync.visionAvailable()) return false;
-  status(`${file.name}: reading with Claude…`);
+  status(`${file.name}: Professor Cedar is reading it…`);
   try {
     const data = await ask(await shrink(cv, 1568));
     if (data && (data.kind === 'status' || data.kind === 'appraisal') && data.pokemon && typeof applyVisionScan === 'function') {
       const placed = applyVisionScan(data.pokemon);   // what Claude read goes onto the card, like an on-device read would
-      if (placed) { gain('note', `read by Claude: ${placed.what}`); status(`${file.name}: ${placed.what}`); if (typeof toast === 'function') toast(`Read by Claude · ${placed.what}`); return true; }
+      if (placed) { gain('note', `read by Professor Cedar: ${placed.what}`); status(`${file.name}: ${placed.what}`); if (typeof toast === 'function') toast(`Read by Professor Cedar · ${placed.what}`); return true; }
     }
     const card = route(data, file);
-    gain('note', `read by Claude: ${card.line}`);
+    gain('note', `read by Professor Cedar: ${card.line}`);
     pushCard(card); render();
     if (typeof toast === 'function') toast(card.toast || card.line, card.go ? `Planner.nav(${JSON.stringify(card.go)})` : null);
     if (window.Planner) Planner.msCheck && Planner.msCheck();
     return true;
   } catch (e) {
-    gain('note', `Claude could not read it: ${e.message || e}`);
+    gain('note', `Professor Cedar could not make it out: ${e.message || e}`);
     return true;
   }
 }
@@ -68,17 +68,17 @@ async function fromFrames(file, snaps, dur) {
   if (!window.Sync || !Sync.available() || !Sync.signedIn()) return false;
   if (Sync.visionOffered && Sync.visionOffered()) { gain('note', 'no status screens · PokeScan Pro reads a battle recording: result, both teams and the decisions that decided it'); pushCard({kind: 'teaser', t: Date.now(), name: file.name}); render(); return true; }
   if (!Sync.visionAvailable || !Sync.visionAvailable()) return false;
-  status(`${file.name}: Claude is watching the recording (${snaps.length} frames)…`);
+  status(`${file.name}: Professor Cedar is watching the recording (${snaps.length} frames)…`);
   try {
     const data = await ask({images: snaps.map(s => ({image: s.image, mediaType: s.mediaType, t: s.t})), hint: `screen recording, ${Math.round(dur)} s`});
     const card = route(data, file);
     if (card.kind === 'battle_end') { card.notes = (data.notes || []).filter(n => n && n.text).slice(0, 3); card.film = true; card.line += card.notes.length ? ` · ${card.notes.length} film note${card.notes.length === 1 ? '' : 's'}` : ''; }
-    gain('note', `read by Claude: ${card.line}`);
+    gain('note', `read by Professor Cedar: ${card.line}`);
     pushCard(card); render();
     if (typeof toast === 'function') toast(card.toast || card.line, card.go ? `Planner.nav(${JSON.stringify(card.go)})` : null);
     if (window.Planner) Planner.msCheck && Planner.msCheck();
     return true;
-  } catch (e) { gain('note', `Claude could not read the recording: ${e.message || e}`); return true; }
+  } catch (e) { gain('note', `Professor Cedar could not make out the recording: ${e.message || e}`); return true; }
 }
 function pushCard(card) { card.id = card.id || Date.now().toString(36); SHARES.unshift(card); SHARES.splice(10); save(); }
 function dismiss(id) { const i = SHARES.findIndex(c => c.id === id); if (i >= 0) { SHARES.splice(i, 1); save(); render(); } }
@@ -132,22 +132,22 @@ function render() {
   if (!SHARES.length) { el.innerHTML = ''; return; }
   el.innerHTML = SHARES.map(c => {
     const x = `<span class="x" onclick="Share.dismiss('${c.id}')">✕</span>`, when = new Date(c.t).toLocaleString('nl-NL', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
-    if (c.kind === 'teaser') return window.Planner && Planner.proTeaser ? Planner.proTeaser('Read this screenshot', 'Claude reads battle results and Team GO Rocket taunts from screenshots. That is a Pro feature.').replace('<div class="sec"', x + '<div class="sec"') : '';
+    if (c.kind === 'teaser') return window.Planner && Planner.proTeaser ? Planner.proTeaser('Read this screenshot', 'Professor Cedar reads battle results and Team GO Rocket taunts from screenshots. That is a Pro feature.').replace('<div class="sec"', x + '<div class="sec"') : '';
     if (c.kind === 'battle_end') {
       const side = (list, lead) => list.map(p => `<span class="chip ${p.id ? '' : 'dim'} ${lead && p.name === lead ? 'ok' : ''}" ${p.id ? `onclick="Planner.openMon('${p.id}')" style="cursor:pointer"` : ''}>${p.id ? Planner.icon(p.id, 'xs') : ''}${esc(p.name || '?')}</span>`).join('');
-      return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${c.result === 'W' ? '✓ Win' : c.result === 'L' ? '✕ Loss' : c.result === 'D' ? 'Draw' : 'Battle'} <small>read by Claude · ${esc(when)}</small></span></div>
+      return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${c.result === 'W' ? '✓ Win' : c.result === 'L' ? '✕ Loss' : c.result === 'D' ? 'Draw' : 'Battle'} <small>read by Professor Cedar · ${esc(when)}</small></span></div>
         <div class="dt">Their team${c.opp && c.opp[0] ? ', lead first' : ''}</div><div class="chips">${side(c.opp || [], c.opp && c.opp[0] && c.opp[0].name)}</div>
         <div class="dt" style="margin-top:6px">Your team${c.party ? ` · ${esc(c.party)}` : ''}</div><div class="chips">${side(c.my || [])}</div>
         ${c.notes && c.notes.length ? `<div class="dt" style="margin-top:8px;color:var(--ink);font-weight:600">Film study</div>${c.notes.map(n => `<div class="fn"><span class="ts">${n.t != null ? fmtT(n.t) : ''}</span><span>${esc(n.text)}</span></div>`).join('')}` : ''}
         <div class="dt" style="margin-top:6px"><a href="#" onclick="Planner.nav('#/battles');return false">Battle log</a>${c.opp && c.opp[0] && c.opp[0].id ? ` · <a href="#" onclick="Planner.openMon('${c.opp[0].id}');return false">how to beat ${esc(c.opp[0].name)}</a>` : ''}</div></div>`;
     }
     if (c.kind === 'rocket') {
-      return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${esc(c.who)} <small>read by Claude · ${esc(when)}</small></span></div>
+      return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 6px"><span>${esc(c.who)} <small>read by Professor Cedar · ${esc(when)}</small></span></div>
         ${c.quote ? `<div class="dt">“${esc(c.quote)}”</div>` : ''}
         ${c.names.length ? `<div class="dt" style="margin-top:6px">You will meet Shadow</div><div class="chips">${c.cands.map(k => `<span class="chip ${k.wanted ? 'ok' : k.rank && k.rank <= 100 ? 'gl' : ''}" ${k.id ? `onclick="Planner.openMon('${k.id}')" style="cursor:pointer"` : ''}>${k.id ? Planner.icon(k.id, 'xs') : ''}${esc(k.name)}${k.text ? ` <span style="opacity:.7">${esc(k.text)}</span>` : ''}</span>`).join('')}</div>` : ''}
         <div class="dt" style="margin-top:6px;color:var(--ink)">${esc(c.verdict)}</div></div>`;
     }
-    return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 4px"><span>Shared screenshot <small>read by Claude · ${esc(when)}</small></span></div><div class="dt">${esc(c.line)}</div></div>`;
+    return `<div class="team card share" style="cursor:default">${x}<div class="sec" style="margin:0 0 4px"><span>Shared screenshot <small>read by Professor Cedar · ${esc(when)}</small></span></div><div class="dt">${esc(c.line)}</div></div>`;
   }).join('');
 }
 

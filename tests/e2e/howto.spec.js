@@ -98,7 +98,7 @@ test('Oranguru: a wild spawn says so, with the weather that boosts it; a legenda
 test('no page names another app or site', async ({ page }) => {
   const errors = await openApp(page, '#/today');
   await page.evaluate(() => Sources.load(true));
-  const rx = /pvpoke|leek ?duck|scrapedduck|pokeminers|pokebattler|silph|gamepress|pok[eé] ?genie/i;
+  const rx = /pvpoke|leek ?duck|scrapedduck|pokeminers|pokebattler|silph|gamepress|pok[eé] ?genie|claude|anthropic/i;   // the AI coach is Professor Cedar on screen
   const seen = [];
   for (const h of ['#/today', '#/builder', '#/teams', '#/roster', '#/meta', '#/rank', '#/raids', '#/scans', '#/matchups', '#/battles', '#/pro', '#/mon/oranguru', '#/mon/ninetales_shadow', '#/mon/azumarill']) {
     await page.evaluate(h => Planner.nav(h), h);

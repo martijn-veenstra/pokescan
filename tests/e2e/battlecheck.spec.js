@@ -53,7 +53,7 @@ test('the battle check names the move into a resist, the losing lead and the was
   await expect(check).toContainText(/Lead Azumarill against Registeel: loses it/);
   await expect(check.locator('.bck.bad .fx').filter({ hasText: 'Medicham' })).toHaveCount(1);   // who should have led instead
   // the review is asked for by hand and carries those checks
-  await b.locator('a:has-text("Coach me on this battle")').click();
+  await b.locator('a:has-text("Ask Professor Cedar about this battle")').click();
   await expect(b.locator('.team.card.review .bgrade .gl')).toHaveText('C');
   await expect(b.locator('.rsec.next')).toContainText('Lead Medicham into a Steel lead');
   for (const s of ['What happened', 'Mistakes', 'Moves', 'Matchups', 'Shields', 'Try this next time', 'Team tip']) await expect(b.locator(`.rsec:has(b:text-is("${s}"))`)).toHaveCount(1);

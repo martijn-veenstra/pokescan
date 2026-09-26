@@ -52,7 +52,7 @@ test('Pro: an end-of-battle screenshot logs the battle with the opponents; a Roc
   const b = await page.evaluate(() => Planner.BATTLES[Planner.BATTLES.length - 1]);
   expect(b.result).toBe('L'); expect(b.src).toBe('share'); expect(b.team).toBe('Core'); expect(b.lead).toBe('tinkaton');
   expect(b.opp).toEqual(['tinkaton', 'cresselia', 'clodsire']); expect(b.ids).toEqual(['azumarill', 'medicham', 'altaria']);
-  expect((await page.evaluate(() => JSON.parse(localStorage.getItem('scanlog'))[0].msg))).toContain('read by Claude');
+  expect((await page.evaluate(() => JSON.parse(localStorage.getItem('scanlog'))[0].msg))).toContain('read by Professor Cedar');
   // the battles page shows what you face
   await page.evaluate(() => Planner.nav('#/battles'));
   await expect(page.locator('#battles')).toContainText('What you face');
@@ -112,7 +112,7 @@ test('Pro: a status screen Claude reads updates the card, or makes one', async (
   await share(page, 'IMG_2167.png'); await done(page);
   expect(posts).toHaveLength(1);
   expect(await page.evaluate(() => results.map(r => [r.species, r.moves, r.secondMove]))).toEqual([['MEDITITE', ['CONFUSION', 'PSYSHOCK'], false]]);
-  await expect(page.locator('#toast')).toContainText(/Read by Claude · MEDITITE moves: Confusion · Psyshock/);
+  await expect(page.locator('#toast')).toContainText(/Read by Professor Cedar · MEDITITE moves: Confusion · Psyshock/);
   // a Pokémon with no card yet: CP and HP make one
   const azu = await page.evaluate(() => { const b = DATA.stats['AZUMARILL'][0], m = cpmAt(20); return { cp: calcCP(b, 8, 15, 15, m), hp: calcHP(b, 15, m) }; });
   answers.push({ kind: 'status', confidence: 0.9, pokemon: { name: 'Azumarill', cp: azu.cp, hp: azu.hp, hpMax: azu.hp, fast: 'Bubble', charged: ['Ice Beam', 'Play Rough'], newAttack: false }, summary: 'Status screen for an Azumarill' });

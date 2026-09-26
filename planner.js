@@ -1090,13 +1090,13 @@ async function askBattleReview(id) {
 }
 function battleReviewCard(b) {
   if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered()
-    ? proTeaser('Battle review', 'Claude coaches you through this match: a grade, the mistakes with their times, the moves and matchups to change, the shield trade, and what to try next time.') : '';
+    ? proTeaser("Professor Cedar's review", 'Professor Cedar coaches you through this match: a grade, the mistakes with their times, the moves and matchups to change, the shield trade, and what to try next time.') : '';
   const rv = BCOACH.battles[b.id], busy = BCOACH.bBusy[b.id], failed = BCOACH.bFailed[b.id];
-  const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>Battle review <small>${extra}</small></span>${rv ? ctxMenu([['Ask again', `Planner.askBattleReview(${attr(b.id)})`]]) : ''}</div>`;
+  const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>🎓 Professor Cedar's review <small>${extra}</small></span>${rv ? ctxMenu([['Ask again', `Planner.askBattleReview(${attr(b.id)})`]]) : ''}</div>`;
   const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
-  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is coaching this match: the grade, your mistakes, the moves and matchups, the shields and what to try next time.');
+  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Professor Cedar is looking over this match: the grade, your mistakes, the moves and matchups, the shields and what to try next time.');
   if (failed && !rv) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">try again</a>`);
-  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">Coach me on this battle</a> — a grade, your mistakes with their times, and what to try next time. Up to 5 an hour.`);
+  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.askBattleReview(${attr(b.id)});return false">Ask Professor Cedar about this battle</a> — a grade, your mistakes with their times, and what to try next time. Up to 5 an hour.`);
   const sec = parseReview(rv.text, BATTLE_SECS), order = BATTLE_SECS.filter(k => k !== 'Grade');
   const g = (sec.Grade || '').replace(/\*\*/g, '').trim(), gl = (g.match(/^[A-F][+-]?/) || [''])[0];
   const grade = g ? `<div class="bgrade"><span class="gl g${(gl[0] || 'x').toLowerCase()}">${esc(gl || '?')}</span><span>${linkNames(mdLite(g.replace(/^[A-F][+-]?\s*[-—:·]?\s*/, '')))}</span></div>` : '';
@@ -1110,14 +1110,14 @@ function refreshReview(ids) { askReview(ids, true); const v = onView(); if (v ==
    of Pro reviews without the player asking for any of them. */
 function reviewCard(ids) {
   if (ids.length !== 3) return '';
-  if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered() ? proTeaser('AI review', 'Claude judges this team: its plan, what it fears and the one swap from your roster that helps.') : '';
+  if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered() ? proTeaser("Professor Cedar's verdict", 'Professor Cedar judges this team: its plan, what it fears and the one swap from your roster that helps.') : '';
   const key = reviewKey(ids), rv = BCOACH.reviews[key], busy = BCOACH.reviewBusy[key], failed = BCOACH.reviewFailed[key];
-  const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>AI review <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
+  const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>🎓 Professor Cedar's verdict <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
   // the scan importer's Pokéball, on the app's other long wait: shaking while Claude thinks, caught when it lands, dropped when it fails
   const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
-  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Claude is judging this team: roles, weak spots and swaps from your roster. Usually 20 to 90 seconds.');
+  if (busy) return wait('on', 'thinking · <span class="rvsec">0s</span>', 'Professor Cedar is judging this team: roles, weak spots and swaps from your roster. Usually 20 to 90 seconds.');
   if (!rv && failed) return wait('err', 'not available', `⚠ ${esc(failed)} · <a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">try again</a>`);
-  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Review this team</a> — Claude writes a game plan, the weak spots and the swaps from your roster. Pro, and counted in your AI reviews an hour.`);
+  if (!rv) return wait('', 'on request', `<a href="#" onclick="Planner.refreshReview(${attr(ids)});return false">Ask Professor Cedar about this team</a> — he writes a game plan, the weak spots and the swaps from your roster. Pro, and counted in your AI reviews an hour.`);
   const sec = parseReview(rv.text), order = TEAM_SECS;
   // the Order section's first line is a lineup: one tap applies it to the saved party or the builder slots when it differs
   const perm = sec.Order ? orderFromReview(sec.Order, ids) : null, party = perm ? savedName(ids, null) : null;
@@ -1864,7 +1864,7 @@ function battleInner() {
     <span style="color:${col}">${res}</span><span style="display:flex;align-items:center;gap:6px"><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span>${ctxMenu([['Delete this battle', `Planner.delBattleGo(${attr(b.id)})`, true]])}</span></div>
     <div class="bvs">${side(b.ids, b.myNames, 'you')}<span class="vs">vs</span>${side(b.opp, b.oppNames, 'them')}</div>
     ${kv([['Shields', b.shields ? `you ${b.shields.me} · them ${b.shields.opp}` : '—'], ['Fainted', b.fainted ? `you ${b.fainted.me} · them ${b.fainted.opp}` : '—'],
-         ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Claude, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in'],
+         ['Read', b.src === 'film' ? 'from your recording, on this phone' : b.src === 'share' ? 'by Professor Cedar, from a screenshot' : b.src === 'ocr' ? 'from a screenshot' : 'tapped in'],
          ['Played with', teamPick(b)]])}</div>`;
   const mv = b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [];
   if (mv.length) {
@@ -1887,7 +1887,7 @@ function openBattle(id) { nav('#/battle/' + id); }
 function battleRow(b, noChips) {                // one line per battle; a film entry with no team yet asks for one in place
   const col = b.result === 'W' ? 'var(--green)' : b.result === 'L' ? '#F59A8B' : 'var(--dim)';
   const open = b.result || b.opp ? ` onclick="Planner.openBattle(${attr(b.id)})" style="cursor:pointer"` : ' style="cursor:default"';
-  const src = b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Claude' : b.src === 'film' ? ' · read from your recording' : '';
+  const src = b.src === 'ocr' ? ' · from screenshot' : b.src === 'share' ? ' · read by Professor Cedar' : b.src === 'film' ? ' · read from your recording' : '';
   const row = `<div class="team row"${open}><span class="sc" style="color:${col}">${b.result || (b.set ? `${b.set.w}/5` : b.rating ? '★' : '·')}</span>${b.lead ? icon(b.lead, 's') : b.opp && b.opp.length ? trio(b.opp.slice(0, 3)) : ''}<span class="tx"><span class="nm">${b.rating ? `rating ${b.rating}${b.delta ? ` (${b.delta > 0 ? '+' : ''}${b.delta})` : ''}` : b.set ? `set ${b.set.w}-${b.set.l}` : `${b.lead ? 'vs ' + esc(nm(b.lead)) + ' lead' : 'battle'}`}</span><div class="dt">${whenT(b.t)}${b.ids ? ' · ' + esc(b.team || b.ids.map(nm).join(' / ')) : ''}${b.opp && b.opp.length ? ' · vs ' + esc(b.opp.map(nm).join(' / ')) : ''}${src}</div></span>${b.result || b.opp ? '<span class="go">›</span>' : ''}${ctxMenu([['Delete', `Planner.delBattle(${attr(b.id)})`, true]])}</div>`;
   // asked only where it is still missing, so an attributed log stays quiet
   return row + (!noChips && b.src === 'film' && !b.team ? teamChips(b) : '');
@@ -2130,7 +2130,7 @@ function renderPro() {
   h += `<div class="sec">In Pro today</div>` + PRO_NOW.map(x => row(x, false)).join('');
   h += `<div class="sec">Coming to Pro <small>you get them the day they ship</small></div>` + PRO_NEXT.map(x => row(x, true)).join('');
   h += `<div class="sec">Always free</div><div class="prow"><span class="tick full">✓</span><div><b>Everything else</b><div class="dt">Scanning, IV ranks, the roster, Today, the builder, matchups, meta teams, rankings, raids, the battle log with its battle check (moves into a resist, losing matchups, wasted shields) and sync across devices stay free.</div></div></div>`;
-  h += `<div class="note">${hl.coach ? 'The AI runs on the PokeScan server with a Claude model; your roster summary is sent for the review and not kept by the model.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
+  h += `<div class="note">${hl.coach ? 'Professor Cedar is PokeScan\'s AI coach. He runs on the PokeScan server; your roster summary is sent for the review and not kept.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
   el.innerHTML = h;
 }
 const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Matchups', '⚑'], ['battles', 'Battle log', '◔']]],

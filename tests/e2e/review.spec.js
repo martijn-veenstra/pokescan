@@ -17,7 +17,7 @@ test('a complete team gets an AI review when asked, never by itself, cached per 
   await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
   // a complete trio offers a review and asks for nothing until it is tapped: reviews are Pro and counted per hour
-  const ask = page.locator('#builder .team.card.rvwait a:has-text("Review this team")');
+  const ask = page.locator('#builder .team.card.rvwait a:has-text("Ask Professor Cedar about this team")');
   await expect(ask).toBeVisible();
   await page.waitForTimeout(500);
   expect(posts, 'nothing is sent before the tap').toHaveLength(0);
@@ -49,12 +49,12 @@ test('a complete team gets an AI review when asked, never by itself, cached per 
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'tinkaton']));
   await page.waitForTimeout(500);
   expect(posts, 'a different trio does not ask by itself either').toHaveLength(1);
-  await page.click('#builder .team.card.rvwait a:has-text("Review this team")');
+  await page.click('#builder .team.card.rvwait a:has-text("Ask Professor Cedar about this team")');
   await expect.poll(() => posts.length).toBe(2);
   // saved party rows carry the verdict, team page shows the review
   // a newly saved party with no review yet: its page offers one and does not ask
   await page.evaluate(() => { Planner.ROSTER.tagged['Fresh'] = ['azumarill', 'altaria', 'tinkaton']; Planner.refresh(); Planner.openTeam(['azumarill', 'altaria', 'tinkaton'], 'Fresh'); });
-  await expect(page.locator('#team .team.card.rvwait a:has-text("Review this team")')).toBeVisible();
+  await expect(page.locator('#team .team.card.rvwait a:has-text("Ask Professor Cedar about this team")')).toBeVisible();
   await page.waitForTimeout(500);
   expect(posts, 'saving a team spends no review').toHaveLength(2);
   await page.evaluate(() => { Planner.ROSTER.tagged['Core'] = ['azumarill', 'medicham', 'altaria']; Planner.refresh(); Planner.nav('#/teams'); });
@@ -101,7 +101,7 @@ test('the review card runs the Pokéball loader: shaking with a live timer, caug
   const errors = await openApp(page, '#/builder');
   await page.evaluate(async () => { await Sync.detect(); Planner.clearSlots(); });
   await page.evaluate(() => Planner.goBuilder(['azumarill', 'medicham', 'altaria']));
-  await page.click('#builder .team.card.rvwait a:has-text("Review this team")');
+  await page.click('#builder .team.card.rvwait a:has-text("Ask Professor Cedar about this team")');
   // the ball shakes inside the card while Claude thinks, and the heading counts the seconds
   const ball = page.locator('#builder .team.card.rvwait .pball.rv');
   await expect(ball).toHaveClass(/\bon\b/);

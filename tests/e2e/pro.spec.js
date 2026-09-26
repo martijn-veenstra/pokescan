@@ -23,7 +23,7 @@ test('free plan sees the locked review and the Pro page; Pro unlocks the review'
   expect(await page.evaluate(() => Sync.plan())).toBe('free');
   // a complete team shows the locked card instead of a review, and nothing is sent to the server
   await page.evaluate(() => Planner.tryTeam(['azumarill', 'medicham', 'altaria']));
-  await expect(page.locator('#builder .team.card.pro-lock')).toContainText('AI review');
+  await expect(page.locator('#builder .team.card.pro-lock')).toContainText("Professor Cedar's verdict");
   await page.waitForTimeout(500);
   expect(coachPosts.length).toBe(0);
   // drawer entry and the Pro page
@@ -44,7 +44,7 @@ test('free plan sees the locked review and the Pro page; Pro unlocks the review'
   await expect(page.locator('#pro')).toContainText('You are on Pro');
   await page.evaluate(() => Planner.nav('#/builder'));
   // Pro offers the review; it is asked for with a tap, never by itself
-  await page.click('#builder .team.card.rvwait a:has-text("Review this team")');
+  await page.click('#builder .team.card.rvwait a:has-text("Ask Professor Cedar about this team")');
   await expect(page.locator('#builder .team.card.review')).toContainText('Fine.', { timeout: 15000 });
   expect(coachPosts.length).toBe(1);
   expect(errors).toEqual([]);
