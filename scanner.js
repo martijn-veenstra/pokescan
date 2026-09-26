@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.12';
+const APP_VERSION='10.13';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -776,7 +776,7 @@ function renderLog(){
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
-function showErr(msg){ const pr=$(CARD_FILM?'bprog':'prog'); if(pr) pr.style.display='flex'; status('⚠ '+msg); pballState('err'); console.error(msg); }
+function showErr(msg){ if(!CARD_FILM){ const pr=$('prog'); if(pr) pr.style.display='flex'; } status('⚠ '+msg); pballState('err'); console.error(msg); }
 window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
 window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
 const results=JSON.parse(localStorage.getItem('scans')||'[]').filter(r=>r&&typeof r.species==='string'); results.forEach(r=>{ if(!Array.isArray(r.combos)) r.combos=[]; });
@@ -872,18 +872,17 @@ $('pfile').addEventListener('change', async e=>{
 function del(i){ results.splice(i,1); save(); render(); }
 
 let IMPORTING=false, STICKY=false;                 // STICKY: the import is over but the card stays up — it failed, or the events are open
-/* Two loaders, one pipeline. A screenshot or recording imported on Scans & import reads out in that page's card; a
-   recording imported from the battle log has its own card on the battle log. Only one import runs at a time (they
-   share the video decoder and the OCR worker), and whichever it is, a small copy of its card floats above the bottom
-   bar on the other pages — never over the Scans page for a battle import. */
+/* Two loaders, one pipeline. Screenshots imported on the Roster read out in the Roster's own card, and a small copy
+   floats above the bottom bar on the other pages. A battle recording imported from the battle log only ever floats,
+   on every page, so the app stays usable for the minutes a recording takes. Only one import runs at a time (they
+   share the video decoder and the OCR worker). */
 let CARD_FILM=false;                             // the import on screen is the battle log's
-const cardStat=()=>$(CARD_FILM?'bstat':'stat');  // the status line of the card that is showing
-function status(s){ const el=cardStat(); if(el) el.textContent=s; const f=$('fstat'); if(f) f.textContent=s; }
+const cardStat=()=>$(CARD_FILM?'fstat':'stat');  // the status line of the card that is showing
+function status(s){ const el=$('stat'); if(el&&!CARD_FILM) el.textContent=s; const f=$('fstat'); if(f) f.textContent=CARD_FILM?'Battle log · '+s:s; }
 function progBox(on){                            // the Pokéball loader and status line: in its own page, and floating above the bottom bar on the others
   IMPORTING=on; if(on){ STICKY=false; CARD_FILM=BATTLE_IMPORT; }
   const up=on||STICKY;
   $('prog').style.display=up&&!CARD_FILM?'flex':'none';
-  const b=$('bprog'); if(b) b.style.display=up&&CARD_FILM?'flex':'none';
   pballState(on?'on':''); syncFloat();
 }
 /* ---------- the loader's own feed: what this import has found so far, behind an expand button ----------
@@ -920,7 +919,7 @@ function fillEvents(el){
   el.dataset.n=EVT.length; el.dataset.first=String(EVT[0].t)+EVT[0].text;
 }
 function renderEvents(){
-  const label=`${evtOpen?'▾':'▸'} ${EVT.length} event${EVT.length===1?'':'s'} recorded`;
+  const n=EVT.length, label=`${evtOpen?'▾':'▸'} ${CARD_FILM?`${n} battle event${n===1?'':'s'}`:`read log · ${n} line${n===1?'':'s'}`}`;   // a screenshot has no events, only what was read
   for(const pre of ['p','f','b']){
     const b=$(pre+'evx'), l=$(pre+'evl'); if(!b||!l) continue;
     b.textContent=label; b.setAttribute('aria-expanded', evtOpen?'true':'false');
@@ -954,9 +953,9 @@ function pballState(st){ document.querySelectorAll('.pball:not(.rv)').forEach(el
 function syncFloat(){                            // an update or add-a-scan started from a Pokémon page runs while that page is shown: mirror the loader there
   const f=$('impfloat'); if(!f) return;
   const on=id=>{ const v=$(id); return !!v&&getComputedStyle(v).display!=='none'; };
-  // not on the page whose own card is showing it, and a battle import never over the Roster page (where the scan loader lives) either
-  const home=CARD_FILM?on('view-battles'):on('view-roster'), scans=on('view-roster');
-  f.hidden=!((IMPORTING||STICKY)&&!home&&!(CARD_FILM&&scans));
+  // a scan import: not over the Roster, whose own card shows it; a battle recording: floating on every page
+  const home=!CARD_FILM&&on('view-roster');
+  f.hidden=!((IMPORTING||STICKY)&&!home); f.classList.toggle('film',CARD_FILM);
 }
 window.addEventListener('hashchange', ()=>setTimeout(syncFloat,0));   // after the router has switched the view
 let TOAST_T=null;
@@ -1162,16 +1161,18 @@ async function scanVideo(file,trainer){
   vid.pause(); vid.removeAttribute('src'); vid.load(); URL.revokeObjectURL(url);
   // The HUD read stands on its own: a battle recording usually makes the status-screen reader misfire a few times
   // (an attacks screen, a "BATTLE" banner), so gating this on reads===0 meant a real recording never got read at all.
+  let filmSaw=false;
   if(window.Film){
     if(!aborted){
-      try{ if(Film.seen()) await Film.finish(file); }
+      try{ if(Film.seen()){ filmSaw=true; await Film.finish(file); } }
       catch(e){ console.error(e); gain('note','the battle read failed: '+(e.message||e)); }
     }
     FILM_REPORT=Film.report(); Film.stop();
   }
   if(aborted) throw abort();                              // nothing else runs on a recording the player stopped
   // Pro commentary on top, only for a recording the scanner made nothing of: it is the fallback, not the reader
-  if(reads===0 && results.length===before && snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
+  // only when the phone made nothing of it: a recording read as a battle is not sent again (it was logged twice)
+  if(!filmSaw && reads===0 && results.length===before && snaps.length>=3 && window.Share) await Share.fromFrames(file, snaps, dur);
 }
 
 async function handleScan(ctx,W,H,trainer,skipKey){

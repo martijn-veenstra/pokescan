@@ -55,12 +55,15 @@ test('a recorded battle goes through scanVideo into a draft, even when the statu
     window.getWorker = async () => { const names = window.__names; let wl = '';
       return { setParameters: async o => { wl = o.tessedit_char_whitelist || ''; },
         recognize: async () => ({ data: { text: wl.includes('!') ? 'CHESNAUGHT used FRENZY PLANT!' : wl.includes('Z') ? (names.shift() || 'AZUMARILL') : '1500' } }) }; };
+    // a Pro account would send a recording the phone made nothing of to Claude: one read as a battle must not go (it was logged twice)
+    window.__claude = 0; if (window.Share) Share.fromFrames = async () => { window.__claude++; return true; };
     await importFilmFiles([file]);
-    return { size: blob.size, report: Film.report(), blog: JSON.parse(localStorage.getItem('blog') || '[]') };
+    return { size: blob.size, report: Film.report(), blog: JSON.parse(localStorage.getItem('blog') || '[]'), claude: window.__claude };
   });
   expect(res.size, 'the browser produced a real video file').toBeGreaterThan(1000);
   expect(res.report, 'the reader calibrated the HUD off the pips in the recording').toMatchObject({ cal: true });
   expect(res.report.entries, 'and turned it into exactly one battle, despite the six second HUD hole').toBe(1);
+  expect(res.claude, 'the recording is not sent to Claude as well').toBe(0);
   expect(res.report.good, 'the splitter saw one battle in the row stream').toBe(1);
   // it became a draft on the battle log, waiting to be saved
   await expect(page.locator('#battles .team.card.draft')).toBeVisible();
