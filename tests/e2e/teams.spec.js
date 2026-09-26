@@ -10,6 +10,8 @@ test('a status screen gives your stardust and that family\'s candy and XL', asyn
   expect(await page.evaluate(() => Planner.ROSTER.have)).toMatchObject({ dust: { v: 99340 }, fam: { MEDITITE: { candy: 45, xl: 13 } } });
   await importFile(page, 'stun-status.png');
   expect(await page.evaluate(() => Planner.ROSTER.have)).toMatchObject({ dust: { v: 417289 }, fam: { MEDITITE: { candy: 45, xl: 13 }, STUNFISK: { candy: 79, xl: 7 } } });
+  await importFile(page, 'mimikyu-status.png');   // a single-digit candy count and XL next to a grey candy icon
+  expect(await page.evaluate(() => Planner.ROSTER.have)).toMatchObject({ dust: { v: 411829 }, fam: { MIMIKYU: { candy: 1, xl: 5 }, STUNFISK: { candy: 79, xl: 7 } } });
 });
 
 /* Saved teams sorts what you can run by what it still costs: Ready now (at the cap with the right moves), Affordable
