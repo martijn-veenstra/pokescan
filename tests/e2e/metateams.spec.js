@@ -35,8 +35,9 @@ test('Meta teams: the 40 best trios in PvPoke order, must-have / leave-out / bui
   await expect(page.locator('#meta')).toContainText(/No trio from the top 40/);
   await page.locator('#meta a:has-text("Clear the filters")').click();
   await expect(rows).toHaveCount(40);
-  // ownership rings: an owned Melmetal shows a green ring in the first row
+  // ownership rings: an owned Melmetal shows a green ring on a meta trio with Melmetal (which trio ranks first moves with the data)
   await page.evaluate(() => { const b = DATA.stats['MELMETAL'][0], lv = 8, m = cpmAt(lv); const r = { species: 'MELMETAL', cp: calcCP(b, 10, 14, 15, m), hp: calcHP(b, 15, m), level: lv, dust: null, combos: [[lv, 10, 14, 15, b]], appraisal: [10, 14, 15], txt: '', cpCandidates: [] }; r.key = `MELMETAL|${r.cp}|${r.hp}|${lv}|`; results.push(r); save(); render(); Planner.refresh(); });
-  await expect(rows.nth(0).locator('.trio img.pi.ow[src$="melmetal.webp"]')).toHaveCount(1);
+  const withMelmetal = rows.filter({ has: page.locator('.trio img[src$="melmetal.webp"]') }).first();
+  await expect(withMelmetal.locator('.trio img.pi.ow[src$="melmetal.webp"]')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
