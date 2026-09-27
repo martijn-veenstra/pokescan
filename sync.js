@@ -8,6 +8,7 @@ const save = () => localStorage.setItem('sync', JSON.stringify(S));
 let available = null, timer = null, busy = false, lastError = '', health = null, me = null;   // me: /api/me (plan, features) for the signed-in account
 const dirty = new Set();
 const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const clerkMode = () => !!(health && health.auth === 'clerk');
 const signedIn = () => clerkMode() ? !!(window.Auth && Auth.signedIn()) : !!S.code;   // the one question every caller asks
 async function hdr() {                          // Clerk: a fresh short-lived session token per request; passcode: the code
@@ -143,6 +144,17 @@ async function onUser(user) {                  // Clerk: signed in, signed out, 
   paint(); if (window.Planner) Planner.refresh();
 }
 if (window.Auth) Auth.onChange(onUser);
+async function eraseCloud() {                   // delete this account's synced data on the server; this device keeps its own copy
+  if (!signedIn() || !confirm('Delete everything synced to your account on the server (scans, roster, parties, battles)? The copy on this device stays. You are signed out afterwards so it is not uploaded again.')) return;
+  busy = true; paint();
+  try {
+    const r = await fetch('/api/state', {method: 'DELETE', headers: await hdr()});
+    if (r.status === 401) throw new Error(authErr());
+    if (!r.ok) throw new Error('server ' + r.status);
+    dirty.clear(); S.base = {}; S.last = {}; save(); lastError = ''; busy = false;
+    disconnect();
+  } catch (e) { lastError = e.message; busy = false; paint(); }
+}
 function disconnect() { if (clerkMode()) { Auth.signOut(); return; } S.code = ''; S.base = {}; S.last = {}; save(); paint(); if (window.Planner) Planner.renderToday(); }
 async function syncNow() {
   if (!signedIn()) return;
@@ -167,24 +179,26 @@ function renderBox() {
   if (clerkMode()) {
     const mode = Auth.mode();
     box.innerHTML = `<div class="box"><h2>${signedIn() ? 'Your account' : 'Sign in'} <span class="x" onclick="Sync.toggle()">✕</span></h2>
-      ${signedIn() ? `<div class="team" style="cursor:default"><b>${Auth.email() || 'Signed in'}</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div>
-          <div class="dt" style="margin-top:4px">id <code id="uid">${Auth.userId() || ''}</code> <button class="mini" onclick="Sync.copyId(this)">Copy</button></div></div>
+      ${signedIn() ? `<div class="team" style="cursor:default"><b>${esc(Auth.email() || 'Signed in')}</b><div class="dt">${lastError ? '⚠ ' + esc(lastError) : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div>
+          <div class="dt" style="margin-top:4px">id <code id="uid">${esc(Auth.userId() || '')}</code> <button class="mini" onclick="Sync.copyId(this)">Copy</button></div></div>
         <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out</button></div>
+        <p class="dim" style="font-size:12px;margin-top:8px"><a href="#" onclick="event.preventDefault();Sync.eraseCloud()">Delete my synced data from the server</a></p>
         ${health.passcodeData ? `<details class="imp" ${importMsg ? 'open' : ''}><summary>Import passcode data</summary>
           <p class="dim" style="font-size:12px">One-time: move the scans, roster, teams and battles saved under the old passcode into this account. Only what this account does not have yet is moved.</p>
           <div class="add" style="margin:6px 0"><input id="impcode" type="password" placeholder="server passcode" autocomplete="off"><button onclick="Sync.importPasscode()" ${busy ? 'disabled' : ''}>Import</button></div>
-          ${importMsg ? `<div class="note" ${/^⚠/.test(importMsg) ? 'style="color:#F59A8B"' : ''}>${importMsg}</div>` : ''}</details>` : ''}
+          ${importMsg ? `<div class="note" ${/^⚠/.test(importMsg) ? 'style="color:#F59A8B"' : ''}>${esc(importMsg)}</div>` : ''}</details>` : ''}
         <p class="dim" style="font-size:12px;margin-top:10px">Scans, roster, parties, battles and the completion log follow your account to every device. Local storage stays the working copy, so the app keeps working offline.</p>`
       : mode === 'offline' ? `<p class="dim">Could not reach the sign-in service. You can keep using the app; sync resumes when you are back online.</p>`
-      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}</div>`;
+      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${esc(lastError)}</div>` : ''}`}</div>`;
     if (!signedIn() && mode === 'clerk') Auth.mountSignIn($('clerk-signin'));
     return;
   }
   box.innerHTML = `<div class="box"><h2>Sync across devices <span class="x" onclick="Sync.toggle()">✕</span></h2>
     <p class="dim">Scans, roster, parties and the completion log are stored on your PokeScan server, so every phone and browser sees the same data. Enter the passcode you set on the server.</p>
-    ${S.code ? `<div class="team" style="cursor:default"><b>Connected</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div></div>
-      <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out on this device</button></div>`
-    : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}
+    ${S.code ? `<div class="team" style="cursor:default"><b>Connected</b><div class="dt">${lastError ? '⚠ ' + esc(lastError) : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div></div>
+      <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out on this device</button></div>
+      <p class="dim" style="font-size:12px;margin-top:8px"><a href="#" onclick="event.preventDefault();Sync.eraseCloud()">Delete the synced data from the server</a></p>`
+    : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${esc(lastError)}</div>` : ''}`}
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
 }
 async function coach(context, onProgress, mode) {   // server-side Claude review of one team, or of one battle (mode 'battle'); needs sync connected and ANTHROPIC_API_KEY on the server
@@ -238,7 +252,7 @@ async function init() {
     paint(); if (window.Planner) Planner.renderToday();
   }
 }
-window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
+window.Sync = {touch, connect, disconnect, eraseCloud, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
                health: () => health, me: () => me, plan, isPro, headers: hdr, coachAvailable: () => !!(health && health.coach && signedIn() && isPro()),
                visionAvailable: () => !!(health && health.vision && signedIn() && isPro()), visionOffered: () => !!(health && health.vision && signedIn() && !isPro()),
                coachOffered: () => !!(health && health.coach && signedIn() && !isPro())};   // the server has the AI, this account has not unlocked it yet

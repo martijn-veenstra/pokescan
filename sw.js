@@ -1,14 +1,15 @@
-/* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
+/* PokeScan service worker: app shell network-first, data stale-while-revalidate, everything else network. */
 const VERSION = 'pokescan-v10.20';
 const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'scanner.js', 'battlefilm.js', 'planner.js', 'auth.js', 'sync.js', 'share.js', 'sources.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/pokemon/_missing.svg'];
 const ICONS = 'pokescan-icons';                  // Pokémon icons: cache-first, kept across versions (a species' render does not change)
+const VENDOR = 'pokescan-vendor-tess5';          // the ~17 MB recogniser files: a fixed name so a deploy does not download them again (rename when vendor/tesseract changes)
 const DATA = ['data/app-great.json', 'data/cups.json', 'data/matrix-great.json', 'data/pve.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.concat(DATA))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== VERSION + '-vendor' && k !== ICONS).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== VENDOR && k !== ICONS && k !== 'share-inbox').map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
@@ -31,7 +32,7 @@ self.addEventListener('fetch', e => {
   }
   if (url.pathname.includes('/vendor/')) {
     // big, immutable recogniser files: cache-first, fetched once
-    e.respondWith(caches.open(VERSION + '-vendor').then(async c => (await c.match(e.request)) || fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; })));
+    e.respondWith(caches.open(VENDOR).then(async c => (await c.match(e.request)) || fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; })));
     return;
   }
   if (url.pathname.includes('/data/')) {
@@ -47,5 +48,5 @@ self.addEventListener('fetch', e => {
   e.respondWith(fetch(e.request).then(r => {
     if (r.ok) caches.open(VERSION).then(c => c.put(e.request, r.clone()));
     return r;
-  }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
+  }).catch(() => caches.match(e.request, {ignoreSearch: true}).then(r => r || (e.request.mode === 'navigate' ? caches.match('index.html') : Response.error()))));
 });

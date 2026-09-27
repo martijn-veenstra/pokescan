@@ -472,7 +472,7 @@ function renderTodayInner(el) {
     if (UI.showAll) { h += rest.map(moveCard).join(''); h += snoozed.map(x => `<div class="team move faded"><div class="mvt"><span class="nm">${esc(x.title)}</span><div class="dt">snoozed until ${when(ROSTER.snooze[x.id])}</div></div><div class="side">${ctxMenu([['Unsnooze', `Planner.unsnooze('${x.id}')`], ['Done without proof', `Planner.markDone('${x.id}')`]])}</div></div>`).join(''); }
   }
   if (ROSTER.log.length) {
-    h += `<div class="sec">Recently completed</div>` + ROSTER.log.slice(0, 4).map(e => `<div class="team move done"><span class="tick ${e.evidence ? 'full' : 'hollow'}">${e.evidence ? '✓' : '○'}</span><div class="mvt"><span class="nm">${esc(e.title)}</span><div class="dt">${when(e.t)}${e.evidence ? ` · <a href="#" onclick="Planner.showScanKey('${esc(e.evidence)}');return false">scan</a>` : e.kind === 'manual' ? ` · without proof · <a href="#" onclick="Planner.undoDone('${e.id}');return false">undo</a>` : ''}${e.note ? ' · ' + esc(e.note) : ''}</div></div></div>`).join('');
+    h += `<div class="sec">Recently completed</div>` + ROSTER.log.slice(0, 4).map(e => `<div class="team move done"><span class="tick ${e.evidence ? 'full' : 'hollow'}">${e.evidence ? '✓' : '○'}</span><div class="mvt"><span class="nm">${esc(e.title)}</span><div class="dt">${when(e.t)}${e.evidence ? ` · <a href="#" onclick="Planner.showScanKey(${attr(e.evidence)});return false">scan</a>` : e.kind === 'manual' ? ` · without proof · <a href="#" onclick="Planner.undoDone(${attr(e.id)});return false">undo</a>` : ''}${e.note ? ' · ' + esc(e.note) : ''}</div></div></div>`).join('');
   }
   // parties: one line each, the rest lives on the Teams page
   const parties = Object.entries(ROSTER.tagged).filter(([, v]) => v.length === 3 && v.every(x => APP.pokemon[x]));
@@ -1328,14 +1328,14 @@ function bundleAvail(list, species) {          // fold a species' entries into a
   const asForm = es => { const f = uniq(es.map(e => e.name)).filter(n => n !== species); return f.length && f.length === uniq(es.map(e => e.name)).length ? `<span class="dim">as ${esc(f.join('/'))}:</span> ` : ''; };
   const raids = grp('raid');
   if (raids.length) {
-    const parts = uniq(raids.map(e => `${e.what}${e.when && e.when !== 'in raids now' ? ` <span>${esc(e.when)}</span>` : ''}`));
+    const parts = uniq(raids.map(e => `${esc(e.what)}${e.when && e.when !== 'in raids now' ? ` <span>${esc(e.when)}</span>` : ''}`));
     out.push({label: 'Raids', now: raids.some(e => e.now), html: asForm(raids) + parts.join(' · ') + flags(raids) + (raids.some(e => /mega/i.test(e.what)) ? ' <span class="dim">· Mega raid gives the normal form</span>' : '')});
   }
   const eggs = grp('egg');
   if (eggs.length) {
     const kms = uniq(eggs.map(e => (String(e.what + ' ' + e.note).match(/(\d+)\s*km/i) || [])[1])).map(Number).sort((a, b) => a - b);
     const sync = eggs.some(e => /adventure sync/i.test(e.what + ' ' + e.note)), gift = eggs.some(e => /gift/i.test(e.what + ' ' + e.note));
-    out.push({label: 'Eggs', now: eggs.some(e => e.now), html: asForm(eggs) + (kms.length ? kms.map(k => k + ' km').join(', ') + ' eggs' : uniq(eggs.map(e => e.what)).join(' · ')) + (sync ? ' <span class="dim">(Adventure Sync)</span>' : '') + (gift ? ' <span class="dim">(gifts)</span>' : '') + flags(eggs)});
+    out.push({label: 'Eggs', now: eggs.some(e => e.now), html: asForm(eggs) + (kms.length ? kms.map(k => k + ' km').join(', ') + ' eggs' : uniq(eggs.map(e => esc(e.what))).join(' · ')) + (sync ? ' <span class="dim">(Adventure Sync)</span>' : '') + (gift ? ' <span class="dim">(gifts)</span>' : '') + flags(eggs)});
   }
   const wild = grp('event');
   if (wild.length) out.push({label: 'Wild', now: wild.some(e => e.now), html: asForm(wild) + uniq(wild.map(e => `${esc(e.what.replace(/^wild spawns\s*\((.*)\)$/i, '$1 spawns'))}${e.when ? ` <span>${esc(e.when)}</span>` : ''}`)).join(' · ') + flags(wild)});
@@ -2297,14 +2297,14 @@ function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
   const lo = ps.length ? Math.min(...ps) : 0, hi = ps.length ? Math.max(...ps) : 0;
   const back = PAGE_LABEL[UI.monFrom] || 'Back';
-  const key = esc(r.key), rm = `Planner.renderMon()`;
+  const key = attr(r.key), rm = `Planner.renderMon()`;   // a JS string literal inside the onclick attribute
   const menu = ctxMenu([
     [r.fav ? '☆ Remove favourite' : '★ Favourite', `toggleFav(${idx});${rm}`],
     r.bench ? ['Unbench', `toggleBench(${idx});${rm}`] : null,                 // benching and archiving by hand are gone; a card that is either can be restored
     r.superseded ? ['Unarchive', `results[${idx}].superseded=null;save();render();Planner.refresh();${rm}`] : null,
-    ['Correct a misread…', `Planner.editScan('${key}')`],                      // Shadow is set there; updating is the button on the page
+    ['Correct a misread…', `Planner.editScan(${key})`],                      // Shadow is set there; updating is the button on the page
     ...(UI.mon && APP.pokemon[UI.mon] ? speciesMenuItems(m, UI.mon, r) : []),
-    ['Delete scan', `Planner.deleteScan('${key}')`, true],
+    ['Delete scan', `Planner.deleteScan(${key})`, true],
   ]);
   let h = lineageBanner(r) + `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.shadow ? chip('shadow', 'ul') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
   const hid = scanId(r);
@@ -2378,7 +2378,7 @@ function editScan(key) {
     <span class="k">HP</span><span class="v"><input id="ehp" inputmode="numeric" value="${r.hp || ''}" style="width:100%"></span>
     <span class="k">Level</span><span class="v"><input id="elv" inputmode="decimal" placeholder="blank = unknown" value="${r.level || ''}" style="width:100%"></span>
     <span class="k">Shadow</span><span class="v"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="esh" ${r.shadow ? 'checked' : ''}> a Shadow Pokémon (purified counts as normal)</label></span></div>
-    <div class="acts" style="margin-top:14px"><button class="primary" onclick="Planner.resolveScan('${esc(key)}');Planner.closeSheet()">Re-solve</button><button onclick="Planner.closeSheet()">Cancel</button></div></div>`;
+    <div class="acts" style="margin-top:14px"><button class="primary" onclick="Planner.resolveScan(${attr(key)});Planner.closeSheet()">Re-solve</button><button onclick="Planner.closeSheet()">Cancel</button></div></div>`;
   $('sheet').classList.add('open');
 }
 function resolveScan(key) {
@@ -2438,8 +2438,8 @@ function speciesMenuItems(m, id, scan) {      // the species' ⋮ items; on a sc
   const {own, auto} = m, o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id), rm = 'Planner.renderMon()', onScan = !!scan;
   return [
     ['Try in builder', `Planner.goBuilder('${id}')`],
-    o && o.scan && !onScan ? ['Update your copy…', `Planner.updateScan('${esc(o.scan.key)}')`] : null,
-    o && o.scan && (!onScan || o.scan.key !== scan.key) ? ["Open the best copy's scan", `Planner.openScan('${esc(o.scan.key)}')`] : null,
+    o && o.scan && !onScan ? ['Update your copy…', `Planner.updateScan(${attr(o.scan.key)})`] : null,
+    o && o.scan && (!onScan || o.scan.key !== scan.key) ? ["Open the best copy's scan", `Planner.openScan(${attr(o.scan.key)})`] : null,
     !o && !onScan ? ['Add a scan of this Pokémon…', `Planner.scanFor('${id}')`] : null,
     !st && !benched ? ['Add to wanted', `Planner.want('${id}',true)`] : null,
     !st && !benched && !onScan ? ['Add as pending (building it)', `Planner.addAs('pending','${id}')`] : null,

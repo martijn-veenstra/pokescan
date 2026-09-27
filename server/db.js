@@ -23,7 +23,11 @@ CREATE TABLE IF NOT EXISTS history (
   kind       text        NOT NULL,
   data       jsonb       NOT NULL,
   saved_at   timestamptz NOT NULL DEFAULT now()
-);`;
+);
+CREATE INDEX IF NOT EXISTS history_user_kind ON history (user_id, kind, id DESC);
+CREATE INDEX IF NOT EXISTS plans_ref ON plans (ref);`;
+const HISTORY_KEEP = 50;                        // snapshots per user and kind
+const HISTORY_EVERY = '1 hour';                 // at most one snapshot per user and kind in this window, so a busy sync cannot fill the table
 
 export async function openDb(url) {
   if (!url) return memoryDb();
@@ -49,11 +53,13 @@ export async function openDb(url) {
         `INSERT INTO state (user_id, kind, data, updated_at) VALUES ($1,$2,$3,now())
          ON CONFLICT (user_id, kind) DO UPDATE SET data=EXCLUDED.data, updated_at=now() RETURNING updated_at`,
         [user, kind, JSON.stringify(data)]);
-      // bounded history of snapshots, for a later "how did my team score over time" view
-      await pool.query('INSERT INTO history (user_id, kind, data) VALUES ($1,$2,$3)', [user, kind, JSON.stringify(data)]);
-      await pool.query(
+      // bounded history of snapshots, for a later "how did my team score over time" view: one per hour, the last HISTORY_KEEP
+      const h = await pool.query(
+        `INSERT INTO history (user_id, kind, data) SELECT $1::text, $2::text, $3::jsonb
+           WHERE NOT EXISTS (SELECT 1 FROM history WHERE user_id=$1 AND kind=$2 AND saved_at > now() - interval '${HISTORY_EVERY}')`, [user, kind, JSON.stringify(data)]);
+      if (h.rowCount) await pool.query(
         `DELETE FROM history WHERE user_id=$1 AND kind=$2
-           AND id NOT IN (SELECT id FROM history WHERE user_id=$1 AND kind=$2 ORDER BY id DESC LIMIT 200)`, [user, kind]);
+           AND id < (SELECT min(id) FROM (SELECT id FROM history WHERE user_id=$1 AND kind=$2 ORDER BY id DESC LIMIT ${HISTORY_KEEP}) keep)`, [user, kind]);
       return r.rows[0].updated_at.toISOString();
     },
     async clear(user) { await pool.query('DELETE FROM state WHERE user_id=$1', [user]); await pool.query('DELETE FROM history WHERE user_id=$1', [user]); },

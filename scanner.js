@@ -820,13 +820,14 @@ function gainSummary(g){
   if(g.note.length) parts.push([...new Set(g.note)].join(' · '));
   return parts.join(' · ')||'nothing new (already scanned, or no Pokémon found)';
 }
+const escHTML=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));   // file names and model-written notes are not markup
 function renderLog(){
   const el=$('implog'); if(!el) return;
   if(!SCANLOG.length){ el.innerHTML=''; return; }
   const fails=SCANLOG.filter(e=>!e.ok).length;
   let h=`<div class="hd" onclick="showLog=!showLog;renderLog()"><span>${showLog?'▾':'▸'} Import log · ${SCANLOG.length} file${SCANLOG.length===1?'':'s'}${fails?` · ${fails} failed`:''}</span>${showLog?`<a href="#" onclick="event.stopPropagation();SCANLOG.length=0;localStorage.removeItem('scanlog');renderLog();return false">clear</a>`:''}</div>`;
   if(showLog) h+=SCANLOG.slice(0,25).map(e=>{ const d=new Date(e.t); const name=(e.file||'').length>28?(e.file||'').slice(0,14)+'…'+(e.file||'').slice(-10):(e.file||'');
-    return `<div class="il"><span class="t">${d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}<br>${d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</span><span><span class="f">${name}</span> <span class="dim">${e.kind||''}${e.size?` · ${(e.size/1e6).toFixed(1)} MB`:''}${e.ms?` · ${(e.ms/1000).toFixed(0)}s`:''}</span><br><span class="r ${e.ok?'ok':'err'}">${e.ok?'✓ ':'⚠ '}${e.msg||''}</span>${e.detail?`<br><span class="d">${e.detail}</span>`:''}</span></div>`; }).join('');
+    return `<div class="il"><span class="t">${d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}<br>${d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</span><span><span class="f">${escHTML(name)}</span> <span class="dim">${escHTML(e.kind||'')}${e.size?` · ${(e.size/1e6).toFixed(1)} MB`:''}${e.ms?` · ${(e.ms/1000).toFixed(0)}s`:''}</span><br><span class="r ${e.ok?'ok':'err'}">${e.ok?'✓ ':'⚠ '}${escHTML(e.msg||'')}</span>${e.detail?`<br><span class="d">${escHTML(e.detail)}</span>`:''}</span></div>`; }).join('');
   el.innerHTML=h;
 }
 
@@ -1342,8 +1343,8 @@ function lineageBanner(r){                        // one-tap merge offer on a sc
   const h=r&&r.lineageHint; if(!h) return '';
   const old=results.find(x=>x.key===h.key); if(!old){ delete r.lineageHint; return ''; }
   const nice=x=>String(x||'').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-  const k=r.key.replace(/'/g,''), what=h.kind==='evolution'?`your ${nice(h.species)} (${h.cp} CP) evolved`:`your ${nice(h.species)} ${h.cp} CP powered up`;
-  return `<div class="lin" onclick="event.stopPropagation()"><span class="q">Is this ${what}?</span><span class="a"><button class="yes" onclick="Planner.lineageMerge('${k}')">Yes, one card</button><button class="no" onclick="Planner.lineageDismiss('${k}')">No, another one</button></span>${h.multi?'<div class="dim" style="font-size:11.5px;margin-top:4px">More than one older card fits; this merges with the first. Use ⋮ → Update this Pokémon on the right card if it is not that one.</div>':''}</div>`;
+  const k=escHTML(JSON.stringify(r.key)), what=escHTML(h.kind==='evolution'?`your ${nice(h.species)} (${h.cp} CP) evolved`:`your ${nice(h.species)} ${h.cp} CP powered up`);
+  return `<div class="lin" onclick="event.stopPropagation()"><span class="q">Is this ${what}?</span><span class="a"><button class="yes" onclick="Planner.lineageMerge(${k})">Yes, one card</button><button class="no" onclick="Planner.lineageDismiss(${k})">No, another one</button></span>${h.multi?'<div class="dim" style="font-size:11.5px;margin-top:4px">More than one older card fits; this merges with the first. Use ⋮ → Update this Pokémon on the right card if it is not that one.</div>':''}</div>`;
 }
 /* the scan list lives on the Roster page: render() redraws it there, batched while an import runs so forty screenshots do not redraw forty times */
 var RENDER_T=null;                                 // var: render() is called during start-up, before this line runs
@@ -1393,7 +1394,7 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
     !r.bench&&bestCopy&&bestCopy[r.species]&&bestCopy[r.species].i===i&&results.filter(x=>x.species===r.species).length>1?'<span class="chip meta1">best copy</span>':'',
     ].join('');
   const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
-  return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan('${r.key.replace(/'/g,'')}')`}">${lineageBanner(r)}
+  return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan(${escHTML(JSON.stringify(r.key))})`}">${lineageBanner(r)}
     <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon((Planner.scanId(r)||{}).id,'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
       <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
     <div class="ivrow">

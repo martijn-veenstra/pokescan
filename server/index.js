@@ -19,6 +19,9 @@ const COACH_PER_USER_HOUR = Number(process.env.COACH_PER_USER_HOUR) || 10;
 const COACH_BATTLE_PER_HOUR = Number(process.env.COACH_BATTLE_PER_HOUR) || 5;   // battle reviews are one per match, so they get a smaller cap inside the per-account budget
 const VISION_PER_HOUR = Number(process.env.VISION_PER_HOUR) || 100, VISION_PER_USER_HOUR = Number(process.env.VISION_PER_USER_HOUR) || 20;
 const MAX_BYTES = 8 * 1024 * 1024;
+// What the static server may send: the app's own top-level files and the data, icons and vendor folders
+const PUBLIC_FILES = /^\/?(index\.html|styles\.css|manifest\.webmanifest|(auth|battlefilm|planner|pvp|scanner|share|sources|sw|sync)\.js)?$/;
+const PUBLIC_DIRS = /^\/(data|icons|vendor)\/[^/]/;
 const COACH_PER_HOUR = Number(process.env.COACH_PER_HOUR) || 30;
 const VERSION = (() => { try { return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return 'dev'; } })();
 
@@ -36,6 +39,14 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     req.rawBody = body;                              // the payment webhook is signed over the raw bytes
     if (!body) return done(null, {});
     try { done(null, JSON.parse(body)); } catch (e) { e.statusCode = 400; done(e); }
+  });
+  // Baseline security headers on every response (a Content-Security-Policy needs the Clerk and font origins; see the review notes)
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (process.env.NODE_ENV === 'production') reply.header('Strict-Transport-Security', 'max-age=31536000');
   });
   const db = await openDb(dbUrl);
   app.decorate('db', db);
@@ -226,15 +237,21 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     const updatedAt = await db.put(req.userId, kind, body.data);
     return { ok: true, updatedAt };
   });
+  // Erase everything synced for this account (state and its history snapshots). The plan row stays: it is the billing record.
+  app.delete('/api/state', { preHandler: auth }, async req => {
+    await db.clear(req.userId);
+    req.log.info(`erased synced data of ${req.userId}`);
+    return { ok: true };
+  });
 
   // Static app. API routes above win; unknown paths fall back to index.html so the PWA start_url always resolves.
   await app.register(fastifyStatic, {
     root: ROOT, prefix: '/', index: ['index.html'], cacheControl: false,   // Cache-Control is set in setHeaders below (the plugin's own header would overwrite it)
     preCompressed: process.env.NODE_ENV === 'production' || process.env.PRECOMPRESSED === '1',   // file.br / file.gz siblings from scripts/precompress.mjs (Docker build); off in dev so a stale sibling never shadows an edited file
-    allowedPath: p => !/^\/(server|scripts|tests|node_modules|\.git|\.github|test-results|playwright-report)(\/|$)/.test(p) && !/\/\.[^/]*$/.test(p) && !/^\/(package(-lock)?\.json|Dockerfile|railway\.json|playwright\.config\.js)$/.test(p),
-    setHeaders(res, filePath) {
-      if (/[\\/]vendor[\\/]/.test(filePath) || /[\\/]icons[\\/]pokemon[\\/]/.test(filePath) || /\.(png|woff2?)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      else res.setHeader('Cache-Control', 'no-cache');
+    allowedPath: p => PUBLIC_FILES.test(p) || PUBLIC_DIRS.test(p),   // an allowlist: only the app itself is public, never server/, scripts/, tests/, package.json or .git
+    setHeaders(reply, filePath) {
+      if (/[\\/]vendor[\\/]/.test(filePath) || /[\\/]icons[\\/]pokemon[\\/]/.test(filePath) || /\.(png|woff2?)$/.test(filePath)) reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      else reply.header('Cache-Control', 'no-cache');
     },
   });
   app.setNotFoundHandler((req, reply) => {

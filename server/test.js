@@ -72,6 +72,16 @@ assert.equal(r.statusCode, 200);
 r = await app.inject({ method: 'GET', url: '/api/state', headers: H });
 assert.equal(r.json().state.scans.data.length, 2);
 
+r = await app.inject({ method: 'DELETE', url: '/api/state' });
+assert.equal(r.statusCode, 401, 'erasing needs the passcode');
+await app.db.put('someone-else', 'scans', [{ key: 'keep' }]);
+r = await app.inject({ method: 'DELETE', url: '/api/state', headers: H });
+assert.equal(r.statusCode, 200);
+r = await app.inject({ method: 'GET', url: '/api/state', headers: H });
+assert.deepEqual(r.json().state, {}, 'erase removes every kind');
+assert.deepEqual((await app.db.get('someone-else', 'scans')).data, [{ key: 'keep' }], 'erase touches only the caller');
+await app.db.clear('someone-else');
+r = await app.inject({ method: 'PUT', url: '/api/state/scans', headers: H, payload: { data: [{ key: 'A' }, { key: 'B' }] } });
 r = await app.inject({ method: 'PUT', url: '/api/state/nope', headers: H, payload: { data: 1 } });
 assert.equal(r.statusCode, 404);
 
@@ -175,6 +185,13 @@ for (const p of ['/server/index.js', '/scripts/build_matrix.mjs', '/tests/e2e/he
   r = await app.inject({ method: 'GET', url: p });
   assert.ok(r.statusCode === 200 && r.body.includes('PokeScan') && r.headers['content-type'].includes('text/html'), `${p} is not served as a file (SPA fallback instead)`);
 }
+// encoded separators must not walk out of a public folder (GHSA-x428-ghpx-8j92 and friends)
+for (const p of ['/data/..%2Fserver%2Fdb.js', '/data%2F..%2Fserver%2Fdb.js', '/data/..%2F.git%2Fconfig', '/icons/..%2Fpackage.json', '/data/..%5cpackage.json']) {
+  r = await app.inject({ method: 'GET', url: p });
+  assert.ok(!/openDb|repositoryformatversion|"dependencies"/.test(r.body), `${p} does not leak a private file`);
+}
+r = await app.inject({ method: 'GET', url: '/' });
+assert.equal(r.headers['x-content-type-options'], 'nosniff'); assert.equal(r.headers['x-frame-options'], 'DENY');
 r = await app.inject({ method: 'GET', url: '/api/health' });
 assert.equal(r.json().auth, 'passcode');
 
