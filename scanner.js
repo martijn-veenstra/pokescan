@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.19';
+const APP_VERSION='10.20';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -679,6 +679,17 @@ function attachMovesFromText(txt, speciesInText, skipKey, hp){
   if(window.Planner) Planner.onMovesScan(target);
   return target.key;
 }
+function movesShort(mv){ return !mv || (mv.charged.length<2 && mv.second!==false); }   // a read that may have missed an attack
+async function readBandDark(ctx, W, H, y0, y1){    // OCR a band keeping only dark grey text: move names without their type icons and coloured energy bars
+  const wk=await getWorker();
+  await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
+  const c2=$('cv2'), top=Math.floor(y0*H), h=Math.floor((y1-y0)*H); c2.width=W; c2.height=h;
+  const g=c2.getContext('2d'); g.drawImage(ctx.canvas, 0, top, W, h, 0, 0, W, h);
+  const img=g.getImageData(0,0,W,h), d=img.data;
+  for(let i=0;i<d.length;i+=4){ const mx=Math.max(d[i],d[i+1],d[i+2]), mn=Math.min(d[i],d[i+1],d[i+2]); d[i]=d[i+1]=d[i+2]=(mx<130 && mx-mn<60)?0:255; d[i+3]=255; }
+  g.putImageData(img,0,0);
+  return (await wk.recognize(c2)).data.text||'';
+}
 async function readBand(ctx, W, H, y0, y1){        // OCR one horizontal band of the frame (fractions of the height), half scale
   const wk=await getWorker();
   await wk.setParameters({tessedit_char_whitelist:'', tessedit_pageseg_mode:'6'});
@@ -1230,6 +1241,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
       if(prev && cands.includes(prev.species)) sp=prev.species; else { const c=results.find(x=>!x.superseded && cands.includes(x.species)); sp=c?c.species:s.candySpecies; } }
     if(/ attack | aanval /.test(normTxt(s.txt)) || (sp && results.some(x=>x.species===sp))){
       if(!/ new attack | nieuwe aanval /.test(normTxt(s.txt))) s.txt=(s.txt||'')+' '+await readBand(ctx,W,H,0.76,1);   // the NEW ATTACK button sits below the card region
+      if(sp && movesShort(readMoves(sp, s.txt))) s.txt+=' '+await readBandDark(ctx,W,H,0.76,1);
       const k=attachMovesFromText(s.txt, sp, skipKey, s.hp); note(`${seen(s)} → ${k?'moves attached to '+sp:'attacks screen, no card to attach to'}`); return k; }
     if(s.species && !s.cpCandidates.length){ note(`${seen(s)} → CP not read, no card`); return null; }
     note(`${seen(s)} → not a status screen`); return null;
@@ -1237,9 +1249,14 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   if(!s.cpCandidates.length){ note(`${seen(s)} → CP not read, no card`); return null; }
   if(s.inferred) note(`name hidden, took ${s.inferred}`);
   let mvSeen=readMoves(s.species, s.txt);
-  if(!mvSeen){                                          // attacks sit below the card region on a full status screen: read the bottom band too
+  if(movesShort(mvSeen)){   // attacks sit below the card region on a full status screen (sometimes only the fast move is inside it): read the bottom band too
     const band=await readBand(ctx,W,H,0.76,1);
-    mvSeen=readMoves(s.species, band); if(mvSeen){ s.txt=(s.txt||'')+' '+band; note(`attacks read from the bottom of the screen`); }
+    const both=readMoves(s.species, (s.txt||'')+' '+band), n=m=>m?(m.fast?1:0)+m.charged.length:0;
+    if(n(both)>n(mvSeen)){ mvSeen=both; s.txt=(s.txt||'')+' '+band; note(`attacks read from the bottom of the screen`); }
+    if(movesShort(mvSeen)){                              // a move name next to its coloured bar (or under the close button) can read as noise: read the dark text alone
+      const dark=await readBandDark(ctx,W,H,0.76,1), more=readMoves(s.species, (s.txt||'')+' '+dark);
+      if(n(more)>n(mvSeen)){ mvSeen=more; s.txt=(s.txt||'')+' '+dark; }
+    }
   }
   s.combos=[];
   const tries=[]; if(s.level){ tries.push(s.level, s.level-0.5, s.level+0.5); }

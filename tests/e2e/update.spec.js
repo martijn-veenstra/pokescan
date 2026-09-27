@@ -64,3 +64,30 @@ test('the appraisal and the scrolled status screen in one import, in Retro Cup',
   await page.waitForFunction(() => /^Done/.test(document.getElementById('stat').textContent), null, { timeout: 180000 });
   expect(await page.evaluate(() => results.map(r => [r.species, r.cp, r.moves]))).toEqual([['MEDITITE', 173, ['CONFUSION', 'PSYSHOCK']]]);
 });
+
+/* "Update this Pokémon" with the user's status screenshot of a Lickilicky that learned Earthquake: the fast move sits in
+   the card region, the charged moves below it. The card used to keep its old Hyper Beam, because a read that found only
+   the fast move never looked at the bottom of the screen. */
+test('an updated status screen replaces the charged moves below the card region', async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('roster'));
+  const errors = await openApp(page, '#/roster');
+  const key = await page.evaluate(() => {
+    const b = DATA.stats['LICKILICKY'][0];
+    for (let lv = 1; lv <= 50; lv += 0.5) { const m = cpmAt(lv);
+      for (let a = 0; a < 16; a++) for (let d = 0; d < 16; d++) for (let s = 0; s < 16; s++) {
+        if (calcCP(b, a, d, s, m) !== 1468 || calcHP(b, s, m) !== 159) continue;
+        const r = { species: 'LICKILICKY', cp: 1468, hp: 159, level: lv, dust: null, combos: [[lv, a, d, s, b]], txt: '', cpCandidates: [], moves: ['ROLLOUT', 'SHADOW_BALL', 'HYPER_BEAM'] };
+        r.key = `LICKILICKY|1468|159|${lv}|`; results.length = 0; results.push(r); save(); Planner.refresh(); return r.key;
+      } }
+    return null;
+  });
+  expect(key).not.toBeNull();
+  await page.evaluate(k => Planner.openScan(k), key);
+  await page.evaluate(k => Planner.updateScan(k, 'mon'), key);
+  await importFile(page, 'lickilicky-status.png');
+  const got = await page.evaluate(() => results.filter(r => !r.superseded).map(r => ({ species: r.species, cp: r.cp, moves: r.moves || null })));
+  expect(got).toHaveLength(1);
+  expect(got[0].species).toBe('LICKILICKY');
+  expect(got[0].moves).toEqual(['ROLLOUT', 'SHADOW_BALL', 'EARTHQUAKE']);
+  expect(errors).toEqual([]);
+});
