@@ -2,14 +2,14 @@
  "league": "great",
  "title": "Great League",
  "roster": "data/roster-great.json",
- "gamemasterTimestamp": "2026-09-23 03:24:34",
- "generatedAt": "2026-09-23T10:30:17Z",
+ "gamemasterTimestamp": "2026-09-26 21:18:52",
+ "generatedAt": "2026-09-27T11:03:51Z",
  "method": "Same heuristic as generate_pvpoke_team_comps.py, restricted to the roster file. Team scores are comparable with data/pvpoke-team-comps.json and the community-teams analysis.",
  "today": [
   {
    "rank": 1,
-   "teamScore": 690.9,
-   "coverage": 702.9,
+   "teamScore": 692.3,
+   "coverage": 704.3,
    "members": [
     {
      "speciesId": "thievul",
@@ -79,8 +79,8 @@
   },
   {
    "rank": 2,
-   "teamScore": 687.5,
-   "coverage": 717.5,
+   "teamScore": 689.6,
+   "coverage": 719.6,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -154,8 +154,8 @@
   },
   {
    "rank": 3,
-   "teamScore": 682.1,
-   "coverage": 712.1,
+   "teamScore": 684.3,
+   "coverage": 714.3,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -228,8 +228,8 @@
   },
   {
    "rank": 4,
-   "teamScore": 670.6,
-   "coverage": 694.6,
+   "teamScore": 672.3,
+   "coverage": 696.3,
    "members": [
     {
      "speciesId": "ninetales",
@@ -301,8 +301,8 @@
   },
   {
    "rank": 5,
-   "teamScore": 659.4,
-   "coverage": 701.4,
+   "teamScore": 661.9,
+   "coverage": 703.9,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -377,82 +377,8 @@
   },
   {
    "rank": 6,
-   "teamScore": 648.5,
-   "coverage": 684.5,
-   "members": [
-    {
-     "speciesId": "ninetales",
-     "name": "Ninetales",
-     "rank": 13,
-     "score": 91.3,
-     "types": [
-      "fire"
-     ],
-     "fastMove": "FIRE_SPIN",
-     "chargedMoves": [
-      "WEATHER_BALL_FIRE",
-      "ENERGY_BALL"
-     ],
-     "moveNames": [
-      "Fire Spin",
-      "Weather Ball (Fire)",
-      "Energy Ball"
-     ]
-    },
-    {
-     "speciesId": "thievul",
-     "name": "Thievul",
-     "rank": 15,
-     "score": 90.9,
-     "types": [
-      "dark"
-     ],
-     "fastMove": "SNARL",
-     "chargedMoves": [
-      "ICY_WIND",
-      "NIGHT_SLASH"
-     ],
-     "moveNames": [
-      "Snarl",
-      "Icy Wind",
-      "Night Slash"
-     ]
-    },
-    {
-     "speciesId": "mimikyu",
-     "name": "Mimikyu (Busted)",
-     "rank": 6,
-     "score": 92.1,
-     "types": [
-      "ghost",
-      "fairy"
-     ],
-     "fastMove": "SHADOW_CLAW",
-     "chargedMoves": [
-      "SHADOW_SNEAK",
-      "PLAY_ROUGH"
-     ],
-     "moveNames": [
-      "Shadow Claw",
-      "Shadow Sneak",
-      "Play Rough"
-     ]
-    }
-   ],
-   "unansweredMeta": [
-    "Vigoroth"
-   ],
-   "sharedWeaknesses": [
-    "Florges",
-    "Araquanid",
-    "Vigoroth",
-    "Dunsparce"
-   ]
-  },
-  {
-   "rank": 7,
-   "teamScore": 647.4,
-   "coverage": 695.4,
+   "teamScore": 650.8,
+   "coverage": 698.8,
    "members": [
     {
      "speciesId": "azumarill",
@@ -527,9 +453,83 @@
    ]
   },
   {
+   "rank": 7,
+   "teamScore": 650.4,
+   "coverage": 686.4,
+   "members": [
+    {
+     "speciesId": "ninetales",
+     "name": "Ninetales",
+     "rank": 13,
+     "score": 91.3,
+     "types": [
+      "fire"
+     ],
+     "fastMove": "FIRE_SPIN",
+     "chargedMoves": [
+      "WEATHER_BALL_FIRE",
+      "ENERGY_BALL"
+     ],
+     "moveNames": [
+      "Fire Spin",
+      "Weather Ball (Fire)",
+      "Energy Ball"
+     ]
+    },
+    {
+     "speciesId": "thievul",
+     "name": "Thievul",
+     "rank": 15,
+     "score": 90.9,
+     "types": [
+      "dark"
+     ],
+     "fastMove": "SNARL",
+     "chargedMoves": [
+      "ICY_WIND",
+      "NIGHT_SLASH"
+     ],
+     "moveNames": [
+      "Snarl",
+      "Icy Wind",
+      "Night Slash"
+     ]
+    },
+    {
+     "speciesId": "mimikyu",
+     "name": "Mimikyu (Busted)",
+     "rank": 6,
+     "score": 92.1,
+     "types": [
+      "ghost",
+      "fairy"
+     ],
+     "fastMove": "SHADOW_CLAW",
+     "chargedMoves": [
+      "SHADOW_SNEAK",
+      "PLAY_ROUGH"
+     ],
+     "moveNames": [
+      "Shadow Claw",
+      "Shadow Sneak",
+      "Play Rough"
+     ]
+    }
+   ],
+   "unansweredMeta": [
+    "Vigoroth"
+   ],
+   "sharedWeaknesses": [
+    "Florges",
+    "Araquanid",
+    "Vigoroth",
+    "Dunsparce"
+   ]
+  },
+  {
    "rank": 8,
-   "teamScore": 643.6,
-   "coverage": 685.6,
+   "teamScore": 647.3,
+   "coverage": 689.3,
    "members": [
     {
      "speciesId": "ninetales",
@@ -604,8 +604,8 @@
   },
   {
    "rank": 9,
-   "teamScore": 641.4,
-   "coverage": 689.4,
+   "teamScore": 645.0,
+   "coverage": 693.0,
    "members": [
     {
      "speciesId": "thievul",
@@ -680,8 +680,8 @@
   },
   {
    "rank": 10,
-   "teamScore": 638.6,
-   "coverage": 698.6,
+   "teamScore": 641.9,
+   "coverage": 701.9,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -761,8 +761,8 @@
  "pending": [
   {
    "rank": 1,
-   "teamScore": 690.9,
-   "coverage": 702.9,
+   "teamScore": 692.3,
+   "coverage": 704.3,
    "members": [
     {
      "speciesId": "thievul",
@@ -832,8 +832,8 @@
   },
   {
    "rank": 2,
-   "teamScore": 687.5,
-   "coverage": 717.5,
+   "teamScore": 689.6,
+   "coverage": 719.6,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -907,8 +907,8 @@
   },
   {
    "rank": 3,
-   "teamScore": 682.1,
-   "coverage": 712.1,
+   "teamScore": 684.3,
+   "coverage": 714.3,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -981,8 +981,8 @@
   },
   {
    "rank": 4,
-   "teamScore": 670.6,
-   "coverage": 694.6,
+   "teamScore": 672.3,
+   "coverage": 696.3,
    "members": [
     {
      "speciesId": "ninetales",
@@ -1054,8 +1054,8 @@
   },
   {
    "rank": 5,
-   "teamScore": 659.4,
-   "coverage": 701.4,
+   "teamScore": 661.9,
+   "coverage": 703.9,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -1130,8 +1130,8 @@
   },
   {
    "rank": 6,
-   "teamScore": 657.6,
-   "coverage": 693.6,
+   "teamScore": 659.2,
+   "coverage": 695.2,
    "members": [
     {
      "speciesId": "quagsire",
@@ -1204,155 +1204,8 @@
   },
   {
    "rank": 7,
-   "teamScore": 648.9,
-   "coverage": 684.9,
-   "members": [
-    {
-     "speciesId": "thievul",
-     "name": "Thievul",
-     "rank": 15,
-     "score": 90.9,
-     "types": [
-      "dark"
-     ],
-     "fastMove": "SNARL",
-     "chargedMoves": [
-      "ICY_WIND",
-      "NIGHT_SLASH"
-     ],
-     "moveNames": [
-      "Snarl",
-      "Icy Wind",
-      "Night Slash"
-     ]
-    },
-    {
-     "speciesId": "mimikyu",
-     "name": "Mimikyu (Busted)",
-     "rank": 6,
-     "score": 92.1,
-     "types": [
-      "ghost",
-      "fairy"
-     ],
-     "fastMove": "SHADOW_CLAW",
-     "chargedMoves": [
-      "SHADOW_SNEAK",
-      "PLAY_ROUGH"
-     ],
-     "moveNames": [
-      "Shadow Claw",
-      "Shadow Sneak",
-      "Play Rough"
-     ]
-    },
-    {
-     "speciesId": "lickilicky",
-     "name": "Lickilicky",
-     "rank": 129,
-     "score": 85.7,
-     "types": [
-      "normal"
-     ],
-     "fastMove": "ROLLOUT",
-     "chargedMoves": [
-      "BODY_SLAM",
-      "SHADOW_BALL"
-     ],
-     "moveNames": [
-      "Rollout",
-      "Body Slam",
-      "Shadow Ball"
-     ]
-    }
-   ],
-   "unansweredMeta": [
-    "Melmetal",
-    "Vigoroth"
-   ],
-   "sharedWeaknesses": [
-    "Melmetal",
-    "Malamar"
-   ]
-  },
-  {
-   "rank": 8,
-   "teamScore": 648.5,
-   "coverage": 684.5,
-   "members": [
-    {
-     "speciesId": "ninetales",
-     "name": "Ninetales",
-     "rank": 13,
-     "score": 91.3,
-     "types": [
-      "fire"
-     ],
-     "fastMove": "FIRE_SPIN",
-     "chargedMoves": [
-      "WEATHER_BALL_FIRE",
-      "ENERGY_BALL"
-     ],
-     "moveNames": [
-      "Fire Spin",
-      "Weather Ball (Fire)",
-      "Energy Ball"
-     ]
-    },
-    {
-     "speciesId": "thievul",
-     "name": "Thievul",
-     "rank": 15,
-     "score": 90.9,
-     "types": [
-      "dark"
-     ],
-     "fastMove": "SNARL",
-     "chargedMoves": [
-      "ICY_WIND",
-      "NIGHT_SLASH"
-     ],
-     "moveNames": [
-      "Snarl",
-      "Icy Wind",
-      "Night Slash"
-     ]
-    },
-    {
-     "speciesId": "mimikyu",
-     "name": "Mimikyu (Busted)",
-     "rank": 6,
-     "score": 92.1,
-     "types": [
-      "ghost",
-      "fairy"
-     ],
-     "fastMove": "SHADOW_CLAW",
-     "chargedMoves": [
-      "SHADOW_SNEAK",
-      "PLAY_ROUGH"
-     ],
-     "moveNames": [
-      "Shadow Claw",
-      "Shadow Sneak",
-      "Play Rough"
-     ]
-    }
-   ],
-   "unansweredMeta": [
-    "Vigoroth"
-   ],
-   "sharedWeaknesses": [
-    "Florges",
-    "Araquanid",
-    "Vigoroth",
-    "Dunsparce"
-   ]
-  },
-  {
-   "rank": 9,
-   "teamScore": 647.4,
-   "coverage": 695.4,
+   "teamScore": 650.8,
+   "coverage": 698.8,
    "members": [
     {
      "speciesId": "azumarill",
@@ -1427,9 +1280,156 @@
    ]
   },
   {
+   "rank": 8,
+   "teamScore": 650.7,
+   "coverage": 686.7,
+   "members": [
+    {
+     "speciesId": "thievul",
+     "name": "Thievul",
+     "rank": 15,
+     "score": 90.9,
+     "types": [
+      "dark"
+     ],
+     "fastMove": "SNARL",
+     "chargedMoves": [
+      "ICY_WIND",
+      "NIGHT_SLASH"
+     ],
+     "moveNames": [
+      "Snarl",
+      "Icy Wind",
+      "Night Slash"
+     ]
+    },
+    {
+     "speciesId": "mimikyu",
+     "name": "Mimikyu (Busted)",
+     "rank": 6,
+     "score": 92.1,
+     "types": [
+      "ghost",
+      "fairy"
+     ],
+     "fastMove": "SHADOW_CLAW",
+     "chargedMoves": [
+      "SHADOW_SNEAK",
+      "PLAY_ROUGH"
+     ],
+     "moveNames": [
+      "Shadow Claw",
+      "Shadow Sneak",
+      "Play Rough"
+     ]
+    },
+    {
+     "speciesId": "lickilicky",
+     "name": "Lickilicky",
+     "rank": 129,
+     "score": 85.7,
+     "types": [
+      "normal"
+     ],
+     "fastMove": "ROLLOUT",
+     "chargedMoves": [
+      "BODY_SLAM",
+      "SHADOW_BALL"
+     ],
+     "moveNames": [
+      "Rollout",
+      "Body Slam",
+      "Shadow Ball"
+     ]
+    }
+   ],
+   "unansweredMeta": [
+    "Melmetal",
+    "Vigoroth"
+   ],
+   "sharedWeaknesses": [
+    "Melmetal",
+    "Malamar"
+   ]
+  },
+  {
+   "rank": 9,
+   "teamScore": 650.4,
+   "coverage": 686.4,
+   "members": [
+    {
+     "speciesId": "ninetales",
+     "name": "Ninetales",
+     "rank": 13,
+     "score": 91.3,
+     "types": [
+      "fire"
+     ],
+     "fastMove": "FIRE_SPIN",
+     "chargedMoves": [
+      "WEATHER_BALL_FIRE",
+      "ENERGY_BALL"
+     ],
+     "moveNames": [
+      "Fire Spin",
+      "Weather Ball (Fire)",
+      "Energy Ball"
+     ]
+    },
+    {
+     "speciesId": "thievul",
+     "name": "Thievul",
+     "rank": 15,
+     "score": 90.9,
+     "types": [
+      "dark"
+     ],
+     "fastMove": "SNARL",
+     "chargedMoves": [
+      "ICY_WIND",
+      "NIGHT_SLASH"
+     ],
+     "moveNames": [
+      "Snarl",
+      "Icy Wind",
+      "Night Slash"
+     ]
+    },
+    {
+     "speciesId": "mimikyu",
+     "name": "Mimikyu (Busted)",
+     "rank": 6,
+     "score": 92.1,
+     "types": [
+      "ghost",
+      "fairy"
+     ],
+     "fastMove": "SHADOW_CLAW",
+     "chargedMoves": [
+      "SHADOW_SNEAK",
+      "PLAY_ROUGH"
+     ],
+     "moveNames": [
+      "Shadow Claw",
+      "Shadow Sneak",
+      "Play Rough"
+     ]
+    }
+   ],
+   "unansweredMeta": [
+    "Vigoroth"
+   ],
+   "sharedWeaknesses": [
+    "Florges",
+    "Araquanid",
+    "Vigoroth",
+    "Dunsparce"
+   ]
+  },
+  {
    "rank": 10,
-   "teamScore": 643.6,
-   "coverage": 685.6,
+   "teamScore": 647.3,
+   "coverage": 689.3,
    "members": [
     {
      "speciesId": "ninetales",
@@ -1506,8 +1506,8 @@
  "candidates": [
   {
    "rank": 1,
-   "teamScore": 702.7,
-   "coverage": 702.7,
+   "teamScore": 704.2,
+   "coverage": 704.2,
    "members": [
     {
      "speciesId": "mimikyu",
@@ -1575,8 +1575,8 @@
   },
   {
    "rank": 2,
-   "teamScore": 693.8,
-   "coverage": 699.8,
+   "teamScore": 695.3,
+   "coverage": 701.3,
    "members": [
     {
      "speciesId": "thievul",
@@ -1645,8 +1645,8 @@
   },
   {
    "rank": 3,
-   "teamScore": 690.9,
-   "coverage": 702.9,
+   "teamScore": 692.3,
+   "coverage": 704.3,
    "members": [
     {
      "speciesId": "thievul",
@@ -1716,8 +1716,8 @@
   },
   {
    "rank": 4,
-   "teamScore": 687.5,
-   "coverage": 717.5,
+   "teamScore": 689.6,
+   "coverage": 719.6,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -1791,8 +1791,8 @@
   },
   {
    "rank": 5,
-   "teamScore": 684.0,
-   "coverage": 714.0,
+   "teamScore": 686.2,
+   "coverage": 716.2,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -1865,8 +1865,8 @@
   },
   {
    "rank": 6,
-   "teamScore": 683.5,
-   "coverage": 689.5,
+   "teamScore": 685.3,
+   "coverage": 691.3,
    "members": [
     {
      "speciesId": "quagsire",
@@ -1936,81 +1936,8 @@
   },
   {
    "rank": 7,
-   "teamScore": 682.5,
-   "coverage": 700.5,
-   "members": [
-    {
-     "speciesId": "quagsire",
-     "name": "Quagsire",
-     "rank": 14,
-     "score": 91.2,
-     "types": [
-      "water",
-      "ground"
-     ],
-     "fastMove": "MUD_SHOT",
-     "chargedMoves": [
-      "AQUA_TAIL",
-      "STONE_EDGE"
-     ],
-     "moveNames": [
-      "Mud Shot",
-      "Aqua Tail",
-      "Stone Edge"
-     ]
-    },
-    {
-     "speciesId": "mimikyu",
-     "name": "Mimikyu (Busted)",
-     "rank": 6,
-     "score": 92.1,
-     "types": [
-      "ghost",
-      "fairy"
-     ],
-     "fastMove": "SHADOW_CLAW",
-     "chargedMoves": [
-      "SHADOW_SNEAK",
-      "PLAY_ROUGH"
-     ],
-     "moveNames": [
-      "Shadow Claw",
-      "Shadow Sneak",
-      "Play Rough"
-     ]
-    },
-    {
-     "speciesId": "forretress",
-     "name": "Forretress",
-     "rank": 53,
-     "score": 89.5,
-     "types": [
-      "bug",
-      "steel"
-     ],
-     "fastMove": "VOLT_SWITCH",
-     "chargedMoves": [
-      "SAND_TOMB",
-      "ROCK_TOMB"
-     ],
-     "moveNames": [
-      "Volt Switch",
-      "Sand Tomb",
-      "Rock Tomb"
-     ]
-    }
-   ],
-   "unansweredMeta": [
-    "Furret"
-   ],
-   "sharedWeaknesses": [
-    "Jumpluff"
-   ]
-  },
-  {
-   "rank": 8,
-   "teamScore": 682.1,
-   "coverage": 712.1,
+   "teamScore": 684.3,
+   "coverage": 714.3,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -2082,9 +2009,82 @@
    ]
   },
   {
+   "rank": 8,
+   "teamScore": 684.0,
+   "coverage": 702.0,
+   "members": [
+    {
+     "speciesId": "quagsire",
+     "name": "Quagsire",
+     "rank": 14,
+     "score": 91.2,
+     "types": [
+      "water",
+      "ground"
+     ],
+     "fastMove": "MUD_SHOT",
+     "chargedMoves": [
+      "AQUA_TAIL",
+      "STONE_EDGE"
+     ],
+     "moveNames": [
+      "Mud Shot",
+      "Aqua Tail",
+      "Stone Edge"
+     ]
+    },
+    {
+     "speciesId": "mimikyu",
+     "name": "Mimikyu (Busted)",
+     "rank": 6,
+     "score": 92.1,
+     "types": [
+      "ghost",
+      "fairy"
+     ],
+     "fastMove": "SHADOW_CLAW",
+     "chargedMoves": [
+      "SHADOW_SNEAK",
+      "PLAY_ROUGH"
+     ],
+     "moveNames": [
+      "Shadow Claw",
+      "Shadow Sneak",
+      "Play Rough"
+     ]
+    },
+    {
+     "speciesId": "forretress",
+     "name": "Forretress",
+     "rank": 53,
+     "score": 89.5,
+     "types": [
+      "bug",
+      "steel"
+     ],
+     "fastMove": "VOLT_SWITCH",
+     "chargedMoves": [
+      "SAND_TOMB",
+      "ROCK_TOMB"
+     ],
+     "moveNames": [
+      "Volt Switch",
+      "Sand Tomb",
+      "Rock Tomb"
+     ]
+    }
+   ],
+   "unansweredMeta": [
+    "Furret"
+   ],
+   "sharedWeaknesses": [
+    "Jumpluff"
+   ]
+  },
+  {
    "rank": 9,
-   "teamScore": 677.8,
-   "coverage": 695.8,
+   "teamScore": 679.4,
+   "coverage": 697.4,
    "members": [
     {
      "speciesId": "mimikyu",
@@ -2155,8 +2155,8 @@
   },
   {
    "rank": 10,
-   "teamScore": 677.6,
-   "coverage": 695.6,
+   "teamScore": 679.2,
+   "coverage": 697.2,
    "members": [
     {
      "speciesId": "mimikyu",
@@ -2234,8 +2234,8 @@
    "rank": 74,
    "score": 88.5,
    "bestTrio": {
-    "teamScore": 693.8,
-    "coverage": 699.8,
+    "teamScore": 695.3,
+    "coverage": 701.3,
     "members": [
      {
       "speciesId": "thievul",
@@ -2309,8 +2309,8 @@
    "rank": 53,
    "score": 89.5,
    "bestTrio": {
-    "teamScore": 684.0,
-    "coverage": 714.0,
+    "teamScore": 686.2,
+    "coverage": 716.2,
     "members": [
      {
       "speciesId": "tinkaton",
@@ -2388,8 +2388,8 @@
    "rank": 36,
    "score": 90.1,
    "bestTrio": {
-    "teamScore": 683.5,
-    "coverage": 689.5,
+    "teamScore": 685.3,
+    "coverage": 691.3,
     "members": [
      {
       "speciesId": "quagsire",
@@ -2464,8 +2464,8 @@
    "rank": 54,
    "score": 89.5,
    "bestTrio": {
-    "teamScore": 677.5,
-    "coverage": 701.5,
+    "teamScore": 679.0,
+    "coverage": 703.0,
     "members": [
      {
       "speciesId": "quagsire",
@@ -2543,8 +2543,8 @@
    "rank": 55,
    "score": 89.4,
    "bestTrio": {
-    "teamScore": 669.5,
-    "coverage": 699.5,
+    "teamScore": 671.0,
+    "coverage": 701.0,
     "members": [
      {
       "speciesId": "thievul",
@@ -2622,8 +2622,8 @@
    "rank": 43,
    "score": 89.8,
    "bestTrio": {
-    "teamScore": 668.5,
-    "coverage": 692.5,
+    "teamScore": 670.2,
+    "coverage": 694.2,
     "members": [
      {
       "speciesId": "quagsire",
@@ -2698,8 +2698,8 @@
  "tagged": [
   {
    "name": "Team#1",
-   "teamScore": 687.5,
-   "coverage": 717.5,
+   "teamScore": 689.6,
+   "coverage": 719.6,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -2773,8 +2773,8 @@
   },
   {
    "name": "Team#2",
-   "teamScore": 520.2,
-   "coverage": 622.2,
+   "teamScore": 525.3,
+   "coverage": 627.3,
    "members": [
     {
      "speciesId": "ninetales",
@@ -2854,8 +2854,8 @@
   },
   {
    "name": "Comp 1 Champion's Core",
-   "teamScore": 550.0,
-   "coverage": 640.0,
+   "teamScore": 553.8,
+   "coverage": 643.8,
    "members": [
     {
      "speciesId": "ninetales",
@@ -2933,8 +2933,8 @@
   },
   {
    "name": "Old Team#1",
-   "teamScore": 580.6,
-   "coverage": 652.6,
+   "teamScore": 584.1,
+   "coverage": 656.1,
    "members": [
     {
      "speciesId": "tinkaton",
@@ -3015,12 +3015,12 @@
   "pending": [
    {
     "rank": 1,
-    "weakerScore": 624.1,
-    "combinedScore": 1267.7,
+    "weakerScore": 627.2,
+    "combinedScore": 1274.5,
     "teams": [
      {
-      "teamScore": 643.6,
-      "coverage": 685.6,
+      "teamScore": 647.3,
+      "coverage": 689.3,
       "members": [
        {
         "speciesId": "ninetales",
@@ -3094,8 +3094,8 @@
       ]
      },
      {
-      "teamScore": 624.1,
-      "coverage": 672.1,
+      "teamScore": 627.2,
+      "coverage": 675.2,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -3171,12 +3171,12 @@
    },
    {
     "rank": 2,
-    "weakerScore": 624.1,
-    "combinedScore": 1261.2,
+    "weakerScore": 627.2,
+    "combinedScore": 1266.3,
     "teams": [
      {
-      "teamScore": 637.1,
-      "coverage": 679.1,
+      "teamScore": 639.1,
+      "coverage": 681.1,
       "members": [
        {
         "speciesId": "ninetales",
@@ -3248,8 +3248,8 @@
       ]
      },
      {
-      "teamScore": 624.1,
-      "coverage": 672.1,
+      "teamScore": 627.2,
+      "coverage": 675.2,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -3325,12 +3325,12 @@
    },
    {
     "rank": 3,
-    "weakerScore": 624.1,
-    "combinedScore": 1251.9,
+    "weakerScore": 627.2,
+    "combinedScore": 1258.8,
     "teams": [
      {
-      "teamScore": 627.8,
-      "coverage": 681.8,
+      "teamScore": 631.6,
+      "coverage": 685.6,
       "members": [
        {
         "speciesId": "azumarill",
@@ -3403,8 +3403,8 @@
       ]
      },
      {
-      "teamScore": 624.1,
-      "coverage": 672.1,
+      "teamScore": 627.2,
+      "coverage": 675.2,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -3480,12 +3480,12 @@
    },
    {
     "rank": 4,
-    "weakerScore": 608.6,
-    "combinedScore": 1232.7,
+    "weakerScore": 610.4,
+    "combinedScore": 1237.6,
     "teams": [
      {
-      "teamScore": 624.1,
-      "coverage": 672.1,
+      "teamScore": 627.2,
+      "coverage": 675.2,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -3558,8 +3558,8 @@
       ]
      },
      {
-      "teamScore": 608.6,
-      "coverage": 686.6,
+      "teamScore": 610.4,
+      "coverage": 688.4,
       "members": [
        {
         "speciesId": "chesnaught",
@@ -3639,12 +3639,12 @@
    },
    {
     "rank": 5,
-    "weakerScore": 604.6,
-    "combinedScore": 1275.2,
+    "weakerScore": 608.1,
+    "combinedScore": 1280.4,
     "teams": [
      {
-      "teamScore": 670.6,
-      "coverage": 694.6,
+      "teamScore": 672.3,
+      "coverage": 696.3,
       "members": [
        {
         "speciesId": "ninetales",
@@ -3715,8 +3715,8 @@
       ]
      },
      {
-      "teamScore": 604.6,
-      "coverage": 652.6,
+      "teamScore": 608.1,
+      "coverage": 656.1,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -3792,12 +3792,12 @@
    },
    {
     "rank": 6,
-    "weakerScore": 604.6,
-    "combinedScore": 1252.0,
+    "weakerScore": 608.1,
+    "combinedScore": 1258.9,
     "teams": [
      {
-      "teamScore": 647.4,
-      "coverage": 695.4,
+      "teamScore": 650.8,
+      "coverage": 698.8,
       "members": [
        {
         "speciesId": "azumarill",
@@ -3872,8 +3872,8 @@
       ]
      },
      {
-      "teamScore": 604.6,
-      "coverage": 652.6,
+      "teamScore": 608.1,
+      "coverage": 656.1,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -3949,12 +3949,12 @@
    },
    {
     "rank": 7,
-    "weakerScore": 604.6,
-    "combinedScore": 1248.2,
+    "weakerScore": 608.1,
+    "combinedScore": 1255.4,
     "teams": [
      {
-      "teamScore": 643.6,
-      "coverage": 685.6,
+      "teamScore": 647.3,
+      "coverage": 689.3,
       "members": [
        {
         "speciesId": "ninetales",
@@ -4028,8 +4028,8 @@
       ]
      },
      {
-      "teamScore": 604.6,
-      "coverage": 652.6,
+      "teamScore": 608.1,
+      "coverage": 656.1,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -4105,12 +4105,12 @@
    },
    {
     "rank": 8,
-    "weakerScore": 604.6,
-    "combinedScore": 1213.1,
+    "weakerScore": 608.1,
+    "combinedScore": 1218.5,
     "teams": [
      {
-      "teamScore": 608.5,
-      "coverage": 686.5,
+      "teamScore": 610.4,
+      "coverage": 688.4,
       "members": [
        {
         "speciesId": "quagsire",
@@ -4189,8 +4189,8 @@
       ]
      },
      {
-      "teamScore": 604.6,
-      "coverage": 652.6,
+      "teamScore": 608.1,
+      "coverage": 656.1,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -4266,12 +4266,12 @@
    },
    {
     "rank": 9,
-    "weakerScore": 600.5,
-    "combinedScore": 1224.6,
+    "weakerScore": 604.0,
+    "combinedScore": 1231.2,
     "teams": [
      {
-      "teamScore": 624.1,
-      "coverage": 672.1,
+      "teamScore": 627.2,
+      "coverage": 675.2,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -4344,8 +4344,8 @@
       ]
      },
      {
-      "teamScore": 600.5,
-      "coverage": 690.5,
+      "teamScore": 604.0,
+      "coverage": 694.0,
       "members": [
        {
         "speciesId": "azumarill",
@@ -4430,12 +4430,12 @@
    },
    {
     "rank": 10,
-    "weakerScore": 600.5,
-    "combinedScore": 1205.1,
+    "weakerScore": 604.0,
+    "combinedScore": 1212.1,
     "teams": [
      {
-      "teamScore": 604.6,
-      "coverage": 652.6,
+      "teamScore": 608.1,
+      "coverage": 656.1,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -4508,8 +4508,8 @@
       ]
      },
      {
-      "teamScore": 600.5,
-      "coverage": 690.5,
+      "teamScore": 604.0,
+      "coverage": 694.0,
       "members": [
        {
         "speciesId": "azumarill",
@@ -4596,12 +4596,12 @@
   "candidates": [
    {
     "rank": 1,
-    "weakerScore": 640.7,
-    "combinedScore": 1324.2,
+    "weakerScore": 643.7,
+    "combinedScore": 1329.0,
     "teams": [
      {
-      "teamScore": 683.5,
-      "coverage": 689.5,
+      "teamScore": 685.3,
+      "coverage": 691.3,
       "members": [
        {
         "speciesId": "quagsire",
@@ -4670,8 +4670,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -4746,12 +4746,12 @@
    },
    {
     "rank": 2,
-    "weakerScore": 640.7,
-    "combinedScore": 1318.5,
+    "weakerScore": 643.7,
+    "combinedScore": 1323.1,
     "teams": [
      {
-      "teamScore": 677.8,
-      "coverage": 695.8,
+      "teamScore": 679.4,
+      "coverage": 697.4,
       "members": [
        {
         "speciesId": "mimikyu",
@@ -4821,8 +4821,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -4897,12 +4897,12 @@
    },
    {
     "rank": 3,
-    "weakerScore": 640.7,
-    "combinedScore": 1318.3,
+    "weakerScore": 643.7,
+    "combinedScore": 1322.9,
     "teams": [
      {
-      "teamScore": 677.6,
-      "coverage": 695.6,
+      "teamScore": 679.2,
+      "coverage": 697.2,
       "members": [
        {
         "speciesId": "mimikyu",
@@ -4973,8 +4973,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5049,12 +5049,12 @@
    },
    {
     "rank": 4,
-    "weakerScore": 640.7,
-    "combinedScore": 1318.2,
+    "weakerScore": 643.7,
+    "combinedScore": 1322.7,
     "teams": [
      {
-      "teamScore": 677.5,
-      "coverage": 701.5,
+      "teamScore": 679.0,
+      "coverage": 703.0,
       "members": [
        {
         "speciesId": "quagsire",
@@ -5126,8 +5126,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5202,12 +5202,12 @@
    },
    {
     "rank": 5,
-    "weakerScore": 640.7,
-    "combinedScore": 1317.1,
+    "weakerScore": 643.7,
+    "combinedScore": 1321.6,
     "teams": [
      {
-      "teamScore": 676.4,
-      "coverage": 700.4,
+      "teamScore": 677.9,
+      "coverage": 701.9,
       "members": [
        {
         "speciesId": "quagsire",
@@ -5279,8 +5279,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5355,12 +5355,12 @@
    },
    {
     "rank": 6,
-    "weakerScore": 640.7,
-    "combinedScore": 1314.1,
+    "weakerScore": 643.7,
+    "combinedScore": 1318.6,
     "teams": [
      {
-      "teamScore": 673.4,
-      "coverage": 703.4,
+      "teamScore": 674.9,
+      "coverage": 698.9,
       "members": [
        {
         "speciesId": "mimikyu",
@@ -5383,23 +5383,22 @@
         ]
        },
        {
-        "speciesId": "medicham",
-        "name": "Medicham",
-        "rank": 54,
-        "score": 89.5,
+        "speciesId": "furret",
+        "name": "Furret",
+        "rank": 43,
+        "score": 89.8,
         "types": [
-         "fighting",
-         "psychic"
+         "normal"
         ],
-        "fastMove": "PSYCHO_CUT",
+        "fastMove": "SUCKER_PUNCH",
         "chargedMoves": [
-         "ICE_PUNCH",
-         "DYNAMIC_PUNCH"
+         "SWIFT",
+         "TRAILBLAZE"
         ],
         "moveNames": [
-         "Psycho Cut",
-         "Ice Punch",
-         "Dynamic Punch"
+         "Sucker Punch",
+         "Swift",
+         "Trailblaze"
         ]
        },
        {
@@ -5423,18 +5422,17 @@
         ]
        }
       ],
-      "unansweredMeta": [],
+      "unansweredMeta": [
+       "Umbreon"
+      ],
       "sharedWeaknesses": [
-       "Cramorant",
-       "Sableye (Shadow)",
-       "Feraligatr",
-       "Sableye",
-       "Talonflame"
+       "Melmetal",
+       "Malamar"
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5509,12 +5507,12 @@
    },
    {
     "rank": 7,
-    "weakerScore": 640.7,
-    "combinedScore": 1314.1,
+    "weakerScore": 643.7,
+    "combinedScore": 1318.5,
     "teams": [
      {
-      "teamScore": 673.4,
-      "coverage": 697.4,
+      "teamScore": 674.8,
+      "coverage": 704.8,
       "members": [
        {
         "speciesId": "mimikyu",
@@ -5537,22 +5535,23 @@
         ]
        },
        {
-        "speciesId": "furret",
-        "name": "Furret",
-        "rank": 43,
-        "score": 89.8,
+        "speciesId": "medicham",
+        "name": "Medicham",
+        "rank": 54,
+        "score": 89.5,
         "types": [
-         "normal"
+         "fighting",
+         "psychic"
         ],
-        "fastMove": "SUCKER_PUNCH",
+        "fastMove": "PSYCHO_CUT",
         "chargedMoves": [
-         "SWIFT",
-         "TRAILBLAZE"
+         "ICE_PUNCH",
+         "DYNAMIC_PUNCH"
         ],
         "moveNames": [
-         "Sucker Punch",
-         "Swift",
-         "Trailblaze"
+         "Psycho Cut",
+         "Ice Punch",
+         "Dynamic Punch"
         ]
        },
        {
@@ -5576,17 +5575,18 @@
         ]
        }
       ],
-      "unansweredMeta": [
-       "Umbreon"
-      ],
+      "unansweredMeta": [],
       "sharedWeaknesses": [
-       "Melmetal",
-       "Malamar"
+       "Cramorant",
+       "Sableye (Shadow)",
+       "Feraligatr",
+       "Sableye",
+       "Talonflame"
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5661,12 +5661,12 @@
    },
    {
     "rank": 8,
-    "weakerScore": 640.7,
-    "combinedScore": 1312.3,
+    "weakerScore": 643.7,
+    "combinedScore": 1316.9,
     "teams": [
      {
-      "teamScore": 671.6,
-      "coverage": 695.6,
+      "teamScore": 673.2,
+      "coverage": 697.2,
       "members": [
        {
         "speciesId": "mimikyu",
@@ -5737,8 +5737,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5813,12 +5813,12 @@
    },
    {
     "rank": 9,
-    "weakerScore": 640.7,
-    "combinedScore": 1311.3,
+    "weakerScore": 643.7,
+    "combinedScore": 1316.0,
     "teams": [
      {
-      "teamScore": 670.6,
-      "coverage": 694.6,
+      "teamScore": 672.3,
+      "coverage": 696.3,
       "members": [
        {
         "speciesId": "ninetales",
@@ -5889,8 +5889,8 @@
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
@@ -5965,31 +5965,31 @@
    },
    {
     "rank": 10,
-    "weakerScore": 640.7,
-    "combinedScore": 1309.2,
+    "weakerScore": 643.7,
+    "combinedScore": 1313.9,
     "teams": [
      {
-      "teamScore": 668.5,
-      "coverage": 692.5,
+      "teamScore": 670.2,
+      "coverage": 700.2,
       "members": [
        {
-        "speciesId": "quagsire",
-        "name": "Quagsire",
-        "rank": 14,
-        "score": 91.2,
+        "speciesId": "azumarill",
+        "name": "Azumarill",
+        "rank": 32,
+        "score": 90.1,
         "types": [
          "water",
-         "ground"
+         "fairy"
         ],
-        "fastMove": "MUD_SHOT",
+        "fastMove": "BUBBLE",
         "chargedMoves": [
-         "AQUA_TAIL",
-         "STONE_EDGE"
+         "ICE_BEAM",
+         "PLAY_ROUGH"
         ],
         "moveNames": [
-         "Mud Shot",
-         "Aqua Tail",
-         "Stone Edge"
+         "Bubble",
+         "Ice Beam",
+         "Play Rough"
         ]
        },
        {
@@ -6013,36 +6013,38 @@
         ]
        },
        {
-        "speciesId": "furret",
-        "name": "Furret",
-        "rank": 43,
-        "score": 89.8,
+        "speciesId": "doublade",
+        "name": "Doublade",
+        "rank": 74,
+        "score": 88.5,
         "types": [
-         "normal"
+         "steel",
+         "ghost"
         ],
-        "fastMove": "SUCKER_PUNCH",
+        "fastMove": "SHADOW_CLAW",
         "chargedMoves": [
-         "SWIFT",
-         "TRAILBLAZE"
+         "SACRED_SWORD",
+         "IRON_HEAD"
         ],
         "moveNames": [
-         "Sucker Punch",
-         "Swift",
-         "Trailblaze"
+         "Shadow Claw",
+         "Sacred Sword",
+         "Iron Head"
         ]
        }
       ],
       "unansweredMeta": [
-       "Corviknight"
+       "Furret"
       ],
       "sharedWeaknesses": [
        "Melmetal",
-       "Jumpluff"
+       "Cramorant",
+       "Forretress (Shadow)"
       ]
      },
      {
-      "teamScore": 640.7,
-      "coverage": 676.7,
+      "teamScore": 643.7,
+      "coverage": 679.7,
       "members": [
        {
         "speciesId": "tinkaton",
