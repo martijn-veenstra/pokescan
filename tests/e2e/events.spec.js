@@ -8,6 +8,8 @@ const iso = h => new Date(Date.now() + h * 3600e3).toISOString();
 const SOURCES = { t: Date.now(), raids: [], eggs: [], research: [], rocket: { t: Date.now(), lineups: [] }, events: [
   { eventID: 'harvest', name: 'Harvest Festival: Applin Picking', eventType: 'event', heading: 'Event', image: '', start: iso(-24), end: iso(48),
     extraData: { generic: {}, page: { about: 'The harvest is in: Grass-type Pokémon appear more often and Applin debuts in the wild.', bonuses: ['2× Catch Candy', 'Increased Hatch Stardust'], spawns: [{ name: 'Applin', shiny: true, group: '' }, { name: 'Oddish', shiny: false, group: '' }], raids: [{ name: 'Mega Venusaur', shiny: true, group: 'Mega Raids' }], eggs: [], research: ['Catch 10 Grass-type Pokémon'] } } },
+  { eventID: 'path', name: 'Choose Your Path: Twilight Trails', eventType: 'choose-your-path', heading: 'Choose Your Path', start: iso(-48), end: iso(24),
+    extraData: { generic: {}, page: { bonuses: ['Explore (PokéStops): 5× XP for spinning PokéStops', 'Catch (Candy): 2× Candy for catching Pokémon', 'Battle (Team GO Rocket): Extra Mysterious Components from Team GO Rocket Grunts', 'Catch (Stardust): 2× Stardust for catching Pokémon'], spawns: [], raids: [], eggs: [], research: [] } } },
   { eventID: 'r5', name: 'Xurkitree in 5-star Raid Battles', eventType: 'raid-battles', heading: 'Raid Battles', start: iso(-30), end: iso(60), extraData: { raidbattles: { bosses: [{ name: 'Xurkitree', canBeShiny: false }] } } },
   { eventID: 'rm', name: 'Mega Malamar in Mega Raids', eventType: 'raid-battles', heading: 'Raid Battles', start: iso(-30), end: iso(60), extraData: { raidbattles: { bosses: [{ name: 'Mega Malamar', canBeShiny: true }] } } },
   { eventID: 'gbl', name: 'Ultra League and Retro Cup | Twilight Trails', eventType: 'go-battle-league', start: iso(-30), end: iso(60), extraData: { generic: {} } },
@@ -30,7 +32,15 @@ test('Today shows live and upcoming events with their bonuses, Pokémon and what
   await expect(today.locator('.sec:has-text("Events")')).toHaveCount(1);
   await expect(today.locator('.evleague')).toContainText('GO Battle League Ultra League and Retro Cup');
   const live = today.locator('details.ev.live');
-  await expect(live).toHaveCount(2);                                            // the Harvest Festival and one entry for all live raid rotations
+  await expect(live).toHaveCount(3);                                            // Choose Your Path, the Harvest Festival and one entry for all live raid rotations
+  // long bonuses are a wrapped list, the part before the colon in bold, nothing wider than the card
+  const path = live.filter({ hasText: 'Choose Your Path' });
+  await expect(path.locator('summary .evbl li:not(.evmore)')).toHaveCount(3);
+  await expect(path.locator('summary .evbl li.evmore')).toHaveText('+1 more');
+  await expect(path.locator('summary .evbl li b').first()).toHaveText('Explore (PokéStops)');
+  expect(await path.evaluate(d => d.scrollWidth <= d.clientWidth + 1 && [...d.querySelectorAll('li')].every(li => li.getBoundingClientRect().right <= d.getBoundingClientRect().right + 1))).toBe(true);
+  await path.locator('summary .nm').click();
+  await expect(path.locator('.evbody .evbl li')).toHaveCount(4);
   const harvest = live.filter({ hasText: 'Harvest Festival' });
   await expect(harvest.locator('.evtop .chip.bon')).toHaveText(['2× Catch Candy', 'Increased Hatch Stardust']);
   await expect(harvest).toContainText('Applin ✨');

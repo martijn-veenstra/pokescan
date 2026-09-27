@@ -862,10 +862,17 @@ function eventsCard(m) {
   const monChip = p => { const t = tag(p.name) || {}; return `<span class="evmon ${t.cls || ''}"${t.id ? ` onclick="event.preventDefault();Planner.openMon('${t.id}')"` : ''}>${t.id ? icon(t.id, 's') : ''}${esc(p.name)}${p.shiny ? ' ✨' : ''}${t.t ? `<em>${esc(t.t)}</em>` : ''}</span>`; };
   const groups = list => { const g = new Map(); for (const p of list) { const k = p.group || ''; if (!g.has(k)) g.set(k, []); g.get(k).push(p); } return [...g.entries()]; };
   const block = (title, list) => list.length ? `<div class="evsub">${title}</div>${groups(list).map(([g, ps]) => `${g ? `<div class="evgrp">${esc(g)}</div>` : ''}<div class="evmons">${ps.map(monChip).join('')}</div>`).join('')}` : '';
+  // bonuses: short ones as chips ("2× Catch Candy"), long ones as a list with the part before the colon in bold
+  const bonusHtml = (list, max, cls) => {
+    const shown = max ? list.slice(0, max) : list, more = list.length - shown.length;
+    const moreTxt = more > 0 ? `<span class="dim evmore">+${more} more</span>` : '';
+    if (list.every(b => b.length <= 28)) return `<div class="evbon ${cls}">${shown.map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}${moreTxt}</div>`;
+    return `<ul class="evbl ${cls}">${shown.map(b => { const i = b.indexOf(': '); return `<li>${i > 0 && i < 40 ? `<b>${esc(b.slice(0, i))}</b> ${esc(b.slice(i + 2))}` : esc(b)}</li>`; }).join('')}${more > 0 ? `<li class="dim evmore">+${more} more</li>` : ''}</ul>`;
+  };
   const row = e => {
     const all = [...e.spawns, ...e.raids, ...e.eggs], mine = [...new Set(all.map(p => (tag(p.name) || {}).t).filter(Boolean))];
     const top = all.slice(0, e.now ? 6 : 0);
-    const body = `${e.about ? `<div class="evabout">${esc(e.about)}</div>` : ''}${e.bonuses.length ? `<div class="evsub">Bonuses</div><div class="evbon">${e.bonuses.map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}</div>` : ''}
+    const body = `${e.about ? `<div class="evabout">${esc(e.about)}</div>` : ''}${e.bonuses.length ? `<div class="evsub">Bonuses</div>${bonusHtml(e.bonuses, 0, '')}` : ''}
       ${block('Wild spawns', e.spawns)}${block('Raids', e.raids)}${block('Eggs', e.eggs)}
       ${e.research.length ? `<div class="evsub">Research</div><ul class="evres">${e.research.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
       ${!e.bonuses.length && !all.length && !e.research.length ? `<div class="dim">${e.about ? 'No bonuses or Pokémon listed for it.' : 'No bonuses or Pokémon published for this one yet.'}</div>` : ''}`;
@@ -874,7 +881,7 @@ function eventsCard(m) {
       <div class="dt">${esc(e.when)}${e.heading && e.heading !== e.name ? ` · ${esc(e.heading)}` : ''}${!e.now && e.bonuses[0] ? ` · <span class="good">${esc(e.bonuses[0])}${e.bonuses.length > 1 ? ` +${e.bonuses.length - 1}` : ''}</span>` : ''}</div>
       ${e.now && e.about ? `<div class="evabout clamp evtop">${esc(e.about)}</div>` : ''}
       ${mine.length ? `<div class="evfor">★ ${esc(mine.join(' · '))}</div>` : ''}
-      ${e.now && e.bonuses.length ? `<div class="evbon evtop">${e.bonuses.slice(0, 4).map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}${e.bonuses.length > 4 ? `<span class="dim"> +${e.bonuses.length - 4}</span>` : ''}</div>` : ''}
+      ${e.now && e.bonuses.length ? bonusHtml(e.bonuses, 3, 'evtop') : ''}
       ${top.length ? `<div class="evmons evtop">${top.map(monChip).join('')}${all.length > top.length ? `<span class="dim">+${all.length - top.length}</span>` : ''}</div>` : ''}
       </span><span class="go">›</span></summary><div class="evbody">${body}</div></details>`;
   };

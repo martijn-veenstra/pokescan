@@ -73,7 +73,7 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
 .iv{font-variant-numeric:tabular-nums;color:var(--ink);text-align:right}
 .meta{font-size:12.5px;color:var(--dim);margin-top:7px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
-.chip{font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;
+.chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;
  font-variant-numeric:tabular-nums;white-space:nowrap}
 .chip.gl{background:rgba(91,141,239,.16);color:#9DBCF7}
 .chip.ul{background:rgba(245,184,76,.14);color:#F5CE8A}
@@ -589,3 +589,9 @@ details.team.ev[open] .go{transform:rotate(90deg)}details.team.ev[open] .evtop{d
 /* "Update with a new scan": outlined green, stands out from the grey buttons without being a filled one */
 .btn.upd{margin:2px 0 0;padding:10px 12px;background:transparent;color:var(--green);border:1px solid rgba(72,213,151,.55);font-weight:600;font-size:14px}
 .btn.upd:active{background:rgba(72,213,151,.10)}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enlarge text in a block it thinks overflows */
+.evbl{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12.5px;line-height:1.4;color:var(--ink)}
+.evbl li{position:relative;padding:5px 9px 5px 22px;border-radius:9px;background:rgba(72,213,151,.08);overflow-wrap:anywhere}
+.evbl li::before{content:'✦';position:absolute;left:8px;top:5px;color:var(--green);font-size:10px}
+.evbl li b{color:#7FE3B6;font-weight:600}.evbl li.evmore{background:none;padding-left:9px}.evbl li.evmore::before{content:none}
+.evbon .evmore{font-size:12px;align-self:center}
