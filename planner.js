@@ -2368,7 +2368,7 @@ function scanSection(m, r) {
   ]);
   let h = lineageBanner(r) + `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.shadow ? chip('shadow', 'ul') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
   const hid = scanId(r);
-  h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon(hid && hid.id, 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
+  h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon((hid && hid.id) || unrankedId(r) || String(r.species || '').toLowerCase(), 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
   {                                              // types, weaknesses and the meta rank: the species facts in the same card
     const e = UI.mon && APP.pokemon[UI.mon], form = best && best[4], types = e ? e.types : form ? [form[3], form[4]].filter(t => t && t !== 'none').map(t => t.toLowerCase()) : [];
     const alt0 = e ? null : altEntry(r), known0 = knownMoves(r, (hid && hid.id) || (alt0 && alt0.id)), mv0 = known0 || (e ? e.moveset : alt0 ? alt0.e.moveset : []);
@@ -2423,11 +2423,20 @@ function scanSection(m, r) {
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
   if (UI.gloss) h += `<div class="gloss"><b>IVs</b> Attack / Defence / HP, 0–15 each. <b>IV%</b> their sum out of 45. <b>${LEAGUE.abbr} rank</b> where this spread sits among the 4096 possible spreads of ${esc(nice(r.species))} at the ${LEAGUE.cp} cap (#1 is the perfect ${esc(LEAGUE.title)} copy); the percentage is its stat product relative to #1. <b>${LEAGUE.cp === 2500 ? "GL" : "UL"}</b> the same at ${LEAGUE.cp === 2500 ? 1500 : 2500}. Put another way, ${g0 ? `${(100 - g0.n / 40.96).toFixed(1)}%` : 'the share'} of all spreads rank below this one. Ranks assume L50 unless the Best Buddy boost is on in Profile.</div>`;
   h += `</div>`;
-  if (!UI.mon) {                                  // not ranked here: the other league's move usage, then the evolutions
-    const known0 = mid ? knownMoves(r, mid) : null;
-    if (alt) h += moveUsage(alt.id, known0 || [], alt.e, alt.title);
-    h += (best ? evoTable(r, best) : '') + `<div class="note">${esc(nice(r.species))} is not ranked in ${esc(LEAGUE.title)}${alt ? `; its moves and their usage come from ${esc(alt.title)}, where it is #${alt.e.rank}` : ', so it has no PvP or raid pages of its own here'}.</div>`;
-  }
+  if (!UI.mon) h += unrankedTabs(m, r, alt, mid ? knownMoves(r, mid) : null, best);   // not ranked here: the same tabs, fed by the other league
+  return h;
+}
+function unrankedTabs(m, r, alt, known, best) {   // a species this league does not rank (Dewpider in Retro Cup): PvP and Raids from what is known anyway
+  const uid = unrankedId(r) || (alt && alt.id) || String(r.species || '').toLowerCase();
+  const tab = UI.monTab === 'pve' ? 'pve' : 'pvp';
+  let h = `<div class="tabs sub seg montabs" style="margin:10px 0 6px"><button class="${tab === 'pvp' ? 'on' : ''}" onclick="Planner.monTab('pvp')">PvP</button><button class="${tab === 'pve' ? 'on' : ''}" onclick="Planner.monTab('pve')">Raids</button></div>`;
+  if (tab === 'pve') return h + pveTab(m, uid, known, null, Object.assign({types: []}, alt ? alt.e : {}, {species: r.species, name: nice(r.species)}));
+  if (alt) h += moveUsage(alt.id, known || [], alt.e, alt.title);
+  if (best) h += evoTable(r, best);
+  h += rosterCard(m, uid, {inTeams: false, status: `${chip('scanned', 'gl')} <span class="dim">not used in ${esc(LEAGUE.title)} teams</span>`});
+  const b = baseFor(uid);
+  if (b && calcCP(b, 15, 15, 15, cpmAt(maxL() / 2)) >= LEAGUE.cp) h += ivCard(uid);   // only when it can reach the cap at all
+  h += `<div class="note">Not ranked in ${esc(LEAGUE.title)}${alt ? ` · moves and usage from ${esc(alt.title)} (#${alt.e.rank})` : ''}.</div>`;
   return h;
 }
 function editScan(key) {
@@ -2515,6 +2524,17 @@ function speciesMenuItems(m, id, scan) {      // the species' ⋮ items; on a sc
     ROSTER.candidates[id] !== undefined && !o ? ['Remove from wanted', `Planner.dropMon('candidates','${id}')`, true] : null,
   ];
 }
+function rosterCard(m, id, x) {                 // "In your roster": status, teams, the storage search and the family's candy
+  const {st = ownership(m, id), benched = ROSTER.exclude.includes(id), o = m.own[id], a = m.auto[id], teamsIn = 0, inTeams, status} = x || {}, rep = m.rep;
+  const rrows = [
+    ['Status', status || `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${benched && st ? ' ' + chip('benched') : ''}${o && o.manual ? ' <span class="dim">added by hand</span>' : ''}`],
+    inTeams ? ['In teams', `${teamsIn} of ${rep.todayAll.length} buildable from your roster`] : null,
+  ];
+  rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span><div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under ${LEAGUE.cp} CP; the catch string for a pre-evolution is under How to get</div>`]);
+  { const fk = familyKey(a ? a.fromId : id), hv = haveOf(fk);
+    rrows.push(['Candy', `<span class="have"><input inputmode="numeric" placeholder="?" value="${hv && hv.candy != null ? hv.candy : ''}" onchange="Planner.setHave('${fk}','candy',this.value)"> ${esc(nice(fk))} candy · <input inputmode="numeric" placeholder="?" value="${hv && hv.xl != null ? hv.xl : ''}" onchange="Planner.setHave('${fk}','xl',this.value)"> XL</span><div class="dim" style="font-size:12px">${hv ? `${hv.hand ? 'set by hand' : 'read from a status screen'} ${when(hv.t)}` : 'read off the next status screenshot of any of them, or type it'}</div>`]); }
+  return `<div class="sec">In your roster</div><div class="team card" style="cursor:default">${kv(rrows)}</div>`;
+}
 function monInner(m, id, scanR) {               // the species part; under a scan (scanR) without its own head, the tabs straight under the scan's card
   const noHead = !!scanR;
   const {L, own, auto, ri, rep} = m, e = APP.pokemon[id], o = own[id], a = auto[id], st = ownership(m, id), benched = ROSTER.exclude.includes(id);
@@ -2560,17 +2580,8 @@ function monInner(m, id, scanR) {               // the species part; under a sca
   }
   h += moveUsage(id, known || []);
   if (scanR && scanR.combos.length) h += evoTable(scanR, bestOf2(scanR));   // where the evolution ranks: a PvP question
-  {                                              // roster card
-    const rrows = [
-      ['Status', `${st ? ownChip(st) : benched ? chip('benched') : '<span class="dim">not in your roster</span>'}${benched && st ? ' ' + chip('benched') : ''}${o && o.manual ? ' <span class="dim">added by hand</span>' : ''}`],
-      ['In teams', `${teamsIn} of ${rep.todayAll.length} buildable from your roster`],
-    ];
-    rrows.push(['Search', `<span class="srchi"><code>${esc(searchFor(id))}</code><button onclick="Planner.copyText(${attr(searchFor(id))},this)">Copy</button></span><div class="dim" style="font-size:12px">Pokémon GO storage search: the evolution family under ${LEAGUE.cp} CP; the catch string for a pre-evolution is under How to get</div>`]);
-    { const fk = familyKey(a ? a.fromId : id), hv = haveOf(fk);
-      rrows.push(['Candy', `<span class="have"><input inputmode="numeric" placeholder="?" value="${hv && hv.candy != null ? hv.candy : ''}" onchange="Planner.setHave('${fk}','candy',this.value)"> ${esc(nice(fk))} candy · <input inputmode="numeric" placeholder="?" value="${hv && hv.xl != null ? hv.xl : ''}" onchange="Planner.setHave('${fk}','xl',this.value)"> XL</span><div class="dim" style="font-size:12px">${hv ? `${hv.hand ? 'set by hand' : 'read from a status screen'} ${when(hv.t)}` : 'read off the next status screenshot of any of them, or type it'}</div>`]); }
-    h += `<div class="sec">In your roster</div><div class="team card" style="cursor:default">${kv(rrows)}</div>`;
-    h += ivCard(id);
-  }
+  h += rosterCard(m, id, {inTeams: true, st, benched, o, a, teamsIn});
+  h += ivCard(id);
   // roster fit
   const fit = rosterFit(m, id), best = rep.today[0];
   h += `<div class="sec">With your roster <small>${fit.owned ? `in ${fit.inTeams} of ${fit.of} buildable teams` : 'if you add it'}</small></div>`;
@@ -2834,8 +2845,8 @@ function gmMove(m) {
   if (m.startsWith('HIDDEN_POWER') && PVE.pvemoves.HIDDEN_POWER_FAST) return Object.assign({}, PVE.pvemoves.HIDDEN_POWER_FAST, {t: (APP.moves[m] || {}).t});
   return null;
 }
-function raidCombos(id) {
-  const e = APP.pokemon[id], b = evoBaseStats(id); if (!e || !b || !PVE) return [];
+function raidCombos(id, eIn) {
+  const e = APP.pokemon[id] || eIn, b = evoBaseStats(id); if (!e || !b || !PVE) return [];
   const atk = (b[0] + 15) * CPM40, dmg = (p, stab) => Math.floor(0.5 * p * atk / RAID_BOSS_DEF * (stab ? 1.2 : 1)) + 1;
   const out = [];
   for (const f of e.fast) { const fm = gmMove(f); if (!fm || fm.e <= 0) continue;
@@ -2852,10 +2863,10 @@ function raidRowsHTML(rows, mine, n) {           // the ranked fast + charged pa
   return rows.slice(0, n).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('');
 }
 const pveMv = id => (PVE && PVE.moves[id] ? PVE.moves[id].n : mvName(id));   // game-master move ids (FAIRY_WIND_FAST) → names
-function pveTab(m, id, known, o) {             // generic raid-side page for any Pokémon: attacker moves, the types it is best against, its counters, your copy
-  const e = APP.pokemon[id]; let h = '';
+function pveTab(m, id, known, o, eIn) {       // generic raid-side page for any Pokémon: attacker moves, the types it is best against, its counters, your copy
+  const e = APP.pokemon[id] || eIn; let h = '';   // eIn: an unranked species, with the moves another league lists for it
   if (!PVE) { loadPve(); return h + `<div class="note">${pveError ? 'Raid data not available: ' + esc(pveError) : 'Loading the raid data…'}</div>`; }
-  const cur = (known || []).filter(Boolean), rows = raidCombos(id), mine = x => x.f === cur[0] && cur.slice(1).includes(x.c);
+  const cur = (known || []).filter(Boolean), rows = raidCombos(id, e), mine = x => x.f === cur[0] && cur.slice(1).includes(x.c);
   const best = rows[0], yours = rows.filter(mine), yb = yours.length ? yours.reduce((a, b) => b.pct > a.pct ? b : a) : null;
   // best as an attacker: where this Pokémon sits in the per-type rankings (shadow and mega forms count as their own rows)
   const species = id.split('_')[0].toUpperCase(), shadow = /_shadow$/.test(id), mega = /_mega/.test(id);
@@ -2877,7 +2888,7 @@ function pveTab(m, id, known, o) {             // generic raid-side page for any
   else if (!o) h += `<div class="note">Not in your storage yet. ${roles.length ? 'Worth building as a raid attacker; ' : ''}the PvP tab says how to get it.</div>`;
   // as a raid boss
   const weak = bossWeak(e.types);
-  h += `<div class="sec">When it is the boss <small>weak to</small></div><div class="team row" onclick="Planner.pickBoss('${id}')"><span class="tx"><span class="chips" style="margin:0">${weak.slice(0, 6).map(x => chip(`${x.t} ×${x.e.toFixed(x.e % 1 ? 2 : 0)}`, 't-' + x.t)).join('')}</span><div class="dt" style="margin-top:6px">Rank your own attackers against it ›</div></span></div>`;
+  if (APP.pokemon[id] && weak.length) h += `<div class="sec">When it is the boss <small>weak to</small></div><div class="team row" onclick="Planner.pickBoss('${id}')"><span class="tx"><span class="chips" style="margin:0">${weak.slice(0, 6).map(x => chip(`${x.t} ×${x.e.toFixed(x.e % 1 ? 2 : 0)}`, 't-' + x.t)).join('')}</span><div class="dt" style="margin-top:6px">Rank your own attackers against it ›</div></span></div>`;
   return h;
 }
 function pveType(t) { UI.pveType = t; nav('#/raids'); }

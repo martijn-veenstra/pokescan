@@ -35,6 +35,17 @@ test('a scrolled status screen of the card being updated attaches its attacks to
   await expect(mon.locator('.scanhero')).not.toContainText(/Teams are scored with|Correct a misread if this one is|scan the attacks to compare|this card is updated, no second card/);
   await expect(mon.locator('.scanhero')).toContainText(/Best moves\s*Little League/);
   expect(await mon.locator('.use .ur').count()).toBeGreaterThan(2);
+  // the page an unranked species gets is a full one: its icon, the PvP / Raids tabs, the roster card, the raid page
+  expect(await mon.locator('.scanhero .dh img.pi').first().getAttribute('src')).toMatch(/meditite\.webp$/);
+  await expect(mon.locator('.montabs')).toHaveCount(1);
+  const roster = mon.locator('.sec:has-text("In your roster") + .team.card');
+  await expect(roster).toContainText('Meditite candy');
+  await expect(roster.locator('code')).toContainText('meditite');
+  await mon.locator('.montabs button:has-text("Raids")').click();
+  await expect(mon).toContainText('As a raid attacker', { timeout: 30000 });
+  await expect(mon).toContainText('Raid moves');
+  await mon.locator('.montabs button:has-text("PvP")').click();
+  await expect(mon).toContainText('Moves by meta usage');
   // the appraisal screenshot of the same Pokémon folds into the same card too
   await page.evaluate(k => Planner.updateScan(k, 'mon'), key);
   await importFile(page, 'meditite-appr.png');
