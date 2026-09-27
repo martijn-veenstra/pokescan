@@ -333,6 +333,7 @@ function showScanKey(key) { const r = results.find(x => x.key === key); if (!r) 
 
 /* ---------- rendering: Today ---------- */
 const chip = (t, cls) => `<span class="chip ${cls || ''}">${esc(t)}</span>`;
+const updBtn = key => `<button class="btn upd" onclick="Planner.updateScan(${attr(key)},'mon')">⟳ Update with a new scan</button>`;   // same Pokémon after a power-up, evolution, appraisal or new attack: the card is updated
 /* fold(): show the first n rendered items, keep the rest behind a "+N more" toggle that opens (and closes) in place.
    chip: true renders the toggle as a chip so it sits in a .chips row; otherwise it is a dim line under the list. */
 function fold(items, n, opts) {
@@ -2368,6 +2369,7 @@ function scanSection(m, r) {
     h += `<div class="metal">${esc(meta)}</div>`;
     if (types.length) h += typeRows(types, weakToTypes(types), strongVs(mv0), known0 ? 'with its moves' : mv0.length ? 'with the recommended moves' : '');
   }
+  let updPlaced = false;
   const rows = [], mine = hid && hid.id && m.own[hid.id] && m.own[hid.id].key === r.key ? hid.id : null;   // the copy your roster plays
   if (mine && best) h += cpMeter(r, best);
   if (mine) h += todoList(m, mine);
@@ -2384,7 +2386,7 @@ function scanSection(m, r) {
     else if (gl.lv > best[0]) { const c = costTo(best[0], gl.lv); st = `${chip(`power up to L${gl.lv}`, 'ul')} <span class="dim">${fmt(c.dust)} dust · ${c.candy} candy → ${gl.cp} CP</span>`; }
     else st = `${chip(`ready for ${LEAGUE.abbr}`, 'meta1')} <span class="dim">${gl.cp} CP at L${gl.lv}, no power-up needed</span>`;
     rows.push(['Status', st]);
-    if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} fit this CP and HP, best shown. An appraisal pins it down.<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
+    if (r.combos.length > 1) rows.push(['Spreads', `${r.combos.length} possible · an appraisal pins it<div class="alts" style="margin-top:4px">${r.combos.map(c => `L${c[0]}  ${c[1]}/${c[2]}/${c[3]}  ${pct(c).toFixed(1)}%`).join('\n')}</div>`]);
   } else rows.push(['Status', `${chip('no match', 'warn')} <span class="dim">no IV spread fits this CP and HP; use ⋮ → Correct a misread</span>`]);
   const sid0 = scanId(r), here = sid0 && sid0.id && APP.pokemon[sid0.id] ? sid0.id : null, alt = here ? null : altEntry(r);
   const mid = here || (alt && alt.id), eAlt = alt && alt.e;
@@ -2396,19 +2398,19 @@ function scanSection(m, r) {
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
     if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
     rows.push(...moveRows(id0, known, `Planner.setScanMove(${idx},SLOT,this.value)`, undefined, e0));
-    rows.push(['', `<div class="dim" style="font-size:12px">${r.movesSeen ? '<span class="okc">✓</span> moves read from a screenshot' : known ? 'set by hand' : 'not scanned yet: screenshot the status screen scrolled to the attacks, or pick them. Teams are scored with the recommended moveset until then.'}</div>`]);
-    const unlockTxt = `${e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : ''}${e0.buddy ? ` · or walk ${e0.buddy} km as buddy` : ''}`;
-    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → set <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">${r.movesSeen ? 'one charged move read, but the NEW ATTACK button was not in the shot: screenshot the attacks with that button visible, or pick the 2nd move in the third box' : 'not known yet: scan the attacks, or pick it in the third box'}${unlockTxt ? ` · unlocking costs ${unlockTxt}` : ''}</span>`]);
-    rows.push([alt ? `Recommended <span class="dim">${esc(alt.title)}</span>` : 'Recommended', !known ? `runs ${esc(rec.map(mvName).join(' · '))} <span class="dim">· scan the attacks to compare</span>` : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> runs ${esc(rec.map(mvName).join(' · '))}`]);
+    if (!r.superseded) { rows.push(['', updBtn(r.key)]); updPlaced = true; }
+    const unlockTxt = e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : '';
+    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">unknown${unlockTxt ? ` · unlock ${unlockTxt}` : ''}</span>`]);
+    rows.push([alt ? `Best moves <span class="dim">${esc(alt.title)}</span>` : 'Best moves', !known ? esc(rec.map(mvName).join(' · ')) : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> ${esc(rec.map(mvName).join(' · '))}`]);
   }
-  rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> IVs from the appraisal screen' : 'IVs solved from CP, HP and level'}${r.cpInferred ? ' · CP inferred from the appraisal' : ''}`]);
+  rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> appraisal' : 'CP & HP'}${r.cpInferred ? ' · CP from appraisal' : ''}`]);
   if (sid0 && sid0.id) {                        // the other form's standing: a shadow ranks differently from its purified/normal twin
     const isSh = /_shadow$/.test(sid0.id), alt = isSh ? sid0.id.replace(/_shadow$/, '') : sid0.id + '_shadow', ea = APP.pokemon[alt], e0 = APP.pokemon[sid0.id];
-    if (r.shadow && !isSh) rows.push(['Shadow', `marked as Shadow; the rankings list only the normal ${esc(nm(sid0.id))} in ${esc(LEAGUE.title)}, so that is what the planner uses`]);
-    else if (ea && e0) rows.push(['Shadow', isSh ? `shadow copy, meta #${e0.rank} · purified it would be the normal ${esc(nm(alt))}, meta #${ea.rank}` : `normal copy, meta #${e0.rank} · the Shadow form ranks meta #${ea.rank} <span class="dim">(⋮ → Correct a misread if this one is)</span>`]);
+    if (r.shadow && !isSh) rows.push(['Shadow', 'marked Shadow · ranked as normal']);
+    else if (ea && e0) rows.push(['Shadow', isSh ? `shadow copy, meta #${e0.rank} · purified meta #${ea.rank}` : `normal · Shadow is meta #${ea.rank}`]);
   }
   if (r.history && r.history.length) rows.push(['History', r.history.slice().reverse().map(h => `${when(h.t)}: ${h.species !== r.species ? esc(nice(h.species)) + ' · ' : ''}${h.cp} CP · L${h.level ?? '?'}`).join('<br>') + `<div class="dim" style="font-size:12px">now ${r.cp} CP · L${r.level ?? '?'}</div>`]);
-  if (!r.superseded) rows.push(['', `<button class="btn sec" style="margin:4px 0 0" onclick="Planner.updateScan(${attr(r.key)},'mon')">⟳ Update with a new scan</button><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this card is updated, no second card.</div>`]);
+  if (!r.superseded && !updPlaced) rows.push(['', updBtn(r.key)]);
   h += kv(rows);
   h += `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="Planner.toggleGloss()">${UI.gloss ? '▾' : 'ⓘ'} What do IV%, ${LEAGUE.abbr} rank and ${LEAGUE.cp === 2500 ? 'GL' : 'UL'} rank mean?</div>`;
   const g0 = best ? pvpRank(best[4] || DATA.stats[r.species][0], best[1], best[2], best[3], LEAGUE.cp) : null;
@@ -2532,7 +2534,7 @@ function monInner(m, id, scanR) {               // the species part; under a sca
   else if (!noHead && a) { const need = evoShort(evoBranch(a.fromId, id)); h += `<div class="note" style="margin:0">Evolves from your <a href="#" onclick="Planner.openScan(${attr(a.fromKey)});return false"><b>${esc(a.from)}</b></a>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.${need ? ` Needs: ${esc(need)}.` : ''}</div>`; }
   else if (!noHead && !o && sc) h += `<div class="note" style="margin:0">Catch a <b>${esc(nm(pre))}</b> ≤ <b>${sc.safe}</b> CP: it evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs).</div>`;
   if (!noHead && !o) h += `<div class="notown"><div><b>Not in your roster yet</b><span class="dt">${a ? `You own its pre-evolution, not ${esc(e.name)} itself. ` : ''}Once you have one, screenshot its status screen in Pokémon GO and add it: IVs, level and moves are read from it and this page fills in.</span></div><button class="btn sec" onclick="Planner.scanFor('${id}')">＋ Add a scan of this Pokémon</button></div>`;
-  if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0"><button class="btn sec" style="margin:0" onclick="Planner.updateScan(${attr(o.scan.key)},'mon')">⟳ Update with a new scan</button></div><div class="dt">Screenshot the same Pokémon after a power-up, evolution, appraisal or new attack: this copy is updated, no second card.</div>`;
+  if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0">${updBtn(o.scan.key)}</div>`;
   h += `</div>`;
   }
   // the two faces of a Pokémon: what it does in GO Battle League, what it does in raids
@@ -2543,7 +2545,7 @@ function monInner(m, id, scanR) {               // the species part; under a sca
     const cur = (known || []).filter(Boolean), secondOpen = !known || cur.length < 3;
     const src = known ? (o ? (o.scan && o.scan.movesSeen ? 'read from your screenshot' : 'set by hand') : 'set for planning') : (o && !o.manual ? 'not scanned yet' : 'not set yet');
     const mrows = moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set');
-    mrows.push(['Recommended', !known ? `planning uses <b>${esc(rec.map(mvName).join(' · '))}</b> until the moves are known` : notRec.length ? `recommends <b>${esc(rec.map(mvName).join(' · '))}</b>` : `<span class="okc">✓</span> your moves match the recommended set`]);
+    mrows.push(['Best moves', !known ? `planning uses <b>${esc(rec.map(mvName).join(' · '))}</b> until the moves are known` : notRec.length ? `recommends <b>${esc(rec.map(mvName).join(' · '))}</b>` : `<span class="okc">✓</span> your moves match the recommended set`]);
     const cnt = PVP.counts ? PVP.counts(APP.moves, cur.length ? cur : rec) : null;
     if (cnt && cnt.charged.length) mrows.push(['Counts', `<b>${esc(mvName(cnt.fast))}</b> ${cnt.gain} energy per ${cnt.turns} turn${cnt.turns > 1 ? 's' : ''} → ${cnt.charged.map(c => `<b>${esc(mvName(c.id))}</b> in ${c.first} <span class="dim">(${c.seq}, ${c.turns} turns)</span>`).join(' · ')}`]);
     if (secondOpen && e.thirdMove) mrows.push(['Unlock', `2nd charged move: ${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · or walk ${e.buddy} km as buddy` : ''}`]);

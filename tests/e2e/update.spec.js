@@ -29,7 +29,11 @@ test('a scrolled status screen of the card being updated attaches its attacks to
   expect(await sels.nth(0).evaluate(el => el.value)).toBe('CONFUSION');
   expect(await sels.nth(1).evaluate(el => el.value)).toBe('PSYSHOCK');
   await expect(mon.locator('.scanhero')).toContainText(/locked[\s\S]*50\.000 dust · 50 candy/);
-  await expect(mon.locator('.scanhero')).toContainText(/Recommended\s*Little League/);
+  // the Update button sits right under the three move boxes, and the card carries no long explanations
+  expect(await mon.locator('.scanhero').evaluate(h => { const v = [...h.querySelectorAll('.kv > .v')], i = v.findIndex(x => x.querySelector('select.mvsel')); return v[i + 3] && !!v[i + 3].querySelector('button.btn.upd'); })).toBe(true);
+  await expect(mon.locator('.scanhero button.btn.upd')).toHaveCount(1);
+  await expect(mon.locator('.scanhero')).not.toContainText(/Teams are scored with|Correct a misread if this one is|scan the attacks to compare|this card is updated, no second card/);
+  await expect(mon.locator('.scanhero')).toContainText(/Best moves\s*Little League/);
   expect(await mon.locator('.use .ur').count()).toBeGreaterThan(2);
   // the appraisal screenshot of the same Pokémon folds into the same card too
   await page.evaluate(k => Planner.updateScan(k, 'mon'), key);
