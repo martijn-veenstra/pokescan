@@ -62,3 +62,23 @@ test('the battle check names the move into a resist, the losing lead and the was
   expect(ctx.history.join('\n')).toMatch(/thrown into a resist/);
   expect(errors).toEqual([]);
 });
+
+/* Signed out on a server with accounts, or on a server without the AI: the review cards say so instead of vanishing */
+for (const [label, health, expectText] of [
+  ['signed out', { ok: true, db: true, storage: 'memory', sync: true, auth: 'clerk', clerkPublishableKey: 'pk_test_' + Buffer.from('fake.clerk.accounts.dev$').toString('base64'), coach: true, version: 'test' }, 'You are signed out. Sign in to ask Professor Cedar about this battle.'],
+  ['no AI on the server', { ok: true, db: true, storage: 'memory', sync: true, coach: false, version: 'test' }, 'Professor Cedar is not available on this server right now.'],
+]) test(`the review card says why it is not there: ${label}`, async ({ page }) => {
+  await page.route('https://fake.clerk.accounts.dev/**', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.Clerk = { user: null, session: null, load: async function(){}, addListener(){}, mountSignIn(){}, unmountSignIn(){}, signOut: async function(){} };' }));
+  await page.route('**/api/**', route => {
+    const u = route.request().url();
+    if (u.endsWith('/api/health')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(health) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"user":"default","state":{}}' });
+  });
+  await page.addInitScript(`const BATTLE_A = ${JSON.stringify(battle('b1', 0))}, BATTLE_B = ${JSON.stringify(battle('b2', 3600e3))}; (${seed})(); localStorage.removeItem('sync');`);
+  const errors = await openApp(page, '#/battles');
+  await page.evaluate(async () => { await Sync.detect(); Planner.nav('#/battle/b1'); });
+  await expect(page.locator('#battle .cgate')).toContainText(expectText);
+  if (label === 'signed out') await expect(page.locator('#battle .cgate button')).toHaveText('Sign in');
+  await expect(page.locator('#battle .bcheck')).toBeVisible();          // the free check is there either way
+  expect(errors).toEqual([]);
+});

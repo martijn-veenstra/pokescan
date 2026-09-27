@@ -912,6 +912,25 @@ const saveBCoach = () => { const keep = Object.entries(BCOACH.reviews).sort((a, 
 const reviewKey = ids => ids.slice().sort().join('+') + '|' + LEAGUE.slug;
 const reviewFor = ids => BCOACH.reviews[reviewKey(ids)] || null;
 const coachOn = () => !!(window.Sync && Sync.available() && Sync.signedIn() && Sync.coachAvailable());
+/* why Professor Cedar is or is not there: 'on' (Pro), 'offer' (signed in, free plan), 'signin' (signed out on a server
+   with accounts), 'local' (a server without accounts, not connected), 'off' (no AI on the server), 'wait' (still asking
+   the server), 'none' (no server at all). The cards say which, instead of disappearing. */
+function coachState() {
+  if (!window.Sync || Sync.available() === false) return 'none';
+  const hl = Sync.health && Sync.health(); if (!hl) return 'wait';
+  if (!hl.coach) return 'off';
+  if (coachOn()) return 'on';
+  if (Sync.signedIn()) return 'offer';
+  return hl.auth === 'clerk' ? 'signin' : 'local';
+}
+function coachGate(title, about, cs) {           // the card in place of a review Professor Cedar cannot give right now
+  const body = cs === 'signin' ? `You are signed out. Sign in to ask Professor Cedar ${about}.`
+    : cs === 'local' ? `Connect sync (the cloud button at the top) to ask Professor Cedar ${about}.`
+    : cs === 'off' ? 'Professor Cedar is not available on this server right now.' : '';
+  if (!body) return '';
+  const btn = cs === 'signin' || cs === 'local' ? `<button class="btn sec" style="margin:8px 0 0" onclick="Sync.toggle()">${cs === 'signin' ? 'Sign in' : 'Connect sync'}</button>` : '';
+  return `<div class="team card cgate" style="cursor:default"><div class="sec" style="margin:0 0 4px"><span>🎓 ${esc(title)} <small>${cs === 'off' ? 'unavailable' : cs === 'signin' ? 'sign in' : 'connect'}</small></span></div><div class="dt">${body}</div>${btn}</div>`;
+}
 const TEAM_SECS = ['Verdict', 'Game plan', 'Strengths', 'Weak spots', 'Swaps', 'Order'];
 const BATTLE_SECS = ['Grade', 'What happened', 'Mistakes', 'Moves', 'Matchups', 'Shields', 'Try this next time', 'Team tip',
                      'Turning point', 'Do differently', 'Matchup note'];   // the last three: reviews written before the check existed
@@ -1040,7 +1059,9 @@ function battleHabits(limit) {
 function habitsCard() {
   const pro = coachOn() || !(window.Sync && Sync.available());   // a server without accounts has no Pro to sell: everyone gets it
   const hb = battleHabits(); if (hb.n < 2) return '';
-  if (!pro) return window.Sync && Sync.signedIn() && Sync.coachOffered() ? proTeaser('Your habits', `Across your last ${hb.n} battles: the mistakes you keep making (moves into a resist, losing leads and switches, shields spent on resisted moves) and the drill that fixes each.`) : '';
+  const cs = coachState();
+  if (!pro && cs !== 'offer') return coachGate('Your habits', 'about the mistakes you keep making', cs);
+  if (!pro) return proTeaser('Your habits', `Across your last ${hb.n} battles: the mistakes you keep making (moves into a resist, losing leads and switches, shields spent on resisted moves) and the drill that fixes each.`);
   if (!hb.items.length) return `<div class="sec">Your habits <small>last ${hb.n} battles</small></div><div class="note">No repeat mistakes in your last ${hb.n} battles: the moves went into the right types, the sends held their matchups.</div>`;
   const rows = hb.items.map(l => `<div class="hab"><div class="hn">${l.n}</div><div><b>${esc(l.text)}</b>${l.most ? `<div class="dim">${esc(l.most)}</div>` : ''}<div class="fx">→ ${esc(l.tip)}</div></div></div>`).join('');
   const leads = hb.leads.length ? `<div class="uh" style="margin-top:8px">Leads</div>` + hb.leads.slice(0, 4).map(r => `<div class="dt">${esc(nm(r.id))}: ${r.w}–${r.l}${r.bad ? ` · lost the matchup ${r.bad}×` : ''}</div>`).join('') : '';
@@ -1089,8 +1110,9 @@ async function askBattleReview(id) {
   delete BCOACH.bBusy[id]; renderBattle();
 }
 function battleReviewCard(b) {
-  if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered()
-    ? proTeaser("Professor Cedar's review", 'Professor Cedar coaches you through this match: a grade, the mistakes with their times, the moves and matchups to change, the shield trade, and what to try next time.') : '';
+  const cs = coachState();
+  if (cs !== 'on') return cs === 'offer' ? proTeaser("Professor Cedar's review", 'Professor Cedar coaches you through this match: a grade, the mistakes with their times, the moves and matchups to change, the shield trade, and what to try next time.')
+    : coachGate("Professor Cedar's review", 'about this battle', cs);
   const rv = BCOACH.battles[b.id], busy = BCOACH.bBusy[b.id], failed = BCOACH.bFailed[b.id];
   const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>🎓 Professor Cedar's review <small>${extra}</small></span>${rv ? ctxMenu([['Ask again', `Planner.askBattleReview(${attr(b.id)})`]]) : ''}</div>`;
   const wait = (state, extra, body) => `<div class="team card rvwait" style="cursor:default"><div class="pball rv ${state}" aria-hidden="true">${typeof pballSVG === 'function' ? pballSVG() : ''}</div><div class="rvtx">${head(extra)}<div class="dt">${body}</div></div></div>`;
@@ -1110,7 +1132,8 @@ function refreshReview(ids) { askReview(ids, true); const v = onView(); if (v ==
    of Pro reviews without the player asking for any of them. */
 function reviewCard(ids) {
   if (ids.length !== 3) return '';
-  if (!coachOn()) return window.Sync && Sync.available() && Sync.signedIn() && Sync.coachOffered() ? proTeaser("Professor Cedar's verdict", 'Professor Cedar judges this team: its plan, what it fears and the one swap from your roster that helps.') : '';
+  const cs = coachState();
+  if (cs !== 'on') return cs === 'offer' ? proTeaser("Professor Cedar's verdict", 'Professor Cedar judges this team: its plan, what it fears and the one swap from your roster that helps.') : coachGate("Professor Cedar's verdict", 'about this team', cs);
   const key = reviewKey(ids), rv = BCOACH.reviews[key], busy = BCOACH.reviewBusy[key], failed = BCOACH.reviewFailed[key];
   const head = extra => `<div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 6px"><span>🎓 Professor Cedar's verdict <small>${extra}</small></span>${rv ? ctxMenu([['Refresh review', `Planner.refreshReview(${attr(ids)})`]]) : ''}</div>`;
   // the scan importer's Pokéball, on the app's other long wait: shaking while Claude thinks, caught when it lands, dropped when it fails
@@ -2921,7 +2944,7 @@ function refresh() {                           // roster state changed: recomput
   if (v === 'today') renderToday(); else if (v === 'teams') renderTeams(); else if (v === 'roster') renderRoster();
   else if (v === 'builder' || v === 'meta' || v === 'rank' || v === 'raids') renderMeta();
   else if (v === 'matchups') renderMatchups(); else if (v === 'battles') renderBattles(); else if (v === 'pro') renderPro();
-  else if (v === 'mon' && UI.mon) renderMon(); else if (v === 'team' && UI.team) renderTeam();
+  else if (v === 'mon' && (UI.mon || UI.scan)) renderMon(); else if (v === 'team' && UI.team) renderTeam(); else if (v === 'battle' && UI.battle) renderBattle();
   paintDrawer();
 }
 function markDirty() { dirty = true; }
