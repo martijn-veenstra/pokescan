@@ -448,6 +448,7 @@ function renderTodayInner(el) {
   let h = `<div class="note">${esc(APP.league.title)} rankings · gamemaster ${esc(APP.gamemasterTimestamp.slice(0, 10))} · ${Object.keys(own).length} owned, ${Object.keys(m.ri.pending).length} pending, ${Object.keys(m.ri.candidates).length} wanted</div>`;
   h += startCard(m, best);
   h += changesCard(m);
+  h += eventsCard(m);
   if (!best) {
     h += `<div class="empty"><b>No team yet.</b><br>${ONBOARD.dismissed ? `Scan at least three Pokémon at or under ${LEAGUE.cp} CP, add them by name in Roster, or load the saved roster from its ⋮ menu.` : 'The checklist above says what to scan next.'}</div>`;
     el.innerHTML = h; return;
@@ -832,6 +833,56 @@ function saveBuildNamed() {                    // the builder's inline name fiel
 }
 function renameTeam(old) { const name = prompt('New name', old); if (!name || name === old || !ROSTER.tagged[old]) return; ROSTER.tagged[name] = ROSTER.tagged[old]; delete ROSTER.tagged[old]; if (UI.team) UI.team.name = name; saveRoster(); refresh(); }
 function deleteTeam(name) { if (!ROSTER.tagged[name] || !confirm(`Delete the party "${name}"? Your Pokémon stay in the roster.`)) return; delete ROSTER.tagged[name]; saveRoster(); refresh(); closeTeam(); }
+
+/* ---------- events: what runs now and in the next two weeks, with bonuses and Pokémon (Today) ---------- */
+function forYou(m) {                            // name of an event Pokémon → {cls, t} when it is on your wanted list or feeds a team's candy
+  const {ri, auto} = m, wanted = new Map(), need = new Map();
+  for (const id of Object.keys(ri.candidates).concat(Object.keys(ri.pending).filter(id => !auto[id])).filter(id => APP.pokemon[id])) {
+    const k = familyKey(id); if (!wanted.has(k)) wanted.set(k, []); wanted.get(k).push(id); }
+  const trios = Object.values(ROSTER.tagged).filter(v => v.length === 3 && v.every(x => APP.pokemon[x]));
+  const best = m.rep.today[0]; if (best) trios.unshift(best.members.map(x => x.speciesId));
+  for (const ids of trios) for (const w of teamWork(m, ids).ws) if (w.candy || w.xl) { if (!need.has(w.fam)) need.set(w.fam, new Set()); need.get(w.fam).add(nm(w.id)); }
+  return name => {
+    const bare = String(name).replace(/^(mega|primal|dynamax|gigantamax)\s+/i, '').replace(/\s+[XY]$/, ''), id = idByName(bare); if (!id) return null;
+    const k = familyKey(id), sh = /shadow/i.test(name), w = (wanted.get(k) || []).filter(x => /_shadow$/.test(x) === sh);
+    if (w.length) return {cls: 'want', t: `wanted: ${nm(w[0])}`, id};
+    if (need.has(k)) return {cls: 'candy', t: `candy for ${[...need.get(k)].join(' + ')}`, id};
+    return {cls: '', t: '', id};
+  };
+}
+function eventsCard(m) {
+  const src = window.Sources; if (!src || !src.events) return '';
+  let h = `<div class="sec">Events <small>live now and the next two weeks</small></div>`;
+  const E = src.ready() ? src.events(14) : null;
+  if (!E) return h + `<div class="note">${src.error() ? 'Event schedule not available: ' + esc(src.error()) : 'Event schedule not loaded yet…'}</div>`;
+  const tag = forYou(m), open = UI.evOpen || (UI.evOpen = {});
+  const lg = E.leagues.filter(l => l.now), nx = E.leagues.find(l => !l.now);
+  if (lg.length || nx) h += `<div class="evleague">⚔️ <b>GO Battle League</b> ${lg.length ? esc(lg.map(l => l.name).join(' · ')) : ''}${nx ? `<span class="dim">${lg.length ? ' · next: ' : ''}${esc(nx.name)} from ${esc(nx.when.split(' – ')[0])}</span>` : ''}</div>`;
+  const monChip = p => { const t = tag(p.name) || {}; return `<span class="evmon ${t.cls || ''}"${t.id ? ` onclick="event.preventDefault();Planner.openMon('${t.id}')"` : ''}>${t.id ? icon(t.id, 's') : ''}${esc(p.name)}${p.shiny ? ' ✨' : ''}${t.t ? `<em>${esc(t.t)}</em>` : ''}</span>`; };
+  const groups = list => { const g = new Map(); for (const p of list) { const k = p.group || ''; if (!g.has(k)) g.set(k, []); g.get(k).push(p); } return [...g.entries()]; };
+  const block = (title, list) => list.length ? `<div class="evsub">${title}</div>${groups(list).map(([g, ps]) => `${g ? `<div class="evgrp">${esc(g)}</div>` : ''}<div class="evmons">${ps.map(monChip).join('')}</div>`).join('')}` : '';
+  const row = e => {
+    const all = [...e.spawns, ...e.raids, ...e.eggs], mine = [...new Set(all.map(p => (tag(p.name) || {}).t).filter(Boolean))];
+    const top = all.slice(0, e.now ? 6 : 0);
+    const body = `${e.bonuses.length ? `<div class="evsub">Bonuses</div><div class="evbon">${e.bonuses.map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}</div>` : ''}
+      ${block('Wild spawns', e.spawns)}${block('Raids', e.raids)}${block('Eggs', e.eggs)}
+      ${e.research.length ? `<div class="evsub">Research</div><ul class="evres">${e.research.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
+      ${!e.bonuses.length && !all.length && !e.research.length ? '<div class="dim">No bonuses or Pokémon published for this one yet.</div>' : ''}`;
+    return `<details class="team ev${e.now ? ' live' : ''}" data-ev="${esc(e.id)}"${open[e.id] ? ' open' : ''} ontoggle="Planner.evToggle(this.dataset.ev,this.open)"><summary>
+      ${e.image ? `<img class="evimg" src="${esc(e.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span class="evtx"><span class="nm">${esc(e.name)}</span>
+      <div class="dt">${esc(e.when)}${e.heading && e.heading !== e.name ? ` · ${esc(e.heading)}` : ''}${!e.now && e.bonuses[0] ? ` · <span class="good">${esc(e.bonuses[0])}${e.bonuses.length > 1 ? ` +${e.bonuses.length - 1}` : ''}</span>` : ''}</div>
+      ${mine.length ? `<div class="evfor">★ ${esc(mine.join(' · '))}</div>` : ''}
+      ${e.now && e.bonuses.length ? `<div class="evbon evtop">${e.bonuses.slice(0, 4).map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}${e.bonuses.length > 4 ? `<span class="dim"> +${e.bonuses.length - 4}</span>` : ''}</div>` : ''}
+      ${top.length ? `<div class="evmons evtop">${top.map(monChip).join('')}${all.length > top.length ? `<span class="dim">+${all.length - top.length}</span>` : ''}</div>` : ''}
+      </span><span class="go">›</span></summary><div class="evbody">${body}</div></details>`;
+  };
+  const live = E.events.filter(e => e.now), soon = E.events.filter(e => !e.now);
+  h += live.length ? `<div class="evhd">Live now</div>` + live.map(row).join('') : `<div class="note">No event running right now.</div>`;
+  if (soon.length) h += `<div class="evhd">Coming up</div>` + soon.map(row).join('');
+  h += `<div class="note">Schedule updated ${when(src.updated())}. ★ = on your wanted list or candy a team still needs. Tap an event for its bonuses, spawns, raids and research.</div>`;
+  return h;
+}
+function evToggle(id, on) { const o = UI.evOpen || (UI.evOpen = {}); if (on) o[id] = 1; else delete o[id]; }
 
 /* ---------- wanted Pokémon: where to get them (Today) ---------- */
 function wantedCard(m) {
@@ -2995,7 +3046,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, evToggle, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

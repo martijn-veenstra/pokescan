@@ -127,10 +127,48 @@ function hint(names, opts) {                  // one short phrase for a Next-mov
   const e = forSpecies(names, opts)[0]; if (!e) return '';
   return e.kind === 'raid' ? `${e.name} ${e.what.toLowerCase()} ${e.when}` : e.kind === 'egg' ? `${e.name} from ${e.what}` : e.kind === 'research' ? `${e.name} from field research` : e.kind === 'rocket' ? `Shadow ${e.name} from ${e.what}` : `${e.name} ${e.what} ${e.when}`;
 }
+/* events(days): the events running now and starting within `days`, for the Today page. Raid rotations that share a window
+   fold into one entry, GO Battle League weeks come back apart as `leagues`, city-only safaris and passes are left out.
+   Each event: {id, name, kind, heading, image, start, end, now, when, bonuses:[text], spawns|raids|eggs:[{name, shiny, group}], research:[text]} */
+const HIDE = new Set(['city-safari', 'go-pass', 'season']);
+const hm = d => d.toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+function events(days) {
+  if (!S) return null;
+  const now = Date.now(), horizon = now + (days || 14) * 864e5, out = [], leagues = [], raidWeeks = new Map();
+  const mons = l => (l || []).filter(p => p && p.name).map(p => ({name: stripHtml(p.name), shiny: !!(p.shiny || p.canBeShiny), group: p.group || ''}));
+  const uniq = a => [...new Set(a.map(stripHtml).filter(Boolean))];
+  const label = (a, b, live) => live ? (b.toDateString() === new Date().toDateString() ? `now, until ${hm(b)}` : `now, until ${day(b)}`) : whenLabel(a, b);
+  for (const ev of S.events || []) {
+    const a = dt(ev.start), b = dt(ev.end); if (!a || !b || b.getTime() < now || a.getTime() > horizon) continue;
+    const live = a.getTime() <= now, x = ev.extraData || {}, pg = x.page || {};
+    if (ev.eventType === 'go-battle-league') { leagues.push({name: String(ev.name).split('|')[0].trim(), start: ev.start, end: ev.end, now: live, when: label(a, b, live)}); continue; }
+    if (HIDE.has(ev.eventType)) continue;
+    if (ev.eventType === 'raid-battles') {
+      // every rotation running now is one entry (each tier says until when); upcoming ones are one entry per start date
+      const k = live ? 'now' : ev.start, tier = tierOf(ev.name), grp = (!tier ? 'Raids' : /star/i.test(tier) ? `${tier} raids` : `${tier[0].toUpperCase()}${tier.slice(1).toLowerCase()} raids`) + (live ? ` · until ${day(b)}` : '');
+      if (!raidWeeks.has(k)) raidWeeks.set(k, {id: 'raids:' + (live ? 'now' : ev.start), name: '', kind: 'raids', heading: 'Raid Battles', image: ev.image || '', start: ev.start, end: ev.end, now: live, when: label(a, b, live), bonuses: [], spawns: [], raids: [], eggs: [], research: []});
+      const w = raidWeeks.get(k);
+      if (dt(ev.end) < dt(w.end)) { w.end = ev.end; w.when = label(a, b, live); }
+      if (!live && dt(ev.end) > dt(w.end)) { w.end = ev.end; w.when = label(dt(w.start), b, live); }
+      for (const r of mons((x.raidbattles || {}).bosses)) if (!w.raids.some(q => q.name === r.name)) w.raids.push(Object.assign(r, {group: grp}));
+      continue;
+    }
+    const cd = x.communityday || {}, sp = x.spotlight;
+    out.push({id: ev.eventID, name: stripHtml(ev.name), kind: ev.eventType, heading: ev.heading || '', image: ev.image || '', start: ev.start, end: ev.end, now: live, when: label(a, b, live),
+      bonuses: uniq([...(cd.bonuses || []).map(q => q.text), ...(sp && sp.bonus ? [sp.bonus] : []), ...(pg.bonuses || [])]),
+      spawns: mons([...(cd.spawns || []), ...(sp ? (sp.list && sp.list.length ? sp.list : [sp]) : []), ...(pg.spawns || [])]),
+      raids: mons(pg.raids), eggs: mons(pg.eggs), research: uniq(pg.research || [])});
+  }
+  for (const w of raidWeeks.values()) { if (!w.raids.length) continue;
+    w.name = w.now ? 'Raids now' : `Raids from ${day(dt(w.start))}`; if (w.now) w.when = 'now'; out.push(w); }
+  out.sort((p, q) => p.now !== q.now ? (p.now ? -1 : 1) : p.now ? dt(p.end) - dt(q.end) : dt(p.start) - dt(q.start));
+  leagues.sort((p, q) => dt(p.start) - dt(q.start));
+  return {events: out, leagues};
+}
 function onChange(f) { listeners.push(f); }
 /* raids(): the bosses in raids right now (Leek Duck via ScrapedDuck): name, tier, types (lowercase names), shiny */
 function raids() { return ((S && S.raids) || []).map(r => ({name: r.name, tier: r.tier, types: (r.types || []).map(t => (t.name || '').toLowerCase()).filter(Boolean), shiny: !!r.canBeShiny})); }
 function rocket() { return (S && S.rocket && S.rocket.lineups) || []; }
-window.Sources = {load, forSpecies, hint, onChange, raids, rocket, rocketAt: () => (S && S.rocket && S.rocket.t) || 0, ready: () => !!S, updated: () => S ? S.t : 0, error: () => error};
+window.Sources = {load, forSpecies, hint, onChange, raids, rocket, events, rocketAt: () => (S && S.rocket && S.rocket.t) || 0, ready: () => !!S, updated: () => S ? S.t : 0, error: () => error};
 window.addEventListener('load', () => setTimeout(() => load(false), 800));
 })();

@@ -14,7 +14,11 @@ const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-sect
 <h3>Mega Raids · Saturday</h3><div class="pkmn-list-flex"><div class="pkmn-list-item"><div class="pkmn-list-img"><img src="x.png"></div><span class="pkmn-name">Mega Altaria</span><img class="shiny-icon" src="s.png"></div>
 <div class="pkmn-list-item"><div class="pkmn-list-img"><img src="y.png"></div><span class="pkmn-name">Mega Glalie</span></div></div>
 <h2 class="event-section-header" id="spawns">Wild Encounters</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Swablu</span><img class="shiny-icon"></div></div>
+<h2 class="event-section-header bonuses" id="bonuses">Event Bonuses</h2><div class="bonus-list"><div class="bonus-item"><div class="item-circle"><img src="b.png"></div><span class="bonus-text">2× Catch Candy</span></div><div class="bonus-item"><span class="bonus-text">Incense lasts 1 hour</span></div></div>
 <h2 class="event-section-header" id="shiny">Shiny</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Altaria</span></div></div></div></body></html>`;
+const PATH_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="wild-encounters">Wild Encounters</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Zubat</span></div></div>
+<h2 class="event-section-header" id="event-bonuses">Bonuses</h2><ul><li>2× Stardust for hatching Eggs</li></ul>
+<h2 class="event-section-header" id="field-research-tasks">Field Research</h2><ul><li>Catch 5 Pokémon</li></ul></div></body></html>`;
 const ROCKET_HTML = `<html><body><div class="page-content"><div class="rocket-lineups">
 <div class="rocket-profile" style="--x:1"><div class="employee-info"><span class="photo"><img src="boss.png" alt="Giovanni" /></span><span class="name-title-wrapper"><div class="name">Giovanni</div><div class="title">Team GO Rocket Boss</div></span><span class="quote"><span class="quote-decor">&ldquo;</span><span class="quote-text">I will not tolerate your interference.</span><span class="quote-decor">&rdquo;</span></span></div>
 <div class="lineup-info"><div class="slot "><span class="number">1</span><span class="shadow-pokemon-wrapper"><span class="shadow-pokemon" data-pokemon="Persian" data-type1="normal"><span class="image-wrapper"><img class="pokemon-image" src="pm53.png" alt="Persian" /></span></span></span></div>
@@ -34,9 +38,14 @@ const fakeFetch = async (url) => {
   if (url.endsWith('events.json')) return json([
     { eventID: 'gofest', name: 'GO Fest: Mega Finale', eventType: 'pokemon-go-fest', link: 'https://leekduck.example/events/gofest/', start: soon, end: later, extraData: { generic: {} } },
     { eventID: 'old', name: 'Old Fest', eventType: 'event', link: 'https://leekduck.example/events/old/', start: '2020-01-01T00:00:00.000', end: '2020-01-02T00:00:00.000', extraData: null },
+    { eventID: 'path', name: 'Choose Your Path: Twilight Trails', eventType: 'choose-your-path', link: 'https://leekduck.example/events/path/', start: soon, end: later, extraData: { generic: {} } },
+    { eventID: 'gbl', name: 'Ultra League | Twilight Trails', eventType: 'go-battle-league', link: 'https://leekduck.example/events/gbl/', start: soon, end: later, extraData: { generic: {} } },
+    { eventID: 'safari', name: 'Munich - City Safari', eventType: 'city-safari', link: 'https://leekduck.example/events/safari/', start: soon, end: later, extraData: { generic: {} } },
     { eventID: 'mega', name: 'Mega Beedrill in Mega Raids', eventType: 'raid-battles', link: 'https://leekduck.example/events/mega/', start: soon, end: later, extraData: { raidbattles: { bosses: [{ name: 'Mega Beedrill' }] } } },
   ]);
   if (url.includes('/events/gofest/')) return { ok: true, status: 200, text: async () => GOFEST_HTML };
+  if (url.includes('/events/path/')) return { ok: true, status: 200, text: async () => PATH_HTML };
+  if (/\/events\/(gbl|safari)\//.test(url)) throw new Error('league weeks and city safaris are not fetched: ' + url);
   if (url.includes('rocket-lineups')) return { ok: true, status: 200, text: async () => ROCKET_HTML };
   return { ok: false, status: 404, text: async () => '', json: async () => ({}) };
 };
@@ -136,7 +145,13 @@ assert.equal(gofest.extraData.page.raids[0].group, 'Mega Raids · Saturday');
 assert.deepEqual(gofest.extraData.page.spawns.map(x => x.name), ['Swablu']);
 assert.ok(!src.events.find(e => e.eventID === 'old').extraData, 'past events are not fetched');
 assert.ok(!src.events.find(e => e.eventID === 'mega').extraData.page, 'structured events are left alone');
-assert.equal(src.enriched, 1);
+assert.deepEqual(gofest.extraData.page.bonuses, ['2× Catch Candy', 'Incense lasts 1 hour'], 'event bonuses parsed');
+const cyp = src.events.find(e => e.eventID === 'path');
+assert.deepEqual(cyp.extraData.page.bonuses, ['2× Stardust for hatching Eggs'], 'bonuses from a plain list');
+assert.deepEqual(cyp.extraData.page.research, ['Catch 5 Pokémon']);
+assert.deepEqual(cyp.extraData.page.spawns.map(x => x.name), ['Zubat'], 'a Choose Your Path event is read too');
+assert.ok(!src.events.find(e => e.eventID === 'gbl').extraData.page && !src.events.find(e => e.eventID === 'safari').extraData.page, 'league weeks and city safaris are not read');
+assert.equal(src.enriched, 2);
 console.log('sources', { enriched: src.enriched, gofest: gofest.extraData.page });
 assert.ok(src.rocket && src.rocket.lineups.length === 3, 'three Rocket lineups parsed');
 const fire = src.rocket.lineups.find(l => /Fire/.test(l.who));

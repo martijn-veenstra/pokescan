@@ -1,24 +1,46 @@
-// Availability schedule for the app: Leek Duck's data as published by ScrapedDuck, plus the Pokémon lists that ScrapedDuck
-// leaves out (GO Fest, Raid Days, seasonal events: their raid bosses and spawns only exist on the Leek Duck event page).
+// Availability schedule for the app: Leek Duck's data as published by ScrapedDuck, plus what ScrapedDuck leaves out (GO Fest,
+// Raid Days, seasonal events: their raid bosses, spawns and bonuses only exist on the Leek Duck event page).
 // Those pages are fetched here on the server, where there is no CORS, and parsed with the same markup ScrapedDuck relies on:
 // .event-section-header#raids|spawns|eggs followed by .pkmn-list-flex > .pkmn-list-item > .pkmn-name (+ .shiny-icon).
 const BASE = 'https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/';
 const KINDS = ['raids', 'eggs', 'research', 'events'];
 const TTL = 3 * 3600e3;
 const WINDOW_AHEAD = 21 * 864e5;
-const MAX_PAGES = 14;
+const MAX_PAGES = 20;
 const ROCKET_URL = 'https://leekduck.com/rocket-lineups/';
-const UNSTRUCTURED = new Set(['pokemon-go-fest', 'event', 'raid-day', 'raid-hour', 'max-mondays', 'max-battles', 'season', 'go-tour', 'safari-zone', 'wild-area', 'city-safari', 'live-event']);
+// event types whose page is not read: the data is structured already (raids, spotlight) or it is no event to play (league weeks, passes, city-only safaris)
+const SKIP_PAGE = new Set(['raid-battles', 'pokemon-spotlight-hour', 'go-battle-league', 'go-pass', 'city-safari']);
 
 const decode = s => String(s || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&eacute;/g, 'é').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 
-/* parseEventPage(html) -> {raids:[{name, shiny, group}], spawns:[...], eggs:[...]} or null when the page has none of them. */
+/* parseEventPage(html) -> {raids:[{name, shiny, group}], spawns:[...], eggs:[...], bonuses:[text], research:[text]} or null when the
+   page has none of them. Bonuses are the .bonus-item > .bonus-text entries (the markup ScrapedDuck reads for Community Day). */
 export function parseEventPage(html) {
   if (!html) return null;
   const content = (html.match(/<div[^>]*class="[^"]*page-content[^"]*"[^>]*>([\s\S]*)/) || [null, html])[1];
   const headers = [...content.matchAll(/<[a-z0-9]+[^>]*class="[^"]*event-section-header[^"]*"[^>]*>/gi)].map(m => ({at: m.index, id: ((m[0].match(/\bid="([^"]+)"/) || [])[1] || '').toLowerCase()}));
   if (!headers.length) return null;
-  const out = {raids: [], spawns: [], eggs: []};
+  const out = {raids: [], spawns: [], eggs: [], bonuses: [], research: []};
+  const sectionOf = i => content.slice(headers[i].at, i + 1 < headers.length ? headers[i + 1].at : undefined);
+  const texts = (html, re) => [...html.matchAll(re)].map(m => decode(m[1])).filter(t => t && t.length <= 160);
+  for (let i = 0; i < headers.length; i++) {
+    const id = headers[i].id;
+    if (id.includes('bonus')) {
+      const sect = sectionOf(i);
+      let b = texts(sect, /class="[^"]*bonus-text[^"]*"[^>]*>([\s\S]*?)<\/(?:span|div|p)>/gi);
+      if (!b.length) b = texts(sect, /<li[^>]*>([\s\S]*?)<\/li>/gi);
+      for (const t of b) if (!out.bonuses.includes(t)) out.bonuses.push(t);
+      continue;
+    }
+    if (id.includes('research')) {
+      const sect = sectionOf(i);
+      let t = texts(sect, /class="[^"]*task-text[^"]*"[^>]*>([\s\S]*?)<\/(?:span|div|p)>/gi);
+      if (!t.length) t = texts(sect, /<li[^>]*>([\s\S]*?)<\/li>/gi);
+      for (const x of t) if (!out.research.includes(x)) out.research.push(x);
+      continue;
+    }
+  }
+  if (!out.bonuses.length) for (const t of texts(content, /class="[^"]*bonus-text[^"]*"[^>]*>([\s\S]*?)<\/(?:span|div|p)>/gi)) if (!out.bonuses.includes(t)) out.bonuses.push(t);
   for (let i = 0; i < headers.length; i++) {
     const key = headers[i].id.includes('raid') ? 'raids' : headers[i].id.includes('spawn') || headers[i].id.includes('wild') ? 'spawns' : headers[i].id.includes('egg') ? 'eggs' : null;
     if (!key) continue;
@@ -34,7 +56,7 @@ export function parseEventPage(html) {
       out[key].push({name, shiny: /shiny-icon/.test(chunk), group: group ? group.text : ''});
     });
   }
-  return out.raids.length || out.spawns.length || out.eggs.length ? out : null;
+  return out.raids.length || out.spawns.length || out.eggs.length || out.bonuses.length || out.research.length ? out : null;
 }
 
 /* parseRocketPage(html) -> [{who, title, type, quote, encounter, slots:[[names],[names],[names]]}] or null.
@@ -86,8 +108,8 @@ export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) 
     for (const k of KINDS) out[k] = await (await get(BASE + k + '.json')).json();
     const now = Date.now(), prev = cache;
     const todo = (out.events || []).filter(ev => {
-      const x = ev.extraData || {}; if (x.raidbattles || x.communityday || x.spotlight) return false;
-      if (!UNSTRUCTURED.has(ev.eventType) || !ev.link) return false;
+      const x = ev.extraData || {}; if (x.raidbattles || x.spotlight || (x.communityday && (x.communityday.bonuses || []).length)) return false;
+      if (SKIP_PAGE.has(ev.eventType) || !ev.link) return false;
       const a = Date.parse(ev.start), b = Date.parse(ev.end);
       return isFinite(a) && isFinite(b) && b >= now && a <= now + WINDOW_AHEAD;
     }).slice(0, MAX_PAGES);
