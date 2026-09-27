@@ -13,14 +13,26 @@ const SKIP_PAGE = new Set(['raid-battles', 'pokemon-spotlight-hour', 'go-battle-
 
 const decode = s => String(s || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&eacute;/g, 'é').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 
-/* parseEventPage(html) -> {raids:[{name, shiny, group}], spawns:[...], eggs:[...], bonuses:[text], research:[text]} or null when the
+/* parseEventPage(html) -> {raids:[{name, shiny, group}], spawns:[...], eggs:[...], bonuses:[text], research:[text], about} or null when the
    page has none of them. Bonuses are the .bonus-item > .bonus-text entries (the markup ScrapedDuck reads for Community Day). */
+/* aboutOf(html): the event's own short description (og:description / description meta, else the first real paragraph), without
+   any site name, cut at a sentence end to about 200 characters; '' when there is none. */
+export function aboutOf(html) {
+  const meta = n => decode((html.match(new RegExp(`<meta[^>]*(?:property|name)="${n}"[^>]*content="([^"]*)"`, 'i')) || html.match(new RegExp(`<meta[^>]*content="([^"]*)"[^>]*(?:property|name)="${n}"`, 'i')) || [])[1]);
+  const content = (html.match(/<div[^>]*class="[^"]*page-content[^"]*"[^>]*>([\s\S]*)/) || [null, html])[1];
+  let t = meta('og:description') || meta('description');
+  if (!t || t.length < 30) t = [...content.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map(m => decode(m[1])).find(x => x.length > 40) || '';
+  t = t.replace(/\s*[|–-]\s*Leek Duck.*$/i, '').replace(/[^.!?]*\bLeek\s?Duck\b[^.!?]*[.!?]?/gi, '').replace(/\s+/g, ' ').trim();
+  if (t.length > 200) { const cut = t.slice(0, 200), end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! ')); t = end > 60 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '…'; }
+  return t;
+}
 export function parseEventPage(html) {
   if (!html) return null;
   const content = (html.match(/<div[^>]*class="[^"]*page-content[^"]*"[^>]*>([\s\S]*)/) || [null, html])[1];
   const headers = [...content.matchAll(/<[a-z0-9]+[^>]*class="[^"]*event-section-header[^"]*"[^>]*>/gi)].map(m => ({at: m.index, id: ((m[0].match(/\bid="([^"]+)"/) || [])[1] || '').toLowerCase()}));
-  if (!headers.length) return null;
-  const out = {raids: [], spawns: [], eggs: [], bonuses: [], research: []};
+  const about = aboutOf(html);
+  if (!headers.length) return about ? {raids: [], spawns: [], eggs: [], bonuses: [], research: [], about} : null;
+  const out = {raids: [], spawns: [], eggs: [], bonuses: [], research: [], about};
   const sectionOf = i => content.slice(headers[i].at, i + 1 < headers.length ? headers[i + 1].at : undefined);
   const texts = (html, re) => [...html.matchAll(re)].map(m => decode(m[1])).filter(t => t && t.length <= 160);
   for (let i = 0; i < headers.length; i++) {
@@ -56,7 +68,7 @@ export function parseEventPage(html) {
       out[key].push({name, shiny: /shiny-icon/.test(chunk), group: group ? group.text : ''});
     });
   }
-  return out.raids.length || out.spawns.length || out.eggs.length || out.bonuses.length || out.research.length ? out : null;
+  return out.raids.length || out.spawns.length || out.eggs.length || out.bonuses.length || out.research.length || out.about ? out : null;
 }
 
 /* parseRocketPage(html) -> [{who, title, type, quote, encounter, slots:[[names],[names],[names]]}] or null.
@@ -117,7 +129,7 @@ export function makeSources({fetchImpl = fetch, db = null, log = console} = {}) 
       // reuse a page parsed in the previous cycle so a slow Leek Duck does not empty the list
       const old = prev && (prev.events || []).find(e => e.eventID === ev.eventID && e.extraData && e.extraData.page);
       try {
-        const page = parseEventPage(await (await get(ev.link, 10000)).text());
+        const page = parseEventPage(await (await get(ev.link, 10000, true)).text());   // the same browser user agent as the Rocket page
         if (page) { ev.extraData = Object.assign({}, ev.extraData, {page}); out.enriched++; }
       } catch (e) {
         if (old) { ev.extraData = Object.assign({}, ev.extraData, {page: old.extraData.page}); out.enriched++; }

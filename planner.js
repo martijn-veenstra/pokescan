@@ -864,13 +864,14 @@ function eventsCard(m) {
   const row = e => {
     const all = [...e.spawns, ...e.raids, ...e.eggs], mine = [...new Set(all.map(p => (tag(p.name) || {}).t).filter(Boolean))];
     const top = all.slice(0, e.now ? 6 : 0);
-    const body = `${e.bonuses.length ? `<div class="evsub">Bonuses</div><div class="evbon">${e.bonuses.map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}</div>` : ''}
+    const body = `${e.about ? `<div class="evabout">${esc(e.about)}</div>` : ''}${e.bonuses.length ? `<div class="evsub">Bonuses</div><div class="evbon">${e.bonuses.map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}</div>` : ''}
       ${block('Wild spawns', e.spawns)}${block('Raids', e.raids)}${block('Eggs', e.eggs)}
       ${e.research.length ? `<div class="evsub">Research</div><ul class="evres">${e.research.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
-      ${!e.bonuses.length && !all.length && !e.research.length ? '<div class="dim">No bonuses or Pokémon published for this one yet.</div>' : ''}`;
+      ${!e.bonuses.length && !all.length && !e.research.length ? `<div class="dim">${e.about ? 'No bonuses or Pokémon listed for it.' : 'No bonuses or Pokémon published for this one yet.'}</div>` : ''}`;
     return `<details class="team ev${e.now ? ' live' : ''}" data-ev="${esc(e.id)}"${open[e.id] ? ' open' : ''} ontoggle="Planner.evToggle(this.dataset.ev,this.open)"><summary>
       ${e.image ? `<img class="evimg" src="${esc(e.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span class="evtx"><span class="nm">${esc(e.name)}</span>
       <div class="dt">${esc(e.when)}${e.heading && e.heading !== e.name ? ` · ${esc(e.heading)}` : ''}${!e.now && e.bonuses[0] ? ` · <span class="good">${esc(e.bonuses[0])}${e.bonuses.length > 1 ? ` +${e.bonuses.length - 1}` : ''}</span>` : ''}</div>
+      ${e.now && e.about ? `<div class="evabout clamp evtop">${esc(e.about)}</div>` : ''}
       ${mine.length ? `<div class="evfor">★ ${esc(mine.join(' · '))}</div>` : ''}
       ${e.now && e.bonuses.length ? `<div class="evbon evtop">${e.bonuses.slice(0, 4).map(b => `<span class="chip bon">${esc(b)}</span>`).join('')}${e.bonuses.length > 4 ? `<span class="dim"> +${e.bonuses.length - 4}</span>` : ''}</div>` : ''}
       ${top.length ? `<div class="evmons evtop">${top.map(monChip).join('')}${all.length > top.length ? `<span class="dim">+${all.length - top.length}</span>` : ''}</div>` : ''}

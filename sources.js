@@ -129,9 +129,31 @@ function hint(names, opts) {                  // one short phrase for a Next-mov
 }
 /* events(days): the events running now and starting within `days`, for the Today page. Raid rotations that share a window
    fold into one entry, GO Battle League weeks come back apart as `leagues`, city-only safaris and passes are left out.
-   Each event: {id, name, kind, heading, image, start, end, now, when, bonuses:[text], spawns|raids|eggs:[{name, shiny, group}], research:[text]} */
+   Each event: {id, about, name, kind, heading, image, start, end, now, when, bonuses:[text], spawns|raids|eggs:[{name, shiny, group}], research:[text]} */
 const HIDE = new Set(['city-safari', 'go-pass', 'season']);
 const hm = d => d.toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+/* aboutFor(ev, start, end): one plain sentence on what an event is, for the ones whose page has no description */
+function aboutFor(ev, a, b) {
+  const x = ev.extraData || {}, hrs = Math.round((b - a) / 36e5), dur = hrs <= 1 ? 'for one hour' : hrs < 24 ? `for ${hrs} hours` : '';
+  const nm = String(ev.name || '');
+  const lead = (re) => stripHtml((nm.match(re) || [])[1] || '');
+  switch (ev.eventType) {
+    case 'community-day': { const sp = ((x.communityday || {}).spawns || []).map(q => q.name); const who = sp.length ? sp.join(' and ') : lead(/^(.+?) Community Day/i);
+      return who ? `${who} spawn${sp.length > 1 ? '' : 's'} everywhere ${dur || 'all day'}, with the bonuses below.` : 'The month\'s Community Day: one Pokémon spawns everywhere for a few hours.'; }
+    case 'pokemon-spotlight-hour': { const sp = x.spotlight || {}; const who = sp.name || lead(/^(.+?) Spotlight Hour/i);
+      return `${who} spawns far more often ${dur || 'for one hour'}${sp.bonus ? `, with ${sp.bonus}` : ''}.`; }
+    case 'raid-hour': { const who = lead(/^(.+?) Raid Hour/i); return `${who || 'The 5-star boss'} in 5-star raids at most gyms ${dur || 'for one hour'}.`; }
+    case 'raid-day': return `${lead(/^(.+?) Raid Day/i) || 'One boss'} in raids at most gyms${dur ? ' ' + dur : ''}, usually with extra free raid passes.`;
+    case 'max-mondays': { const who = lead(/^(.+?) during Max Monday/i); return `${who || 'A Dynamax Pokémon'} in Max Battles at Power Spots all day.`; }
+    case 'max-battles': { const who = lead(/^(.+?) Max Battle Day/i); return `${who || 'A Gigantamax Pokémon'} in Max Battles at Power Spots ${dur}; team up with others to win.`; }
+    case 'choose-your-path': return 'Pick a side in the event research: each path gives different encounters and rewards.';
+    case 'research': case 'timed-research': case 'special-research': return 'Timed research with its own tasks and rewards; claim it before it ends.';
+    case 'research-day': return `A research day: field research from PokéStops gives the featured encounters ${dur}.`;
+    case 'pokemon-go-fest': case 'go-tour': return 'A big ticketed event with its own spawns, raids and bonuses; much of it is free to join.';
+    case 'safari-zone': case 'wild-area': case 'live-event': return 'An in-person event in one city, with extra spawns for ticket holders there.';
+    default: return '';
+  }
+}
 function events(days) {
   if (!S) return null;
   const now = Date.now(), horizon = now + (days || 14) * 864e5, out = [], leagues = [], raidWeeks = new Map();
@@ -154,13 +176,18 @@ function events(days) {
       continue;
     }
     const cd = x.communityday || {}, sp = x.spotlight;
-    out.push({id: ev.eventID, name: stripHtml(ev.name), kind: ev.eventType, heading: ev.heading || '', image: ev.image || '', start: ev.start, end: ev.end, now: live, when: label(a, b, live),
+    out.push({id: ev.eventID, about: pg.about || aboutFor(ev, a, b), name: stripHtml(ev.name), kind: ev.eventType, heading: ev.heading || '', image: ev.image || '', start: ev.start, end: ev.end, now: live, when: label(a, b, live),
       bonuses: uniq([...(cd.bonuses || []).map(q => q.text), ...(sp && sp.bonus ? [sp.bonus] : []), ...(pg.bonuses || [])]),
       spawns: mons([...(cd.spawns || []), ...(sp ? (sp.list && sp.list.length ? sp.list : [sp]) : []), ...(pg.spawns || [])]),
       raids: mons(pg.raids), eggs: mons(pg.eggs), research: uniq(pg.research || [])});
   }
   for (const w of raidWeeks.values()) { if (!w.raids.length) continue;
-    w.name = w.now ? 'Raids now' : `Raids from ${day(dt(w.start))}`; if (w.now) w.when = 'now'; out.push(w); }
+    w.name = w.now ? 'Raids now' : `Raids from ${day(dt(w.start))}`; if (w.now) w.when = 'now';
+    const n = {}; for (const r of w.raids) { const t = r.group.replace(/ · .*$/, '').replace(/ raids$/, ''); n[t] = (n[t] || 0) + 1; }
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'];
+    const parts = Object.entries(n).map(([t, c]) => `${c} ${t.replace(/^(\d)-star/i, (_, d) => `${words[d] || d}-star`)}`);
+    w.about = `${w.now ? 'Raid bosses at gyms now' : 'The next raid rotation'}: ${parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]}.`;
+    out.push(w); }
   out.sort((p, q) => p.now !== q.now ? (p.now ? -1 : 1) : p.now ? dt(p.end) - dt(q.end) : dt(p.start) - dt(q.start));
   leagues.sort((p, q) => dt(p.start) - dt(q.start));
   return {events: out, leagues};

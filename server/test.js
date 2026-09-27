@@ -10,13 +10,13 @@ const fakeCoach = async ({ context, mode }) => { await new Promise(r => setTimeo
   if (mode === 'battle') return { text: `**What happened** You led and switched.\n\n**Turning point** At 0:24.\n\n**Do differently**\n- Hold a shield\n\n**Matchup note** context had ${Object.keys(JSON.parse(context)).join(',')}`, model: 'fake', usage: { in: 1, out: 1 } };
   return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria`, model: 'fake', usage: { in: 1, out: 1 } }; };
 // fake Leek Duck: ScrapedDuck JSON plus one event page in Leek Duck's markup (GO Fest with rotating Mega raids)
-const GOFEST_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="raids">Raids</h2>
+const GOFEST_HTML = `<html><head><meta property="og:description" content="GO Fest ends with a Mega finale: Mega Pokémon in raids all weekend, and Swablu in the wild. Tickets unlock extra bonuses and a special research story that goes on for quite a while longer than anyone would read in a card on a phone screen. | Leek Duck"></head><body><div class="page-content"><h2 class="event-section-header" id="raids">Raids</h2>
 <h3>Mega Raids · Saturday</h3><div class="pkmn-list-flex"><div class="pkmn-list-item"><div class="pkmn-list-img"><img src="x.png"></div><span class="pkmn-name">Mega Altaria</span><img class="shiny-icon" src="s.png"></div>
 <div class="pkmn-list-item"><div class="pkmn-list-img"><img src="y.png"></div><span class="pkmn-name">Mega Glalie</span></div></div>
 <h2 class="event-section-header" id="spawns">Wild Encounters</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Swablu</span><img class="shiny-icon"></div></div>
 <h2 class="event-section-header bonuses" id="bonuses">Event Bonuses</h2><div class="bonus-list"><div class="bonus-item"><div class="item-circle"><img src="b.png"></div><span class="bonus-text">2× Catch Candy</span></div><div class="bonus-item"><span class="bonus-text">Incense lasts 1 hour</span></div></div>
 <h2 class="event-section-header" id="shiny">Shiny</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Altaria</span></div></div></div></body></html>`;
-const PATH_HTML = `<html><body><div class="page-content"><h2 class="event-section-header" id="wild-encounters">Wild Encounters</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Zubat</span></div></div>
+const PATH_HTML = `<html><body><div class="page-content"><p>Short.</p><p>Pick a side in Choose Your Path: Twilight Trails and earn different rewards. Data provided by Leek Duck.</p><h2 class="event-section-header" id="wild-encounters">Wild Encounters</h2><div class="pkmn-list-flex"><div class="pkmn-list-item"><span class="pkmn-name">Zubat</span></div></div>
 <h2 class="event-section-header" id="event-bonuses">Bonuses</h2><ul><li>2× Stardust for hatching Eggs</li></ul>
 <h2 class="event-section-header" id="field-research-tasks">Field Research</h2><ul><li>Catch 5 Pokémon</li></ul></div></body></html>`;
 const ROCKET_HTML = `<html><body><div class="page-content"><div class="rocket-lineups">
@@ -149,6 +149,9 @@ assert.deepEqual(gofest.extraData.page.bonuses, ['2× Catch Candy', 'Incense las
 const cyp = src.events.find(e => e.eventID === 'path');
 assert.deepEqual(cyp.extraData.page.bonuses, ['2× Stardust for hatching Eggs'], 'bonuses from a plain list');
 assert.deepEqual(cyp.extraData.page.research, ['Catch 5 Pokémon']);
+assert.equal(gofest.extraData.page.about, 'GO Fest ends with a Mega finale: Mega Pokémon in raids all weekend, and Swablu in the wild.', 'the page description, cut at a sentence end');
+assert.equal(cyp.extraData.page.about, 'Pick a side in Choose Your Path: Twilight Trails and earn different rewards.', 'the first real paragraph, without the site name');
+assert.deepEqual(app.sources.parseEventPage('<html><head><meta name="description" content="A one-day Hatch Day with more Sandile in Eggs."></head><body>nothing</body></html>'), {raids: [], spawns: [], eggs: [], bonuses: [], research: [], about: 'A one-day Hatch Day with more Sandile in Eggs.'}, 'a page with only a description still has an about');
 assert.deepEqual(cyp.extraData.page.spawns.map(x => x.name), ['Zubat'], 'a Choose Your Path event is read too');
 assert.ok(!src.events.find(e => e.eventID === 'gbl').extraData.page && !src.events.find(e => e.eventID === 'safari').extraData.page, 'league weeks and city safaris are not read');
 assert.equal(src.enriched, 2);
