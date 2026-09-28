@@ -601,3 +601,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .evbl li::before{content:'✦';position:absolute;left:8px;top:5px;color:var(--green);font-size:10px}
 .evbl li b{color:#7FE3B6;font-weight:600}.evbl li.evmore{background:none;padding-left:9px}.evbl li.evmore::before{content:none}
 .evbon .evmore{font-size:12px;align-self:center}
+/* Builder: picking a Pokémon for a slot, and the roster as a wrapping grid */
+.pickbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;padding:10px 12px;border-radius:12px;background:rgba(72,213,151,.10);border:1px solid rgba(72,213,151,.4);font-size:13.5px}
+.pickbar button{flex:none;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:6px 12px;font-weight:600}
+.rank.unr .rk{color:var(--dim)}
+.pgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:6px 0 2px}
+.ptile{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 7px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;min-width:0;text-align:center}
+.ptile .pi{width:40px;height:40px}.ptile b{font-size:12px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ptile span{font-size:11px;color:var(--dim)}.ptile.ow{border-color:rgba(72,213,151,.45)}.ptile.pd{border-color:rgba(91,141,239,.45)}
+.ptile:active{background:rgba(72,213,151,.08)}
