@@ -1,6 +1,6 @@
 {
- "generatedAt": "2026-09-27T11:03:08Z",
- "gamemasterTimestamp": "2026-09-26 21:18:52",
+ "generatedAt": "2026-09-28T12:23:54Z",
+ "gamemasterTimestamp": "2026-09-28 01:57:22",
  "leagues": [
   {
    "slug": "great",
@@ -118,6 +118,16 @@
    "kind": "cup",
    "rules": [],
    "file": "data/app-cauldron-2500.json"
+  },
+  {
+   "slug": "trail-1500",
+   "title": "Devon Trail Cup",
+   "short": "Devon Trail",
+   "cp": 1500,
+   "cup": "trail",
+   "kind": "cup",
+   "rules": [],
+   "file": "data/app-trail-1500.json"
   },
   {
    "slug": "gymbreakers-1500",
