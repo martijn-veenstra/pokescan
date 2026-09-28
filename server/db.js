@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS plans (
   until      timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS stripe_events (
+  id          text        PRIMARY KEY,
+  type        text,
+  received_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS history (
   id         bigserial   PRIMARY KEY,
   user_id    text        NOT NULL,
@@ -86,6 +91,10 @@ export async function openDb(url, log = null) {
       const r = await pool.query('SELECT user_id FROM plans WHERE ref=$1 LIMIT 1', [ref]);
       return r.rows[0] ? r.rows[0].user_id : null;
     },
+    async seenEvent(id, type) {                  // idempotency: true when this Stripe event was already processed
+      const r = await pool.query('INSERT INTO stripe_events (id, type) VALUES ($1,$2) ON CONFLICT (id) DO NOTHING RETURNING id', [id, type]);
+      return !r.rows[0];
+    },
     async migrateUser(from, to) {                // move one user's rows to another id, kind by kind, only the kinds the target lacks; returns the moved kinds
       if (!from || !to || from === to) return [];
       const r = await pool.query(
@@ -103,7 +112,7 @@ export async function openDb(url, log = null) {
 }
 
 function memoryDb() {
-  const m = new Map(), plans = new Map();
+  const m = new Map(), plans = new Map(), events = new Map();
   const key = (u, k) => u + ' ' + k;
   return {
     kind: 'memory',
@@ -127,6 +136,7 @@ function memoryDb() {
     async getPlan(user) { return plans.get(user) || null; },
     async setPlan(user, { plan, source = null, ref = null, until = null }) { plans.set(user, { plan, source, ref, until }); },
     async findPlanByRef(ref) { for (const [u, p] of plans) if (p.ref === ref) return u; return null; },
+    async seenEvent(id, type) { if (events.has(id)) return true; events.set(id, type); return false; },
     async migrateUser(from, to) {
       if (!from || !to || from === to) return [];
       const kinds = [];

@@ -185,26 +185,60 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     return { userId: req.userId, auth: authMode, plan, planSource: source, features: await features(req.userId), pro: { price: proPrice, checkoutUrl, manageUrl: proManageUrl || null, coach: !!coach } };
   });
   /* Stripe webhook. The Payment Link carries client_reference_id = the account's user id; a completed checkout writes the plan row,
-     a cancelled or lapsed subscription clears it. Signature per Stripe's scheme: header "t=…,v1=…", HMAC-SHA256 over "t.rawBody". */
+     a cancelled or lapsed subscription clears it. Signature per Stripe's scheme: header "t=…,v1=…", HMAC-SHA256 over "t.rawBody";
+     during a secret rotation the header carries several v1 values and any match accepts. */
   const stripeSignatureOk = (raw, header) => {
     if (!stripeWebhookSecret || !header) return false;
-    const parts = Object.fromEntries(String(header).split(',').map(kv => kv.split('=')));
-    if (!parts.t || !parts.v1 || Math.abs(now() / 1000 - Number(parts.t)) > 300) return false;
-    const expect = Buffer.from(createHmac('sha256', stripeWebhookSecret).update(`${parts.t}.${raw}`).digest('hex')), given = Buffer.from(String(parts.v1));
-    return expect.length === given.length && timingSafeEqual(expect, given);
+    let t = null; const v1s = [];
+    for (const kv of String(header).split(',')) {
+      const i = kv.indexOf('='); if (i < 0) continue;
+      const k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim();
+      if (k === 't') t = v; else if (k === 'v1') v1s.push(v);
+    }
+    if (!t || !v1s.length || Math.abs(now() / 1000 - Number(t)) > 300) return false;
+    const expect = Buffer.from(createHmac('sha256', stripeWebhookSecret).update(`${t}.${raw}`).digest('hex'));
+    return v1s.some(v => { const given = Buffer.from(v); return expect.length === given.length && timingSafeEqual(expect, given); });
+  };
+  const GRACE = 3 * 86400e3;                     // paid-through date plus 3 days, so a slow renewal invoice does not lock anyone out
+  const periodEnd = o => {                       // current_period_end (subscription events) or the invoice line's period end, in ms
+    if (o.current_period_end) return o.current_period_end * 1000;
+    const line = o.lines && o.lines.data && o.lines.data[0];
+    if (line && line.period && line.period.end) return line.period.end * 1000;
+    if (o.period_end) return o.period_end * 1000;
+    return null;
+  };
+  const refUser = async o => {                   // an event's subscription, customer or own id → the account it belongs to
+    for (const ref of [o.subscription, o.customer, o.id]) if (ref) { const u = await db.findPlanByRef(ref); if (u) return u; }
+    return null;
   };
   app.post('/api/stripe/webhook', async (req, reply) => {
     if (!stripeSignatureOk(req.rawBody || '', req.headers['stripe-signature'])) return reply.code(400).send({ error: 'bad_signature' });
     const ev = req.body || {}, o = (ev.data && ev.data.object) || {};
+    if (ev.id && db.seenEvent && await db.seenEvent(ev.id, ev.type)) { req.log.info(`stripe: duplicate ${ev.id} (${ev.type}) skipped`); return { received: true }; }
     if (ev.type === 'checkout.session.completed' && o.client_reference_id && (o.payment_status === 'paid' || o.status === 'complete')) {
-      await db.setPlan(o.client_reference_id, { plan: 'pro', source: 'stripe', ref: o.subscription || o.customer || o.id, until: null });
-      req.log.info(`pro: ${o.client_reference_id} paid via ${o.subscription || o.customer || o.id}`);
+      // paid: Pro until the period end when the session carries it, otherwise a 35-day bound that invoice.paid keeps extending — never for ever
+      const until = new Date((periodEnd(o) || now() + 35 * 86400e3) + GRACE).toISOString();
+      await db.setPlan(o.client_reference_id, { plan: 'pro', source: 'stripe', ref: o.subscription || o.customer || o.id, until });
+      req.log.info(`pro: ${o.client_reference_id} paid via ${o.subscription || o.customer || o.id}, until ${until}`);
+    } else if (ev.type === 'invoice.paid') {     // a renewal: extend to the new period end
+      const user = await refUser(o), end = periodEnd(o);
+      if (user && end) {
+        await db.setPlan(user, { plan: 'pro', source: 'stripe', ref: o.subscription || o.customer, until: new Date(end + GRACE).toISOString() });
+        req.log.info(`pro: ${user} renewed until ${new Date(end + GRACE).toISOString()}`);
+      }
+    } else if (ev.type === 'invoice.payment_failed') {   // Pro stays on while Stripe retries; the app can point at the customer portal
+      const user = await refUser(o);
+      if (user) {
+        const p = await db.getPlan(user);
+        if (p && p.plan === 'pro') { await db.setPlan(user, { plan: 'pro', source: 'past_due', ref: p.ref, until: p.until }); req.log.info(`pro: ${user} payment failed, marked past_due`); }
+      }
     } else if (ev.type === 'customer.subscription.updated' || ev.type === 'customer.subscription.deleted') {
-      const user = await db.findPlanByRef(o.id);
+      const user = await refUser(o);
       if (user) {
         const active = ev.type === 'customer.subscription.updated' && ['active', 'trialing', 'past_due'].includes(o.status);
         // an active subscription stays Pro until the end of the period it has paid for; anything else drops to free
-        await db.setPlan(user, { plan: active ? 'pro' : 'free', source: 'stripe', ref: o.id, until: active && o.current_period_end ? new Date(o.current_period_end * 1000 + 3 * 86400e3).toISOString() : null });
+        const end = periodEnd(o);
+        await db.setPlan(user, { plan: active ? 'pro' : 'free', source: o.status === 'past_due' ? 'past_due' : 'stripe', ref: o.id, until: active && end ? new Date(end + GRACE).toISOString() : null });
         req.log.info(`pro: ${user} subscription ${o.status || 'deleted'} → ${active ? 'pro' : 'free'}`);
       }
     }

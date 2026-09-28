@@ -259,7 +259,35 @@ await app2.db.setPlan('user_bob', { plan: 'pro', source: 'paid', ref: 'sub_1', u
   r = await post(paid, sign(paid, 'whsec_wrong')); assert.equal(r.statusCode, 400, 'wrong secret');
   r = await post(paid, sign(paid, 'whsec_test', Math.floor(Date.now() / 1000) - 3600)); assert.equal(r.statusCode, 400, 'stale timestamp');
   r = await post(paid, sign(paid)); assert.equal(r.statusCode, 200);
-  assert.deepEqual(await app2.db.getPlan('user_dave'), { plan: 'pro', source: 'stripe', ref: 'sub_dave', until: null }, 'a paid checkout makes dave pro');
+  {
+    const p = await app2.db.getPlan('user_dave');
+    assert.equal(p.plan, 'pro'); assert.equal(p.source, 'stripe'); assert.equal(p.ref, 'sub_dave');
+    assert.ok(p.until && new Date(p.until) > new Date(), 'a paid checkout makes dave pro with an expiry, never for ever');
+  }
+  // idempotency: the same event id is processed once (the replay may not flip the plan back)
+  await app2.db.setPlan('user_dave', { plan: 'free' });
+  const evPaid = JSON.stringify({ id: 'evt_1', type: 'checkout.session.completed', data: { object: { id: 'cs_1', client_reference_id: 'user_dave', subscription: 'sub_dave', payment_status: 'paid', status: 'complete' } } });
+  r = await post(evPaid, sign(evPaid)); assert.equal(r.statusCode, 200);
+  assert.equal((await app2.db.getPlan('user_dave')).plan, 'pro', 'first delivery processed');
+  await app2.db.setPlan('user_dave', { plan: 'free' });
+  r = await post(evPaid, sign(evPaid)); assert.equal(r.statusCode, 200, 'a duplicate still answers 200');
+  assert.equal((await app2.db.getPlan('user_dave')).plan, 'free', 'but the duplicate is not processed again');
+  await app2.db.setPlan('user_dave', { plan: 'pro', source: 'stripe', ref: 'sub_dave', until: null });
+  // signature rotation: several v1 values in one header, any match accepts
+  const rotated = JSON.stringify({ type: 'customer.subscription.updated', data: { object: { id: 'sub_dave', status: 'active', current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400 } } });
+  const t0 = Math.floor(Date.now() / 1000);
+  const goodV1 = sign(rotated, 'whsec_test', t0).split('v1=')[1];
+  r = await post(rotated, `t=${t0},v1=deadbeef${'0'.repeat(56)},v1=${goodV1}`);
+  assert.equal(r.statusCode, 200, 'the second v1 (new secret) matches during a rotation');
+  // a failed renewal marks past_due but keeps Pro
+  const failed = JSON.stringify({ type: 'invoice.payment_failed', data: { object: { id: 'in_1', subscription: 'sub_dave', customer: 'cus_1' } } });
+  r = await post(failed, sign(failed)); assert.equal(r.statusCode, 200);
+  { const p = await app2.db.getPlan('user_dave'); assert.equal(p.plan, 'pro', 'pro stays on while Stripe retries'); assert.equal(p.source, 'past_due', 'marked past_due'); }
+  // a paid renewal invoice extends until to the new period end (and clears past_due)
+  const lineEnd = Math.floor(Date.now() / 1000) + 60 * 86400;
+  const invoicePaid = JSON.stringify({ type: 'invoice.paid', data: { object: { id: 'in_2', subscription: 'sub_dave', customer: 'cus_1', lines: { data: [{ period: { end: lineEnd } }] } } } });
+  r = await post(invoicePaid, sign(invoicePaid)); assert.equal(r.statusCode, 200);
+  { const p = await app2.db.getPlan('user_dave'); assert.equal(p.source, 'stripe', 'past_due cleared by the paid invoice'); assert.ok(Math.abs(new Date(p.until) - (lineEnd * 1000 + 3 * 86400e3)) < 2000, 'until is the invoice period end plus grace'); }
   const cancelled = JSON.stringify({ type: 'customer.subscription.deleted', data: { object: { id: 'sub_dave', status: 'canceled' } } });
   r = await post(cancelled, sign(cancelled)); assert.equal(r.statusCode, 200);
   assert.equal((await app2.db.getPlan('user_dave')).plan, 'free', 'a cancelled subscription drops to free');
