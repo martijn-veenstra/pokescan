@@ -73,31 +73,39 @@ test('From your roster is a wrapping grid with the unranked scans in it', async 
   expect(errors).toEqual([]);
 });
 
-test('the roster grid filters on near the cap and on an unlocked 2nd move, and remembers it', async ({ page }) => {
+test('the roster grid filters on Ready (CP now within 100 of the cap) and on an unlocked 2nd move, and remembers it', async ({ page }) => {
   const errors = await openApp(page, '#/builder');
-  await page.evaluate(() => {
+  const cps = await page.evaluate(() => {
     results.length = 0;
-    const add = (sp, iv, lv, moves, second) => { const b = DATA.stats[sp][0], m = cpmAt(lv);
-      const r = { species: sp, cp: calcCP(b, ...iv, m), hp: calcHP(b, iv[2], m), level: lv, dust: null, combos: [[lv, ...iv, b]], appraisal: iv, txt: '', cpCandidates: [], moves, secondMove: second };
-      r.key = `${sp}|${r.cp}|${r.hp}|${lv}|`; results.push(r); };
-    add('AZUMARILL', [0, 15, 15], 40, ['BUBBLE', 'ICE_BEAM', 'PLAY_ROUGH'], true);   // at the cap, 2nd move unlocked
-    add('MEDICHAM', [15, 15, 15], 40, ['COUNTER', 'ICE_PUNCH'], false);               // near the cap, no 2nd move
-    add('MEDITITE', [5, 13, 12], 10, ['CONFUSION', 'PSYSHOCK'], false);               // unranked here and far from the cap
-    save(); Planner.refresh(); Planner.nav('#/builder');
+    const add = (sp, iv, want, moves, second) => { const b = DATA.stats[sp][0];   // the highest level whose CP stays at or under `want`
+      let lv = 1; for (let l = 1; l <= 50; l += 0.5) if (calcCP(b, ...iv, cpmAt(l)) <= want) lv = l;
+      const m = cpmAt(lv), r = { species: sp, cp: calcCP(b, ...iv, m), hp: calcHP(b, iv[2], m), level: lv, dust: null, combos: [[lv, ...iv, b]], appraisal: iv, txt: '', cpCandidates: [], moves, secondMove: second };
+      r.key = `${sp}|${r.cp}|${r.hp}|${lv}|`; results.push(r); return r.cp; };
+    const out = [
+      add('AZUMARILL', [0, 15, 15], 1500, ['BUBBLE', 'ICE_BEAM', 'PLAY_ROUGH'], true),   // at the cap, 2nd move unlocked
+      add('MEDICHAM', [15, 15, 15], 860, ['COUNTER', 'ICE_PUNCH', 'PSYCHIC'], true),     // ~850 now: could reach the cap, but is not ready
+      add('MEDITITE', [5, 13, 12], 180, ['CONFUSION', 'PSYSHOCK'], false),               // unranked here and far from the cap
+    ];
+    save(); Planner.refresh(); Planner.nav('#/builder'); return out;
   });
+  expect(cps[0]).toBeGreaterThanOrEqual(1400); expect(cps[1]).toBeLessThan(900);
   const grid = page.locator('#builder .pgrid'), chips = page.locator('#builder .bfilt');
   await expect(grid.locator('.ptile')).toHaveCount(3);
-  await chips.locator('.chip', { hasText: 'Near 1500' }).click();
-  await expect(grid.locator('.ptile')).toHaveCount(2);
-  await expect(grid).not.toContainText('Meditite');
-  await chips.locator('.chip', { hasText: '2nd move' }).click();
+  await expect(grid.locator('.ptile', { hasText: 'Medicham' })).toContainText(`${cps[1]} CP`);   // the CP it has now, as in the game
+  await chips.locator('.chip', { hasText: 'Ready' }).click();
   await expect(grid.locator('.ptile')).toHaveCount(1);
   await expect(grid).toContainText('Azumarill');
+  await expect(grid).not.toContainText('Medicham');                             // 850 CP is not ready, whatever it could reach
+  await chips.locator('.chip', { hasText: '2nd move' }).click();
+  await expect(grid.locator('.ptile')).toHaveCount(1);
   await expect(chips).toContainText('1 of 3');
+  await chips.locator('.chip', { hasText: 'Ready' }).click();                  // 2nd move alone: Azumarill and Medicham
+  await expect(grid.locator('.ptile')).toHaveCount(2);
+  await chips.locator('.chip', { hasText: 'Ready' }).click();
   await page.reload(); await page.waitForFunction(() => window.Planner && typeof APP !== 'undefined' && APP);
   await page.evaluate(() => Planner.nav('#/builder'));
   await expect(page.locator('#builder .pgrid .ptile')).toHaveCount(1);         // remembered
-  await page.locator('#builder .bfilt .chip', { hasText: 'Near 1500' }).click();
+  await page.locator('#builder .bfilt .chip', { hasText: 'Ready' }).click();
   await page.locator('#builder .bfilt .chip', { hasText: '2nd move' }).click();
   await expect(page.locator('#builder .pgrid .ptile')).toHaveCount(3);
   expect(errors).toEqual([]);
