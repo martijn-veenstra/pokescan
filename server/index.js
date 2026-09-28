@@ -30,6 +30,8 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
                                     proUserIds = (process.env.PRO_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
                                     proCheckoutUrl = process.env.PRO_CHECKOUT_URL || '', proPrice = process.env.PRO_PRICE || '€4.99 / month', proManageUrl = process.env.PRO_MANAGE_URL || '',
                                     stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '', now = () => Date.now() } = {}) {
+  if (clerkSecretKey && process.env.NODE_ENV === 'production' && !appOrigin)
+    throw new Error('APP_ORIGIN must be set when CLERK_SECRET_KEY is set (Clerk authorizedParties check)');
   const app = Fastify({ logger, bodyLimit: MAX_BYTES });
   // accept an empty JSON body (POST /api/auth sends none)
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {

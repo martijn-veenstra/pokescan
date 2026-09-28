@@ -321,3 +321,18 @@ await app3.db.clear('user_alice'); await app3.close();
 await app2.db.clear('user_alice'); await app2.db.clear('user_bob'); await app2.db.clear('user_carol'); await app2.db.clear('default');
 await app2.close();
 console.log('accounts-mode tests passed');
+
+// production refuses to start with a Clerk key but no APP_ORIGIN (the authorizedParties check would be skipped)
+{
+  const oldEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    await assert.rejects(buildServer({ logger: false, clerkSecretKey: 'sk_test_x', appOrigin: '' }),
+      /APP_ORIGIN must be set/, 'production + Clerk key + no APP_ORIGIN refuses to start');
+    const okApp = await buildServer({ logger: false, clerkSecretKey: 'sk_test_x', appOrigin: 'https://pokescan.example', verifyToken: async () => ({ sub: 'user_x' }) });
+    await okApp.close();
+  } finally {
+    if (oldEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = oldEnv;
+  }
+  console.log('APP_ORIGIN guard tests passed');
+}
