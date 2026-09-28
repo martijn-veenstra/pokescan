@@ -496,6 +496,11 @@ and enabled features. Offline or signed out, the app keeps working on local data
 parties and the completion log follow you between devices. Without `DATABASE_URL` it uses an in-memory
 store; without `PASSCODE` the API answers 503 and the app behaves like the static copy.
 
+Postgres TLS: Railway's private network host (`postgres.railway.internal`) uses no TLS. The public proxy
+(`*.rlwy.net`) or `sslmode=require` gets TLS **with certificate verification**; set `PG_CA_CERT` (PEM) when
+the server uses a private CA. `PG_INSECURE_TLS=1` skips verification — local development only, never in
+production. Start-up logs which mode is in use.
+
 ```sh
 npm install
 PASSCODE=choose-one DATABASE_URL=postgres://... npm start     # http://localhost:8080

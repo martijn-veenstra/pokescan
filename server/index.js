@@ -39,7 +39,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (!body) return done(null, {});
     try { done(null, JSON.parse(body)); } catch (e) { e.statusCode = 400; done(e); }
   });
-  const db = await openDb(dbUrl);
+  const db = await openDb(dbUrl, app.log);
   app.decorate('db', db);
   const sources = makeSources({ fetchImpl: sourcesFetch, db, log: app.log });
   app.decorate('sources', sources);

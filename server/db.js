@@ -25,11 +25,20 @@ CREATE TABLE IF NOT EXISTS history (
   saved_at   timestamptz NOT NULL DEFAULT now()
 );`;
 
-export async function openDb(url) {
+export async function openDb(url, log = null) {
   if (!url) return memoryDb();
-  // TLS only for the public proxy host or when asked for; Railway's private network (*.railway.internal) is plain
+  // Railway's private network (*.railway.internal) is plain; the public proxy or sslmode=require gets TLS.
+  // TLS verifies the server certificate: PG_CA_CERT supplies a CA when the server uses a private one,
+  // and PG_INSECURE_TLS=1 is a local-only escape hatch that skips verification (never set it in production).
   const needSsl = /sslmode=require/.test(url) || (/rlwy\.net/.test(url) && !/railway\.internal/.test(url));
-  const pool = new pg.Pool({ connectionString: url, ssl: needSsl ? { rejectUnauthorized: false } : undefined, max: 5 });
+  let ssl, mode = 'no TLS (private network or local)';
+  if (needSsl) {
+    if (process.env.PG_INSECURE_TLS === '1') { ssl = { rejectUnauthorized: false }; mode = 'INSECURE TLS (certificate not checked; PG_INSECURE_TLS=1)'; }
+    else if (process.env.PG_CA_CERT) { ssl = { ca: process.env.PG_CA_CERT, rejectUnauthorized: true }; mode = 'verified TLS (PG_CA_CERT)'; }
+    else { ssl = { rejectUnauthorized: true }; mode = 'verified TLS (system CAs)'; }
+  }
+  (log?.info ?? console.log).call(log ?? console, `postgres: ${mode}`);
+  const pool = new pg.Pool({ connectionString: url, ssl, max: 5 });
   await pool.query(DDL);
   return {
     kind: 'postgres',
