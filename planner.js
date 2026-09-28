@@ -2356,6 +2356,25 @@ function evoTable(r, best) {
   const unsure = r.combos.length > 1 ? `<div class="dt warnt">${r.combos.length} IV spreads fit: best one shown</div>` : '';
   return `<div class="sec">If you evolve it <small>IVs carry over · IV rank of 4096 at each cap · meta rank in that league</small></div><div class="team evot" style="cursor:default">${unsure}${cards}</div>`;
 }
+/* ---------- in-game nickname: name + IVs in the 12 characters Pokémon GO allows ---------- */
+const NICK_DARK = ['⓿', '❶', '❷', '❸', '❹', '❺', '❻', '❼', '❽', '❾', '❿', '⓫', '⓬', '⓭', '⓮', '⓯'];   // IVs 0–15 as dark circled numbers
+const nickSup = n => String(n).replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);                                    // IV % as superscript
+const nickCirc = n => n >= 1 && n <= 20 ? String.fromCodePoint(0x2460 + n - 1) : n <= 35 ? String.fromCodePoint(0x3251 + n - 21) : n <= 50 ? String.fromCodePoint(0x32B1 + n - 36) : String(n);   // level ①–㊿
+const NICK_STYLES = [['iv', 'Name + IVs + level', '{name}{ivs}{iv%}{lv}'], ['rank', 'Name + league rank + IVs', '{name}#{rank}{ivs}'], ['ivs', 'IVs only', '{ivs}{iv%}'], ['custom', 'Custom…', null]];
+function nickPrefs() { try { return JSON.parse(localStorage.getItem('nick') || '{}') || {}; } catch { return {}; } }
+function nickFor(r) {                            // the nickname for a scan, or '' when its IVs are not known
+  if (!r || !r.combos || !r.combos.length) return '';
+  const b = bestOf2(r), p = nickPrefs(), st = NICK_STYLES.find(x => x[0] === p.style) || NICK_STYLES[0];
+  const tpl = st[0] === 'custom' ? (p.custom || NICK_STYLES[0][2]) : st[2];
+  const rk = pvpRank(b[4] || DATA.stats[r.species][0], b[1], b[2], b[3], LEAGUE.cp);
+  const pctIv = Math.round((b[1] + b[2] + b[3]) / 45 * 100);
+  const tok = {ivs: NICK_DARK[b[1]] + NICK_DARK[b[2]] + NICK_DARK[b[3]], 'iv%': nickSup(pctIv), lv: nickCirc(Math.floor(b[0])), rank: String(rk.n), cp: String(r.cp || ''), a: NICK_DARK[b[1]], d: NICK_DARK[b[2]], s: NICK_DARK[b[3]]};
+  const rest = tpl.replace(/\{name\}/g, '').replace(/\{([a-z%]+)\}/g, (m0, k) => tok[k] ?? m0);
+  const room = Math.max(0, 12 - [...rest].length), name = [...nice(r.species).split(' ')[0]].slice(0, room).join('');   // the name fills what is left
+  return [...tpl.replace(/\{([a-z%]+)\}/g, (m0, k) => k === 'name' ? '\u0000' : tok[k] ?? m0).replace('\u0000', name).replace(/\u0000/g, '')].slice(0, 12).join('');
+}
+function setNickStyle(v) { const p = nickPrefs(); p.style = v; try { localStorage.setItem('nick', JSON.stringify(p)); } catch {} renderMon(); }
+function setNickCustom(v) { const p = nickPrefs(); p.style = 'custom'; p.custom = v; try { localStorage.setItem('nick', JSON.stringify(p)); } catch {} renderMon(); }
 function scanSection(m, r) {
   const idx = results.indexOf(r), best = r.combos.length ? bestOf2(r) : null, ps = r.combos.map(pct);
   const lo = ps.length ? Math.min(...ps) : 0, hi = ps.length ? Math.max(...ps) : 0;
@@ -2414,6 +2433,10 @@ function scanSection(m, r) {
     rows.push([alt ? `Best moves <span class="dim">${esc(alt.title)}</span>` : 'Best moves', !known ? esc(rec.map(mvName).join(' · ')) : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> ${esc(rec.map(mvName).join(' · '))}`]);
   }
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> appraisal' : 'CP & HP'}${r.cpInferred ? ' · CP from appraisal' : ''}`]);
+  const nk = nickFor(r);
+  if (nk) { const np = nickPrefs(), sty = (NICK_STYLES.find(x => x[0] === np.style) || NICK_STYLES[0])[0];
+    rows.push(['Nickname', `<span class="nickrow"><span class="nick">${esc(nk)}</span><button class="copy" onclick="Planner.copyText(${attr(nk)},this)">Copy</button></span>
+      <select class="nicksel" onchange="Planner.setNickStyle(this.value)">${NICK_STYLES.map(([k, l]) => `<option value="${k}" ${sty === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${sty === 'custom' ? `<input class="nicktpl" value="${esc(np.custom || NICK_STYLES[0][2])}" onchange="Planner.setNickCustom(this.value)" onkeydown="if(event.key==='Enter')this.blur()"><div class="dim" style="font-size:11.5px">{name} {ivs} {iv%} {lv} {rank} {cp} {a} {d} {s}</div>` : ''}${r.combos.length > 1 ? '<div class="dim" style="font-size:11.5px">best of the possible spreads: an appraisal makes it exact</div>' : ''}`]); }
   if (sid0 && sid0.id) {                        // the other form's standing: a shadow ranks differently from its purified/normal twin
     const isSh = /_shadow$/.test(sid0.id), alt = isSh ? sid0.id.replace(/_shadow$/, '') : sid0.id + '_shadow', ea = APP.pokemon[alt], e0 = APP.pokemon[sid0.id];
     if (r.shadow && !isSh) rows.push(['Shadow', 'marked Shadow · ranked as normal']);
@@ -3123,7 +3146,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, evToggle, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
