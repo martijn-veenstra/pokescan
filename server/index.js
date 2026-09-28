@@ -220,10 +220,14 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (!KINDS.has(kind)) return reply.code(404).send({ error: 'unknown_kind' });
     const body = req.body || {};
     if (!('data' in body)) return reply.code(400).send({ error: 'missing_data' });
-    // optimistic concurrency: a client that last saw an older version gets the current one back instead of overwriting it
-    const cur = await db.get(req.userId, kind);
-    if (body.baseUpdatedAt !== undefined && cur && body.baseUpdatedAt !== cur.updatedAt) {
-      return reply.code(409).send({ error: 'conflict', current: cur });
+    // optimistic concurrency, atomically in the store: the row only changes when it still is the version the client saw
+    if (body.baseUpdatedAt !== undefined) {
+      const updatedAt = await db.put(req.userId, kind, body.data, body.baseUpdatedAt === null ? null : String(body.baseUpdatedAt));
+      if (updatedAt === null) {                 // someone else wrote first: hand the client the current version to merge
+        const cur = await db.get(req.userId, kind);
+        return reply.code(409).send({ error: 'conflict', current: cur || { data: null, updatedAt: null } });
+      }
+      return { ok: true, updatedAt };
     }
     const updatedAt = await db.put(req.userId, kind, body.data);
     return { ok: true, updatedAt };

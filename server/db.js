@@ -53,11 +53,19 @@ export async function openDb(url, log = null) {
       for (const row of r.rows) out[row.kind] = { data: row.data, updatedAt: row.updated_at.toISOString() };
       return out;
     },
-    async put(user, kind, data) {
-      const r = await pool.query(
-        `INSERT INTO state (user_id, kind, data, updated_at) VALUES ($1,$2,$3,now())
-         ON CONFLICT (user_id, kind) DO UPDATE SET data=EXCLUDED.data, updated_at=now() RETURNING updated_at`,
-        [user, kind, JSON.stringify(data)]);
+    async put(user, kind, data, base) {         // base (ISO string or undefined): compare-and-set; null result = conflict
+      let r;                                    // updated_at is truncated to ms: node-postgres parses timestamps into JS Dates, and the client echoes that ms-precision value as base
+      if (base !== undefined) {                 // atomic: the row only changes when it still is the version the client saw
+        r = base === null
+          ? await pool.query(`INSERT INTO state (user_id, kind, data, updated_at) VALUES ($1,$2,$3,date_trunc('milliseconds', now())) ON CONFLICT (user_id, kind) DO NOTHING RETURNING updated_at`, [user, kind, JSON.stringify(data)])
+          : await pool.query(`UPDATE state SET data=$3, updated_at=date_trunc('milliseconds', now()) WHERE user_id=$1 AND kind=$2 AND updated_at=$4 RETURNING updated_at`, [user, kind, JSON.stringify(data), base]);
+        if (!r.rows[0]) return null;
+      } else {
+        r = await pool.query(
+          `INSERT INTO state (user_id, kind, data, updated_at) VALUES ($1,$2,$3,date_trunc('milliseconds', now()))
+           ON CONFLICT (user_id, kind) DO UPDATE SET data=EXCLUDED.data, updated_at=date_trunc('milliseconds', now()) RETURNING updated_at`,
+          [user, kind, JSON.stringify(data)]);
+      }
       // bounded history of snapshots, for a later "how did my team score over time" view
       await pool.query('INSERT INTO history (user_id, kind, data) VALUES ($1,$2,$3)', [user, kind, JSON.stringify(data)]);
       await pool.query(
@@ -106,7 +114,15 @@ function memoryDb() {
       for (const [k, v] of m) if (k.startsWith(user + ' ')) out[k.split(' ')[1]] = v;
       return out;
     },
-    async put(user, kind, data) { const updatedAt = new Date().toISOString(); m.set(key(user, kind), { data, updatedAt }); return updatedAt; },
+    async put(user, kind, data, base) {
+      const cur = m.get(key(user, kind));
+      if (base !== undefined && (cur ? cur.updatedAt : null) !== base) return null;   // compare-and-set, like the Postgres store
+      let t = Date.now();                                                             // monotonic: two writes in one ms must still differ, or a stale base would pass the check
+      if (cur && Date.parse(cur.updatedAt) >= t) t = Date.parse(cur.updatedAt) + 1;
+      const updatedAt = new Date(t).toISOString();
+      m.set(key(user, kind), { data, updatedAt });
+      return updatedAt;
+    },
     async clear(user) { for (const k of [...m.keys()]) if (k.startsWith(user + ' ')) m.delete(k); },
     async getPlan(user) { return plans.get(user) || null; },
     async setPlan(user, { plan, source = null, ref = null, until = null }) { plans.set(user, { plan, source, ref, until }); },

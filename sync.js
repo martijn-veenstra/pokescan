@@ -9,7 +9,7 @@ const save = () => localStorage.setItem('sync', JSON.stringify(S));
    u:<userId>:<key> (or anon:<key>) and the incoming account's parked copy takes their place, then the page
    reloads so every in-memory structure (results, Planner.ROSTER, …) starts from the right store. Data made
    without an account is adopted by the first account that signs in; after that nothing crosses accounts. */
-const USER_KEYS = ['scans', 'roster', 'battles', 'blog', 'bdraft', 'bcoach', 'shares', 'scanlog', 'tname', 'trainer', 'appr', 'mu', 'milestones'];
+const USER_KEYS = ['scans', 'roster', 'battles', 'blog', 'bdraft', 'bcoach', 'shares', 'scanlog', 'tname', 'trainer', 'appr', 'mu', 'milestones', 'shadow'];
 if (!localStorage.getItem('ns')) localStorage.setItem('ns', S.user || 'anon');   // migration: existing keys belong to the signed-in user, or to anon
 const parked = id => USER_KEYS.some(k => localStorage.getItem('u:' + id + ':' + k) !== null);
 function swapStore(to) {                        // returns true when the page must reload to pick up the new store
@@ -29,7 +29,58 @@ function swapStore(to) {                        // returns true when the page mu
   return true;
 }
 let available = null, timer = null, busy = false, lastError = '', health = null, me = null;   // me: /api/me (plan, features) for the signed-in account
-const dirty = new Set();
+const dirty = new Set(S.dirty || []);           // kinds with unpushed edits; persisted in S so a reload inside the debounce loses nothing
+const epoch = {};                               // per kind, bumped by touch(): an edit made during a PUT stays queued
+/* Per-record ledger: SH[kind][id] = {h: hash of the record, t: ms of the last local change, del: 1 for a tombstone}.
+   touch() diffs the working copy against it, so every edit and delete gets a timestamp even when offline; the merge
+   in applyRemote takes the newer side per record, and a tombstone beats an older record, so deletes stick. */
+const SH = JSON.parse(localStorage.getItem('shadow') || '{}');
+const saveShadow = () => localStorage.setItem('shadow', JSON.stringify(SH));
+const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
+const TOMB_TTL = 90 * 24 * 3600e3;              // tombstones older than 90 days are pruned
+const ROSTER_BLOCKS = ['owned', 'pending', 'candidates', 'tagged', 'moves', 'done', 'snooze', 'seen', 'have'];
+const rosterDoc = () => window.Planner ? Planner.ROSTER : JSON.parse(localStorage.getItem('roster') || '{}');
+const battlesArr = () => window.Planner ? Planner.BATTLES : JSON.parse(localStorage.getItem('battles') || '[]');
+function localItems(kind) {                     // id → value of the live working copy
+  const m = new Map();
+  if (kind === 'scans') { for (const r of (typeof results !== 'undefined' ? results : [])) if (r && r.key) m.set(r.key, r); }
+  else if (kind === 'battles') { for (const b of battlesArr()) if (b && b.id) m.set(b.id, b); }
+  else if (kind === 'roster') {
+    const R = rosterDoc();
+    for (const blk of ROSTER_BLOCKS) for (const [k, v] of Object.entries(R[blk] || {})) m.set(blk + ':' + k, v === undefined ? null : v);
+    for (const x of R.exclude || []) m.set('x:' + x, 1);
+  }
+  return m;
+}
+function stamp(kind) {                          // record what changed: new/edited records get now(), gone records a tombstone
+  const led = SH[kind] || (SH[kind] = {});
+  const first = !led.__init;                    // migration: records that predate the ledger get 0, so the first merge is today's union
+  const items = localItems(kind), t = Date.now();
+  for (const [id, v] of items) {
+    const h = hash(JSON.stringify(v)), e = led[id];
+    if (!e || e.h !== h || e.del) led[id] = { h, t: first && !e ? 0 : t };
+  }
+  if (!first) for (const [id, e] of Object.entries(led)) if (id !== '__init' && !e.del && !items.has(id)) led[id] = { t, del: 1 };
+  for (const [id, e] of Object.entries(led)) if (id !== '__init' && e.del && t - e.t > TOMB_TTL) delete led[id];
+  led.__init = 1;
+  saveShadow();
+}
+function wire(kind) {                           // the push payload: records with their updatedAt, plus tombstones
+  stamp(kind);
+  const led = SH[kind] || {};
+  if (kind === 'scans' || kind === 'battles') {
+    const out = [];
+    for (const [id, v] of localItems(kind)) out.push(Object.assign({}, v, { updatedAt: (led[id] || {}).t || 0 }));
+    for (const [id, e] of Object.entries(led)) if (id !== '__init' && e.del) out.push(kind === 'scans' ? { key: id, deleted: true, updatedAt: e.t } : { id, deleted: true, updatedAt: e.t });
+    return out;
+  }
+  if (kind === 'roster') {
+    const meta = {}, del = {};
+    for (const [id, e] of Object.entries(led)) { if (id === '__init') continue; if (e.del) del[id] = e.t; else meta[id] = e.t; }
+    return Object.assign({}, rosterDoc(), { __meta: meta, __del: del });
+  }
+  return null;
+}
 const $ = id => document.getElementById(id);
 const clerkMode = () => !!(health && health.auth === 'clerk');
 const signedIn = () => clerkMode() ? !!(window.Auth && Auth.signedIn()) : !!S.code;   // the one question every caller asks
@@ -55,44 +106,87 @@ async function detect() {
 }
 function local(kind) {
   if (kind === 'scans') return results;
-  if (kind === 'roster') return window.Planner ? Planner.ROSTER : JSON.parse(localStorage.getItem('roster') || '{}');
-  if (kind === 'battles') return window.Planner ? Planner.BATTLES : JSON.parse(localStorage.getItem('battles') || '[]');
+  if (kind === 'roster') return rosterDoc();
+  if (kind === 'battles') return battlesArr();
   return null;
 }
+function mergeList(kind, data) {                // scans and battles: per record, the newer side wins; a tombstone is a record
+  const led = SH[kind] || (SH[kind] = {});
+  const isScan = kind === 'scans';
+  const arr = local(kind);
+  const idOf = r => isScan ? r && r.key : r && r.id;
+  const valid = r => isScan ? (r && typeof r.key === 'string' && typeof r.species === 'string' && Array.isArray(r.combos)) : (r && r.id);
+  const pos = new Map(); arr.forEach((r, i) => pos.set(idOf(r), i));
+  const reindex = () => { pos.clear(); arr.forEach((r, i) => pos.set(idOf(r), i)); };
+  let changed = false;
+  for (const raw of data || []) {
+    const id = idOf(raw); if (!id) continue;
+    const rt = Number(raw.updatedAt) || 0, e = led[id], lt = e ? e.t : 0;
+    if (raw.deleted) {                          // their delete: only when newer than our last change
+      if (e && rt <= lt) continue;
+      if (pos.has(id)) { arr.splice(pos.get(id), 1); reindex(); changed = true; }
+      led[id] = { t: rt, del: 1 };
+      continue;
+    }
+    if (!valid(raw)) continue;
+    const rec = Object.assign({}, raw); delete rec.updatedAt; delete rec.deleted;
+    if (!pos.has(id)) {
+      if (e && e.del && lt >= rt) continue;     // we deleted it more recently: it stays gone
+      arr.push(rec); pos.set(id, arr.length - 1);
+      led[id] = { h: hash(JSON.stringify(rec)), t: rt }; changed = true;
+    } else if (rt > lt) {                       // their edit is newer: their record replaces ours
+      arr[pos.get(id)] = rec;
+      led[id] = { h: hash(JSON.stringify(rec)), t: rt }; changed = true;
+    } else if (isScan && rt === lt) {           // same age (usually both 0, from before the ledger): today's field union
+      const r = arr[pos.get(id)]; let filled = false;
+      for (const f of ['superseded', 'appraisal', 'moves', 'fav', 'bench', 'level', 'combos', 'cp']) if (r[f] === undefined && rec[f] !== undefined) { r[f] = rec[f]; filled = true; }
+      if (filled) { led[id] = { h: hash(JSON.stringify(r)), t: lt }; changed = true; }
+    }
+  }
+  if (changed) {
+    if (isScan) { localStorage.setItem('scans', JSON.stringify(arr)); if (typeof render === 'function') render(); }
+    else { arr.sort((a, b) => a.t - b.t); localStorage.setItem('battles', JSON.stringify(arr)); }
+  }
+  saveShadow();
+  return changed;
+}
+function mergeRoster(data) {                    // per entry over every block; __meta/__del carry the remote timestamps (absent from old clients: 0)
+  const led = SH.roster || (SH.roster = {});
+  const R = local('roster');
+  const meta = (data && data.__meta) || {}, del = (data && data.__del) || {};
+  const parts = id => { const i = id.indexOf(':'); return [id.slice(0, i), id.slice(i + 1)]; };
+  const has = id => { if (id[0] === 'x' && id[1] === ':') return (R.exclude || []).includes(id.slice(2)); const [b, k] = parts(id); return !!R[b] && (k in R[b]); };
+  const put = (id, v) => { if (id[0] === 'x' && id[1] === ':') { (R.exclude = R.exclude || []).includes(id.slice(2)) || R.exclude.push(id.slice(2)); return; } const [b, k] = parts(id); (R[b] = R[b] || {})[k] = v; };
+  const drop = id => { if (id[0] === 'x' && id[1] === ':') { R.exclude = (R.exclude || []).filter(y => y !== id.slice(2)); return; } const [b, k] = parts(id); if (R[b]) delete R[b][k]; };
+  let changed = false;
+  const rItems = new Map();
+  for (const blk of ROSTER_BLOCKS) for (const [k, v] of Object.entries((data || {})[blk] || {})) rItems.set(blk + ':' + k, v === undefined ? null : v);
+  for (const x of (data || {}).exclude || []) rItems.set('x:' + x, 1);
+  for (const [id, v] of rItems) {
+    const rt = Number(meta[id]) || 0, e = led[id], lt = e ? e.t : 0;
+    if (!has(id)) {
+      if (e && e.del && lt >= rt) continue;
+      put(id, v); led[id] = { h: hash(JSON.stringify(v)), t: rt }; changed = true;
+    } else if (rt > lt) { put(id, v); led[id] = { h: hash(JSON.stringify(v)), t: rt }; changed = true; }
+  }
+  for (const [id, dt0] of Object.entries(del)) {
+    const dt = Number(dt0) || 0, e = led[id], lt = e ? e.t : 0;
+    if (e && dt <= lt) continue;
+    if (has(id)) { drop(id); changed = true; }
+    led[id] = { t: dt, del: 1 };
+  }
+  R.log = R.log || [];                          // the activity log stays an append-only union
+  const seen = new Set(R.log.map(e => e.t + e.id));
+  for (const e of (data || {}).log || []) if (e && !seen.has(e.t + e.id)) { R.log.push(e); changed = true; }
+  R.log.sort((a, b) => b.t - a.t); R.log = R.log.slice(0, 50);
+  localStorage.setItem('roster', JSON.stringify(R));
+  saveShadow();
+  return changed;
+}
 function applyRemote(kind, data) {
-  if (kind === 'scans') {
-    const have = new Set(results.map(r => r.key));
-    let added = 0;
-    const valid = r => r && typeof r.key === 'string' && typeof r.species === 'string' && Array.isArray(r.combos);
-    for (const r of data || []) if (valid(r) && !have.has(r.key)) { results.push(r); added++; }
-    // for records both sides have, take remote fields we lack (archived state, appraisal, moves)
-    const byKey = new Map((data || []).filter(valid).map(r => [r.key, r]));
-    for (const r of results) {
-      const rem = byKey.get(r.key); if (!rem) continue;
-      for (const f of ['superseded', 'appraisal', 'moves', 'fav', 'bench', 'level', 'combos', 'cp']) if (r[f] === undefined && rem[f] !== undefined) r[f] = rem[f];
-    }
-    localStorage.setItem('scans', JSON.stringify(results));
-    if (added && typeof render === 'function') render();
-    return added > 0;
-  }
-  if (kind === 'battles') { return !!(window.Planner && Planner.mergeBattles(data)); }
-  if (kind === 'roster') {
-    const R = local('roster');
-    let changed = false;
-    for (const blk of ['owned', 'pending', 'candidates', 'tagged', 'moves', 'done', 'snooze']) {
-      R[blk] = R[blk] || {};
-      for (const [k, v] of Object.entries((data || {})[blk] || {})) if (!(k in R[blk])) { R[blk][k] = v; changed = true; }
-    }
-    R.exclude = R.exclude || [];
-    for (const x of (data || {}).exclude || []) if (!R.exclude.includes(x)) { R.exclude.push(x); changed = true; }
-    R.log = R.log || [];
-    const seen = new Set(R.log.map(e => e.t + e.id));
-    for (const e of (data || {}).log || []) if (!seen.has(e.t + e.id)) { R.log.push(e); changed = true; }
-    R.log.sort((a, b) => b.t - a.t);
-    R.log = R.log.slice(0, 50);
-    localStorage.setItem('roster', JSON.stringify(R));
-    return changed;
-  }
+  if (!(SH[kind] || {}).__init) stamp(kind);    // baseline first, so our unsent local changes carry their timestamps into the merge
+  if (kind === 'scans' || kind === 'battles') return mergeList(kind, data);
+  if (kind === 'roster') return mergeRoster(data);
   return false;
 }
 async function pull() {
@@ -109,30 +203,40 @@ async function pull() {
   return changed;
 }
 async function pushKind(kind) {
-  let r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: local(kind), baseUpdatedAt: S.base[kind]})});
-  if (r.status === 409) {                      // someone else wrote first: merge theirs in, then write the union
+  const before = epoch[kind] || 0;              // an edit during the PUT bumps this and keeps the kind queued
+  let body = wire(kind);
+  let r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: body, baseUpdatedAt: S.base[kind]})});
+  for (let attempt = 0; r.status === 409 && attempt < 3; attempt++) {   // someone else wrote first: merge theirs in, then write the union
     const {current} = await r.json();
     applyRemote(kind, current.data);
     S.base[kind] = current.updatedAt;
-    r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: local(kind), baseUpdatedAt: S.base[kind]})});
+    body = wire(kind);
+    r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: body, baseUpdatedAt: S.base[kind]})});
   }
   if (r.status === 401) throw new Error(authErr());
   if (!r.ok) throw new Error('server ' + r.status);
   S.base[kind] = (await r.json()).updatedAt;
   S.last[kind] = Date.now();
+  return (epoch[kind] || 0) === before;         // false: it changed while we pushed, push it again
 }
 async function flush() {
-  if (!available || !signedIn() || busy || !dirty.size) return;
+  if (!signedIn() || busy || !dirty.size) return;
+  if (available === false) await detect();      // the app may have started offline; a change made then still deserves a push
+  if (!available) return;
   busy = true; paint();
   try {
-    for (const kind of [...dirty]) { await pushKind(kind); dirty.delete(kind); }
-    lastError = ''; save();
-  } catch (e) { lastError = e.message; }
+    for (const kind of [...dirty]) { if (await pushKind(kind)) dirty.delete(kind); }
+    lastError = ''; S.dirty = [...dirty]; save();
+  } catch (e) { lastError = e.message; S.dirty = [...dirty]; save(); }
   busy = false; paint();
+  if (dirty.size && !lastError) { clearTimeout(timer); timer = setTimeout(flush, 1500); }   // kinds that changed mid-push go again
 }
 function touch(kind) {
-  if (!available || !signedIn()) return;
-  dirty.add(kind); clearTimeout(timer); timer = setTimeout(flush, 1500);
+  stamp(kind);                                  // the ledger records the change (and its timestamp) even when offline or signed out
+  epoch[kind] = (epoch[kind] || 0) + 1;
+  dirty.add(kind); S.dirty = [...dirty]; save();
+  if (!signedIn()) return;
+  clearTimeout(timer); timer = setTimeout(flush, 1500);   // flush itself re-checks busy/available, so a timer during a push reschedules
 }
 async function connect(code) {
   S.code = (code || '').trim(); save(); lastError = '';
@@ -262,21 +366,24 @@ async function importPasscode() {              // one-time: the passcode era's r
 function copyId(btn) { const id = (window.Auth && Auth.userId()) || ''; if (!id) return; navigator.clipboard && navigator.clipboard.writeText(id).then(() => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } }).catch(() => {}); }
 async function init() {
   if (await detect() && !clerkMode() && S.code) {
-    try { await pull(); } catch (e) { lastError = e.message; }
+    try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); await flush(); }   // push too: edits made while the server was unreachable
+    catch (e) { lastError = e.message; }
     paint(); if (window.Planner) Planner.renderToday();
-  }
+  } else if (dirty.size && signedIn()) flush();  // edits queued before this load (dirty is persisted)
 }
 window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
                health: () => health, me: () => me, plan, isPro, headers: hdr, coachAvailable: () => !!(health && health.coach && signedIn() && isPro()),
                visionAvailable: () => !!(health && health.vision && signedIn() && isPro()), visionOffered: () => !!(health && health.vision && signedIn() && !isPro()),
                coachOffered: () => !!(health && health.coach && signedIn() && !isPro())};   // the server has the AI, this account has not unlocked it yet
 window.addEventListener('load', () => setTimeout(init, 300));
-window.addEventListener('online', () => { if (signedIn()) flush(); });
+window.addEventListener('online', async () => { if (!signedIn()) return; if (available === false) await detect(); flush(); });
 // the server may gain the coach (or sync) after a redeploy: re-read /api/health when the app comes back to the foreground
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState !== 'visible' || available === false || Date.now() - detectedAt < 120e3) return;
+  if (document.visibilityState !== 'visible') return;
+  if (available !== false && Date.now() - detectedAt < 120e3) { if (dirty.size && signedIn()) flush(); return; }
   const before = JSON.stringify(health);
   await detect();
   if (JSON.stringify(health) !== before && window.Planner) Planner.renderToday();
+  if (dirty.size && signedIn()) flush();        // offline edits go out as soon as the app is visible and the server reachable
 });
 })();

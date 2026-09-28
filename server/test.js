@@ -336,3 +336,21 @@ console.log('accounts-mode tests passed');
   }
   console.log('APP_ORIGIN guard tests passed');
 }
+
+// the concurrency check is atomic in the store: put(user, kind, data, base) is a compare-and-set
+{
+  const { openDb } = await import('./db.js');
+  const db = await openDb(process.env.DATABASE_URL);
+  await db.clear('cas_user');
+  const v1 = await db.put('cas_user', 'scans', [{ key: 'A' }], null);        // create: base null means "there is nothing yet"
+  assert.ok(v1, 'create with base=null succeeds');
+  assert.equal(await db.put('cas_user', 'scans', [{ key: 'B' }], null), null, 'a second create with base=null conflicts');
+  const v2 = await db.put('cas_user', 'scans', [{ key: 'A' }, { key: 'B' }], v1);
+  assert.ok(v2, 'update with the current base succeeds');
+  assert.equal(await db.put('cas_user', 'scans', [{ key: 'C' }], v1), null, 'update with a stale base conflicts');
+  assert.deepEqual((await db.get('cas_user', 'scans')).data, [{ key: 'A' }, { key: 'B' }], 'the stale write changed nothing');
+  const v3 = await db.put('cas_user', 'scans', [{ key: 'C' }]);              // no base: unconditional write (old clients)
+  assert.ok(v3, 'unconditional write still works');
+  await db.clear('cas_user');
+  console.log('compare-and-set tests passed');
+}
