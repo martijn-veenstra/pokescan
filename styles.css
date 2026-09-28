@@ -610,3 +610,5 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .ptile .pi{width:40px;height:40px}.ptile b{font-size:12px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ptile span{font-size:11px;color:var(--dim)}.ptile.ow{border-color:rgba(72,213,151,.45)}.ptile.pd{border-color:rgba(91,141,239,.45)}
 .ptile:active{background:rgba(72,213,151,.08)}
+.bfilt{margin:4px 0 2px;align-items:center}.bfilt .chip{border:1px solid var(--line);cursor:pointer}.bfilt .cnt{margin-left:auto;font-size:12px}
+.ptile .pic{position:relative;display:inline-block}.ptile .b2{position:absolute;right:-6px;bottom:-2px;font-style:normal;font-size:10px;font-weight:700;line-height:15px;width:15px;height:15px;border-radius:50%;background:var(--green);color:#0B1220;text-align:center}

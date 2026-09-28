@@ -72,3 +72,33 @@ test('From your roster is a wrapping grid with the unranked scans in it', async 
   expect((await slots(page))[0]).toBe('meditite');
   expect(errors).toEqual([]);
 });
+
+test('the roster grid filters on near the cap and on an unlocked 2nd move, and remembers it', async ({ page }) => {
+  const errors = await openApp(page, '#/builder');
+  await page.evaluate(() => {
+    results.length = 0;
+    const add = (sp, iv, lv, moves, second) => { const b = DATA.stats[sp][0], m = cpmAt(lv);
+      const r = { species: sp, cp: calcCP(b, ...iv, m), hp: calcHP(b, iv[2], m), level: lv, dust: null, combos: [[lv, ...iv, b]], appraisal: iv, txt: '', cpCandidates: [], moves, secondMove: second };
+      r.key = `${sp}|${r.cp}|${r.hp}|${lv}|`; results.push(r); };
+    add('AZUMARILL', [0, 15, 15], 40, ['BUBBLE', 'ICE_BEAM', 'PLAY_ROUGH'], true);   // at the cap, 2nd move unlocked
+    add('MEDICHAM', [15, 15, 15], 40, ['COUNTER', 'ICE_PUNCH'], false);               // near the cap, no 2nd move
+    add('MEDITITE', [5, 13, 12], 10, ['CONFUSION', 'PSYSHOCK'], false);               // unranked here and far from the cap
+    save(); Planner.refresh(); Planner.nav('#/builder');
+  });
+  const grid = page.locator('#builder .pgrid'), chips = page.locator('#builder .bfilt');
+  await expect(grid.locator('.ptile')).toHaveCount(3);
+  await chips.locator('.chip', { hasText: 'Near 1500' }).click();
+  await expect(grid.locator('.ptile')).toHaveCount(2);
+  await expect(grid).not.toContainText('Meditite');
+  await chips.locator('.chip', { hasText: '2nd move' }).click();
+  await expect(grid.locator('.ptile')).toHaveCount(1);
+  await expect(grid).toContainText('Azumarill');
+  await expect(chips).toContainText('1 of 3');
+  await page.reload(); await page.waitForFunction(() => window.Planner && typeof APP !== 'undefined' && APP);
+  await page.evaluate(() => Planner.nav('#/builder'));
+  await expect(page.locator('#builder .pgrid .ptile')).toHaveCount(1);         // remembered
+  await page.locator('#builder .bfilt .chip', { hasText: 'Near 1500' }).click();
+  await page.locator('#builder .bfilt .chip', { hasText: '2nd move' }).click();
+  await expect(page.locator('#builder .pgrid .ptile')).toHaveCount(3);
+  expect(errors).toEqual([]);
+});
