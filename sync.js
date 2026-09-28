@@ -5,6 +5,29 @@
 'use strict';
 const S = Object.assign({code: '', last: {}, base: {}, user: ''}, JSON.parse(localStorage.getItem('sync') || '{}'));
 const save = () => localStorage.setItem('sync', JSON.stringify(S));
+/* Local data is per account. The plain keys stay the working copy; on an account switch they are parked under
+   u:<userId>:<key> (or anon:<key>) and the incoming account's parked copy takes their place, then the page
+   reloads so every in-memory structure (results, Planner.ROSTER, …) starts from the right store. Data made
+   without an account is adopted by the first account that signs in; after that nothing crosses accounts. */
+const USER_KEYS = ['scans', 'roster', 'battles', 'blog', 'bdraft', 'bcoach', 'shares', 'scanlog', 'tname', 'trainer', 'appr', 'mu', 'milestones'];
+if (!localStorage.getItem('ns')) localStorage.setItem('ns', S.user || 'anon');   // migration: existing keys belong to the signed-in user, or to anon
+const parked = id => USER_KEYS.some(k => localStorage.getItem('u:' + id + ':' + k) !== null);
+function swapStore(to) {                        // returns true when the page must reload to pick up the new store
+  const from = localStorage.getItem('ns') || 'anon';
+  if (from === to) return false;
+  if (to !== 'anon' && from === 'anon' && !parked(to)) { localStorage.setItem('ns', to); return false; }   // first sign-in adopts the anonymous data
+  for (const k of USER_KEYS) {                  // park the current owner's data…
+    const v = localStorage.getItem(k);
+    if (v === null) localStorage.removeItem('u:' + from + ':' + k); else localStorage.setItem('u:' + from + ':' + k, v);
+  }
+  for (const k of USER_KEYS) {                  // …and put the new owner's in its place
+    const v = localStorage.getItem('u:' + to + ':' + k);
+    if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+  }
+  localStorage.setItem('ns', to);
+  try { caches.delete('share-inbox'); } catch {}   // shared screenshots waiting for import belong to the previous user
+  return true;
+}
 let available = null, timer = null, busy = false, lastError = '', health = null, me = null;   // me: /api/me (plan, features) for the signed-in account
 const dirty = new Set();
 const $ = id => document.getElementById(id);
@@ -134,9 +157,14 @@ async function refreshMe() {                    // plan and features of the sign
 const plan = () => me ? me.plan : (health && health.auth !== 'clerk' && signedIn() ? 'pro' : 'free');   // without accounts the server is the owner's own: everything unlocked
 const isPro = () => plan() === 'pro';
 async function onUser(user) {                  // Clerk: signed in, signed out, or another account on this phone
-  if (!user) { S.base = {}; S.last = {}; lastError = ''; me = null; save(); paint(); if (window.Planner) Planner.refresh(); return; }
+  if (!user) {
+    S.base = {}; S.last = {}; lastError = ''; me = null; save();
+    if (swapStore('anon')) { location.reload(); return; }   // the previous user's data leaves the screen and the device's working copy
+    paint(); if (window.Planner) Planner.refresh(); return;
+  }
   if (S.user && S.user !== user.id) { S.base = {}; S.last = {}; }   // never merge one account's local copy into another's server data by accident
   S.user = user.id; save(); lastError = '';
+  if (swapStore(user.id)) { location.reload(); return; }    // this account's own local data takes the working copy's place; sync resumes after the reload
   refreshMe();
   try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); await flush(); S.connectedAt = Date.now(); save(); }
   catch (e) { lastError = e.message; }
