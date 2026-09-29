@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: railway-deploy   # never overlap with deploy-railway.yml
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -31,6 +35,7 @@ jobs:
           python3 scripts/evaluate_teams.py data/community-teams-great.json -o data/community-teams-great-analysis.json
           python3 scripts/generate_roster_team_comps.py --pretty
       - name: Commit and push if anything changed
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -38,6 +43,39 @@ jobs:
             git add data icons
             git commit -m "Update PvPoke data ($(date -u +%Y-%m-%d))"
             git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             git checkout -- data
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
+      # a push with GITHUB_TOKEN never triggers deploy-railway.yml (GitHub's design), so this job deploys itself
+      - name: Run server tests before deploying
+        if: steps.commit.outputs.changed == 'true'
+        run: npm ci && npm test
+      - name: Deploy with the Railway CLI
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE: ${{ vars.RAILWAY_SERVICE || 'pokescan' }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::Missing RAILWAY_TOKEN secret. Create a project token in Railway (Project Settings > Tokens) and add it in GitHub under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          npm i -g @railway/cli
+          railway up --service "$SERVICE" --ci
+      - name: Smoke check the live health endpoint
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          APP_URL: ${{ vars.APP_URL || 'https://pokescan-production.up.railway.app' }}
+        run: |
+          echo "Waiting for $APP_URL/api/health ..."
+          for i in $(seq 1 20); do
+            if out=$(curl -sf --max-time 10 "$APP_URL/api/health"); then
+              echo "health: $out"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::health endpoint did not answer within 2 minutes"
+          exit 1

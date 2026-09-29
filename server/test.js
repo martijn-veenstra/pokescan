@@ -6,6 +6,14 @@ import { fileURLToPath } from 'node:url';
 import { buildServer } from './index.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+// Postgres mode: the tests assume an empty database (a reused one keeps plans and stripe_events rows around)
+if (process.env.DATABASE_URL) {
+  const pg = (await import('pg')).default;
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  for (const t of ['state', 'plans', 'history', 'stripe_events']) await pool.query(`DROP TABLE IF EXISTS ${t}`).catch(() => {});
+  await pool.end();
+}
+
 const fakeCoach = async ({ context, mode }) => { await new Promise(r => setTimeout(r, 150));
   if (mode === 'battle') return { text: `**What happened** You led and switched.\n\n**Turning point** At 0:24.\n\n**Do differently**\n- Hold a shield\n\n**Matchup note** context had ${Object.keys(JSON.parse(context)).join(',')}`, model: 'fake', usage: { in: 1, out: 1 } };
   return { text: `**Verdict** Solid core.\n\n**Strengths**\n- context had ${Object.keys(JSON.parse(context)).join(',') || 'nothing'}\n\n**Weak spots**\n- Tinkaton\n\n**Swaps**\n- none\n\n**Order**\nLead: Medicham · Swap: Azumarill · Closer: Altaria`, model: 'fake', usage: { in: 1, out: 1 } }; };
