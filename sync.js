@@ -214,6 +214,7 @@ async function pushKind(kind) {
     r = await fetch('/api/state/' + kind, {method: 'PUT', headers: await hdr(), body: JSON.stringify({data: body, baseUpdatedAt: S.base[kind]})});
   }
   if (r.status === 401) throw new Error(authErr());
+  if (r.status === 409) { const e = new Error("couldn't upload: the server kept a different version"); e.transient = true; throw e; }   // still conflicting after three merges: try again later
   if (!r.ok) throw new Error('server ' + r.status);
   S.base[kind] = (await r.json()).updatedAt;
   S.last[kind] = Date.now();

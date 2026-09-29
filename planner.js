@@ -916,8 +916,9 @@ function wantedCard(m) {
 /* A redraw that nobody asked for — data that finished loading in the background (the schedule, evo.json, the league
    rankings) — must not pull an open ⋮ menu out from under a tap: it re-rendered the page, the menu closed, and the tap
    on "Mark as normal" found nothing. Such redraws wait until no menu is open. */
-function whenIdle(fn) {
-  const open = () => [...document.querySelectorAll('.view.on .ctx .menu')].some(m => !m.hidden);
+function whenIdle(fn) {                         // also while typing in a field: a redraw would replace the input and drop what was typed
+  const typing = () => { const a = document.activeElement; return !!(a && a.matches && a.matches('input, textarea, select') && a.closest('.view.on')); };
+  const open = () => typing() || [...document.querySelectorAll('.view.on .ctx .menu')].some(m => !m.hidden);
   if (!open()) { fn(); return; }
   const iv = setInterval(() => { if (!open()) { clearInterval(iv); fn(); } }, 300);
 }

@@ -329,6 +329,7 @@ assert.equal(r.statusCode, 409, 'no passcode on this server → nothing to impor
 const app3 = await buildServer({ passcode: 'secret', logger: false, coach: fakeCoach, sourcesFetch: fakeFetch, verifyToken: async t => { if (!users[t]) throw new Error('bad'); return users[t]; }, clerkPublishableKey: 'pk_test_x', ownerMigrateFrom: '' });
 r = await app3.inject({ method: 'GET', url: '/api/health' });
 assert.equal(r.json().auth, 'clerk'); assert.equal(r.json().passcodeData, true, 'health says passcode-era data may exist');
+await app3.db.clear('user_alice'); await app3.db.clear('default');   // on Postgres the apps share one database: start the migrate checks from empty accounts
 await app3.db.put('default', 'roster', { owned: { medicham: null } });
 await app3.db.put('default', 'battles', [{ t: 1 }]);
 r = await app3.inject({ method: 'POST', url: '/api/migrate', headers: { authorization: 'Bearer nope', 'content-type': 'application/json' }, payload: { passcode: 'secret' } });
@@ -380,5 +381,18 @@ console.log('accounts-mode tests passed');
   const v3 = await db.put('cas_user', 'scans', [{ key: 'C' }]);              // no base: unconditional write (old clients)
   assert.ok(v3, 'unconditional write still works');
   await db.clear('cas_user');
+  if (db.kind === 'postgres') {                 // a row saved before v10.30 has microseconds; the client only ever sees (and echoes) milliseconds
+    const pg = (await import('pg')).default, pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    await pool.query(`INSERT INTO state (user_id, kind, data, updated_at) VALUES ('cas_user', 'roster', '{}', '2026-09-01T10:00:00.123456Z')`);
+    const cur = await db.get('cas_user', 'roster');
+    assert.equal(cur.updatedAt, '2026-09-01T10:00:00.123Z');
+    assert.ok(await db.put('cas_user', 'roster', { a: 1 }, cur.updatedAt), 'the millisecond base the client saw matches a microsecond row (was a 409 forever)');
+    await pool.query(`INSERT INTO state (user_id, kind, data, updated_at) VALUES ('cas_user', 'battles', '[]', '2026-09-01T10:00:00.654321Z')`);
+    const db2 = await openDb(process.env.DATABASE_URL);   // start-up rounds the stored times to milliseconds
+    const us = (await pool.query(`SELECT extract(microseconds FROM updated_at)::bigint % 1000 AS r FROM state WHERE user_id='cas_user' AND kind='battles'`)).rows[0].r;
+    assert.equal(Number(us), 0, 'start-up leaves no sub-millisecond times behind');
+    await db2.close(); await pool.end();
+    await db.clear('cas_user');
+  }
   console.log('compare-and-set tests passed');
 }

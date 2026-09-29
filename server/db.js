@@ -45,6 +45,8 @@ export async function openDb(url, log = null) {
   (log?.info ?? console.log).call(log ?? console, `postgres: ${mode}`);
   const pool = new pg.Pool({ connectionString: url, ssl, max: 5 });
   await pool.query(DDL);
+  // rows saved before v10.30 carry microseconds; round them once so every stored time is the millisecond value clients echo
+  await pool.query(`UPDATE state SET updated_at = date_trunc('milliseconds', updated_at) WHERE updated_at <> date_trunc('milliseconds', updated_at)`);
   return {
     kind: 'postgres',
     async ping() { await pool.query('SELECT 1'); return true; },
@@ -63,7 +65,7 @@ export async function openDb(url, log = null) {
       if (base !== undefined) {                 // atomic: the row only changes when it still is the version the client saw
         r = base === null
           ? await pool.query(`INSERT INTO state (user_id, kind, data, updated_at) VALUES ($1,$2,$3,date_trunc('milliseconds', now())) ON CONFLICT (user_id, kind) DO NOTHING RETURNING updated_at`, [user, kind, JSON.stringify(data)])
-          : await pool.query(`UPDATE state SET data=$3, updated_at=date_trunc('milliseconds', now()) WHERE user_id=$1 AND kind=$2 AND updated_at=$4 RETURNING updated_at`, [user, kind, JSON.stringify(data), base]);
+          : await pool.query(`UPDATE state SET data=$3, updated_at=date_trunc('milliseconds', now()) WHERE user_id=$1 AND kind=$2 AND date_trunc('milliseconds', updated_at)=$4::timestamptz RETURNING updated_at`, [user, kind, JSON.stringify(data), base]);   // at ms precision: a row from before v10.30 has microseconds the client never sees
         if (!r.rows[0]) return null;
       } else {
         r = await pool.query(
