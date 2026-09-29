@@ -253,8 +253,7 @@ async function resync() {                       // pull what other devices chang
     S.dirty = [...dirty]; S.syncedAt = Date.now(); save();
     lastError = ''; lastErrorAt = 0; retryN = 0; retrying = false;
   } catch (e) { S.dirty = [...dirty]; save(); if (!retryLater(e)) { lastError = e.message; lastErrorAt = Date.now(); } }
-  busy = false; paint();
-  if (window.Planner) Planner.refresh();
+  busy = false; paint();                         // pull() already redraws when something came in; a redraw here would wipe what is being typed
 }
 function touch(kind) {
   stamp(kind);                                  // the ledger records the change (and its timestamp) even when offline or signed out
@@ -296,6 +295,7 @@ async function onUser(user) {                  // Clerk: signed in, signed out, 
   if (swapStore(user.id)) { location.reload(); return; }    // this account's own local data takes the working copy's place; sync resumes after the reload
   refreshMe();
   await resync(); S.connectedAt = Date.now(); save();
+  if (window.Planner) Planner.refresh();         // signed in (or another account): the pages follow the account
 }
 if (window.Auth) Auth.onChange(onUser);
 function disconnect() { if (clerkMode()) { Auth.signOut(); return; } S.code = ''; S.base = {}; S.last = {}; save(); paint(); if (window.Planner) Planner.renderToday(); }
