@@ -106,3 +106,35 @@ test('an updated status screen replaces the charged moves below the card region'
   expect(got[0].moves).toEqual(['ROLLOUT', 'SHADOW_BALL', 'EARTHQUAKE']);
   expect(errors).toEqual([]);
 });
+
+/* The user's Porygon: the status screenshot makes the card, "Update with a new scan" with the appraisal screenshot pins its
+   IVs. The update used to end on the generic Porygon page ("not owned", "Not in your roster yet"): a pre-evolution whose
+   evolution fits the cap is not an owned team member. It now returns to the card, and the species page lists the scan. */
+test('updating a pre-evolution card returns to that card; its species page lists the scan', async ({ page }) => {
+  await page.addInitScript(() => localStorage.removeItem('roster'));
+  const errors = await openApp(page, '#/roster');
+  await page.evaluate(() => { results.length = 0; save(); Planner.refresh(); });
+  await importFile(page, 'porygon-status.png');
+  const card = await page.evaluate(() => results.filter(r => !r.superseded).map(r => ({ key: r.key, species: r.species, cp: r.cp, hp: r.hp, appraisal: r.appraisal || null })));
+  expect(card).toHaveLength(1);
+  expect(card[0]).toMatchObject({ species: 'PORYGON', cp: 810, hp: 97 });
+  await page.evaluate(k => Planner.openScan(k), card[0].key);
+  await expect(page.locator('#mon button:has-text("Update with a new scan")').first()).toBeVisible();
+  await page.evaluate(k => Planner.updateScan(k, 'mon'), card[0].key);
+  await importFile(page, 'porygon-appraisal.png');
+  const after = await page.evaluate(() => results.filter(r => !r.superseded).map(r => ({ key: r.key, cp: r.cp, appraisal: r.appraisal || null })));
+  expect(after).toHaveLength(1);
+  expect(after[0].appraisal).toEqual([4, 14, 9]);
+  await expect.poll(() => page.evaluate(() => decodeURIComponent(location.hash))).toBe('#/scan/' + after[0].key);   // back on the card
+  await expect(page.locator('#mon .scanhero')).toContainText('810');
+  await expect(page.locator('#mon')).not.toContainText('Not in your roster yet');
+  // the species page knows the scan
+  await page.evaluate(() => Planner.openMon('porygon'));
+  const mon = page.locator('#mon');
+  await expect(mon).not.toContainText('Not in your roster yet');
+  await expect(mon.locator('.monhead .chips')).not.toContainText('not owned');
+  await expect(mon.locator('.yourscans')).toContainText(/Your Porygon[\s\S]*810 CP · L18 · 4\/14\/9/);
+  await mon.locator('.yourscans .team.row').first().click();
+  await expect.poll(() => page.evaluate(() => decodeURIComponent(location.hash))).toBe('#/scan/' + after[0].key);
+  expect(errors).toEqual([]);
+});

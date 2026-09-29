@@ -251,13 +251,18 @@ function onNewScan(s) {                        // called by the scanner after a 
 }
 function updateScan(key, from) {               // "Update this Pokémon": the next import belongs to this card (power-up, evolution, appraisal, attacks)
   const r = results.find(x => x.key === key); if (!r) return;
-  UI.updateKey = key; UI.updateFrom = from === 'mon' ? UI.mon : null; status(`Updating ${nice(r.species)} ${r.cp} CP: pick its new screenshots`);
+  UI.updateKey = key; UI.updateFrom = from === 'mon' ? UI.mon : null; UI.updateFromScan = from === 'mon' ? UI.scan : null; status(`Updating ${nice(r.species)} ${r.cp} CP: pick its new screenshots`);
   if (from !== 'mon') nav('#/roster');
   $('file').click();
 }
 function updateDone(card) {
-  const k = UI.updateKey, from = UI.updateFrom; UI.updateKey = null; UI.updateFrom = null;
-  if (from) {                                    // came from a Pokémon page: go back to it (the species may have changed on an evolution)
+  const k = UI.updateKey, from = UI.updateFrom, fromScan = UI.updateFromScan; UI.updateKey = null; UI.updateFrom = null; UI.updateFromScan = null;
+  if (fromScan && (card || results.some(x => x.key === k))) {   // started on the card's own page: back to the card (its key follows CP, level and IVs)
+    const key = card ? card.key : k;
+    if (typeof toast === 'function' && card) toast(`⟳ ${nice(card.species)} updated: ${card.cp} CP`);
+    UI.scan = key; openScan(key); return;
+  }
+  if (from) {                                    // came from a species page: go back to it (the species may have changed on an evolution)
     const sid = card ? scanId(card) : null, id = sid && sid.id && APP.pokemon[sid.id] ? sid.id : from;
     if (typeof toast === 'function' && card) toast(`⟳ ${nm(id)} updated: ${card.cp} CP`);
     openMon(id); return;
@@ -2571,7 +2576,9 @@ function monInner(m, id, scanR) {               // the species part; under a sca
   const back = PAGE_LABEL[UI.monFrom] || 'Back';
   const rm = 'Planner.renderMon()';
   const menu = ctxMenu(speciesMenuItems(m, id, null));
-  let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st) || (!o ? chip('not owned', 'warn') : '')}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
+  // scans of this species that are not an owned team member: a pre-evolution whose evolution fits the cap, or over the cap
+  const myScans = o ? [] : results.filter(r => !r.superseded && r.cp && (scanId(r) || {}).id === id).sort((p, q) => q.cp - p.cp);
+  let h = noHead ? '' : `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${ownChip(st) || (!o ? (myScans.length ? chip('scanned', 'gl') : chip('not owned', 'warn')) : '')}${benched ? chip('benched') : ''}${a ? chip('evolves from your ' + a.from, 'gl') : ''}</div></div>`;
   const teamsIn = rep.todayAll.filter(t => t.members.some(x => x.speciesId === id)).length;
   if (!noHead) {
   h += `<div class="detail" style="gap:8px"><div class="dh" style="flex-wrap:nowrap"><span style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">${icon(id, 'xl')}<span style="display:flex;flex-direction:column;min-width:0"><span class="nm" style="font-size:20px">${esc(e.name)}</span><span class="metal">meta #${e.rank} · ${e.score} in ${esc(LEAGUE.title)}</span></span></span>${menu}</div>`;
@@ -2587,7 +2594,14 @@ function monInner(m, id, scanR) {               // the species part; under a sca
   } else if (!noHead && o && o.manual) h += `<div class="note" style="margin:0">Added by hand, no scan: import a screenshot of this Pokémon for its IVs, level and moves.</div>`;
   else if (!noHead && a) { const need = evoShort(evoBranch(a.fromId, id)); h += `<div class="note" style="margin:0">Evolves from your <a href="#" onclick="Planner.openScan(${attr(a.fromKey)});return false"><b>${esc(a.from)}</b></a>: ${a.cpNow} CP as ${esc(e.name)}, fits to L${a.toLevel}, IV rank #${a.glRank}.${need ? ` Needs: ${esc(need)}.` : ''}</div>`; }
   else if (!noHead && !o && sc) h += `<div class="note" style="margin:0">Catch a <b>${esc(nm(pre))}</b> ≤ <b>${sc.safe}</b> CP: it evolves into a GL-legal ${esc(e.name)} (${sc.safe + 1}–${sc.max} CP only with the right IVs).</div>`;
-  if (!noHead && !o) h += `<div class="notown"><div><b>Not in your roster yet</b><span class="dt">${a ? `You own its pre-evolution, not ${esc(e.name)} itself. ` : ''}Once you have one, screenshot its status screen in Pokémon GO and add it: IVs, level and moves are read from it and this page fills in.</span></div><button class="btn sec" onclick="Planner.scanFor('${id}')">＋ Add a scan of this Pokémon</button></div>`;
+  if (!noHead && !o && myScans.length) {         // you have one: list it, and say why it does not count as a team member yet
+    const why = r => { if (r.cp > LEAGUE.cp) return `over the ${LEAGUE.cp} cap`;
+      const ev = Object.entries(auto).find(([, x]) => x.fromKey === r.key); return ev ? `battles as ${nm(ev[0])} in ${LEAGUE.title}: evolve it` : ''; };
+    h += `<div class="yourscans"><div class="sec" style="margin:4px 0 4px">Your ${esc(e.name)}</div>${myScans.map(r => { const b = r.combos && r.combos.length ? bestOf2(r) : null, w = why(r);
+      return `<div class="team row" onclick="Planner.openScan(${attr(r.key)})">${icon(id, 'm')}<span class="tx"><span class="nm">${r.cp} CP · L${r.level ?? (b ? b[0] : '?')}${b ? ` · ${b[1]}/${b[2]}/${b[3]}` : ''}</span>${w ? `<div class="dt">${esc(w)}</div>` : ''}</span><span class="go">›</span></div>`; }).join('')}
+      <div class="dt" style="margin-top:4px"><a href="#" onclick="Planner.scanFor('${id}');return false">＋ Add a scan of another one</a></div></div>`;
+  }
+  else if (!noHead && !o) h += `<div class="notown"><div><b>Not in your roster yet</b><span class="dt">${a ? `You own its pre-evolution, not ${esc(e.name)} itself. ` : ''}Once you have one, screenshot its status screen in Pokémon GO and add it: IVs, level and moves are read from it and this page fills in.</span></div><button class="btn sec" onclick="Planner.scanFor('${id}')">＋ Add a scan of this Pokémon</button></div>`;
   if (!noHead && o && !o.manual && o.scan) h += `<div class="acts" style="margin:6px 0 0">${updBtn(o.scan.key)}</div>`;
   h += `</div>`;
   }
