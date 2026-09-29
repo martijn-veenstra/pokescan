@@ -194,7 +194,7 @@ video{position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-e
 .note{font-size:12px;color:var(--dim);margin:4px 0 8px}
 h1 .help.prof{margin-left:auto;width:auto;padding:0 10px;gap:5px;font-size:12px;border-radius:15px}h1 .help.prof+.help{margin-left:0}
 h1 .help.sync{margin-left:0}h1 .help.sync.on{color:var(--green);border-color:#3BC489}h1 .help.sync.err{color:#F59A8B;border-color:#F0654F}
-h1 .help.sync+.help{margin-left:0}
+h1 .help.sync+.help{margin-left:0}h1 .help.sync.busy{color:var(--green);border-color:rgba(72,213,151,.5);animation:syncpulse 1.2s ease-in-out infinite}@keyframes syncpulse{50%{opacity:.55}}
 h1 .help{margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);
  color:var(--dim);font:700 15px Sora,sans-serif;display:flex;align-items:center;justify-content:center}
 #help{display:none;position:fixed;inset:0;background:rgba(6,10,20,.82);z-index:20;overflow:auto;

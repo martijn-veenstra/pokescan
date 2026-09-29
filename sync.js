@@ -86,7 +86,7 @@ const clerkMode = () => !!(health && health.auth === 'clerk');
 const signedIn = () => clerkMode() ? !!(window.Auth && Auth.signedIn()) : !!S.code;   // the one question every caller asks
 async function hdr() {                          // Clerk: a fresh short-lived session token per request; passcode: the code
   const tok = clerkMode() ? await Auth.token() : S.code;
-  if (!tok) throw new Error(clerkMode() ? 'signed out' : 'connect sync first (cloud button)');
+  if (!tok) { const e = new Error(clerkMode() ? 'signed out' : 'connect sync first (cloud button)'); e.transient = clerkMode() && Auth.signedIn(); throw e; }   // a user without a token yet: the app just woke up
   return {authorization: 'Bearer ' + tok, 'content-type': 'application/json'};
 }
 const authErr = () => clerkMode() ? 'signed out' : 'wrong passcode';
@@ -227,9 +227,34 @@ async function flush() {
   try {
     for (const kind of [...dirty]) { if (await pushKind(kind)) dirty.delete(kind); }
     lastError = ''; S.dirty = [...dirty]; save();
-  } catch (e) { lastError = e.message; S.dirty = [...dirty]; save(); }
-  busy = false; paint();
+  } catch (e) { S.dirty = [...dirty]; save(); busy = false; if (!retryLater(e)) { lastError = e.message; lastErrorAt = Date.now(); } paint(); return; }
+  busy = false; retryN = 0; paint();
   if (dirty.size && !lastError) { clearTimeout(timer); timer = setTimeout(flush, 1500); }   // kinds that changed mid-push go again
+}
+/* A request that fails because the phone just woke the app (network not back, sign-in token not refreshed, the server
+   restarting) is retried quietly (2 s, 5 s, 15 s) instead of turning the button red; only what is still failing after
+   that, while online, is shown. A wrong passcode or a server that says "signed out" is shown at once. */
+let retryN = 0, retryT = null, retrying = false, lastErrorAt = 0;
+const transient = e => !!(e && (e.transient || e.name === 'TypeError' || /load failed|failed to fetch|network|server 5\d\d/i.test(e.message || '')));
+function retryLater(e) {
+  if (!transient(e)) return false;
+  if (navigator.onLine === false) { retrying = false; return true; }   // offline: the 'online' event syncs; not an error
+  if (retryN >= 3) { retryN = 0; retrying = false; return false; }
+  const d = [2000, 5000, 15000][retryN++]; retrying = true;
+  clearTimeout(retryT); retryT = setTimeout(() => { retrying = false; resync(); }, d);
+  return true;
+}
+async function resync() {                       // pull what other devices changed, push what is waiting; errors as above
+  if (!signedIn() || busy) return;
+  busy = true; paint();
+  try {
+    await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles');
+    for (const kind of [...dirty]) { if (await pushKind(kind)) dirty.delete(kind); }
+    S.dirty = [...dirty]; S.syncedAt = Date.now(); save();
+    lastError = ''; lastErrorAt = 0; retryN = 0; retrying = false;
+  } catch (e) { S.dirty = [...dirty]; save(); if (!retryLater(e)) { lastError = e.message; lastErrorAt = Date.now(); } }
+  busy = false; paint();
+  if (window.Planner) Planner.refresh();
 }
 function touch(kind) {
   stamp(kind);                                  // the ledger records the change (and its timestamp) even when offline or signed out
@@ -270,28 +295,38 @@ async function onUser(user) {                  // Clerk: signed in, signed out, 
   S.user = user.id; save(); lastError = '';
   if (swapStore(user.id)) { location.reload(); return; }    // this account's own local data takes the working copy's place; sync resumes after the reload
   refreshMe();
-  try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); await flush(); S.connectedAt = Date.now(); save(); }
-  catch (e) { lastError = e.message; }
-  paint(); if (window.Planner) Planner.refresh();
+  await resync(); S.connectedAt = Date.now(); save();
 }
 if (window.Auth) Auth.onChange(onUser);
 function disconnect() { if (clerkMode()) { Auth.signOut(); return; } S.code = ''; S.base = {}; S.last = {}; save(); paint(); if (window.Planner) Planner.renderToday(); }
 async function syncNow() {
   if (!signedIn()) return;
-  busy = true; paint();
-  try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); busy = false; await flush(); lastError = ''; }
-  catch (e) { lastError = e.message; busy = false; }
-  paint();
+  retryN = 0; clearTimeout(retryT); retrying = false;
+  await resync();
 }
 function paint() {
   const b = $('syncbtn'); if (!b) return;
   if (available === false) { b.style.display = 'none'; return; }
   b.style.display = '';
-  b.classList.toggle('on', signedIn() && !lastError);
-  b.classList.toggle('err', !!lastError);
-  b.title = lastError ? 'Sync error: ' + lastError : signedIn() ? 'Synced' : clerkMode() ? 'Sign in' : 'Set up sync';
+  const off = navigator.onLine === false;
+  b.classList.toggle('on', signedIn() && !lastError && !off);
+  b.classList.toggle('err', !!lastError && !off);
+  b.classList.toggle('busy', signedIn() && (busy || retrying) && !lastError);
+  b.title = !signedIn() ? (clerkMode() ? 'Sign in' : 'Set up sync') : syncLine();
   const box = $('syncbox');
   if (box && box.classList.contains('open')) renderBox();
+}
+const KIND_WORD = {scans: 'scans', roster: 'roster', battles: 'battles'};
+const esc0 = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+function syncLine() {                            // one line: what there is to sync, or what went wrong
+  const last = Math.max(S.last.scans || 0, S.last.roster || 0, S.last.battles || 0, S.syncedAt || 0);
+  const at = t => new Date(t).toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+  const waiting = [...dirty].map(k => KIND_WORD[k] || k);
+  if (navigator.onLine === false) return waiting.length ? `Offline: ${waiting.join(', ')} wait for the connection` : 'Offline';
+  if (lastError) return `⚠ ${lastError}${lastErrorAt ? ' · ' + at(lastErrorAt) : ''}`;
+  if (busy || retrying) return retrying ? 'Retrying…' : 'Syncing…';
+  if (waiting.length) return `Waiting to upload: ${waiting.join(', ')}`;
+  return last ? `Up to date · last synced ${at(last)}` : 'Not synced yet';
 }
 function renderBox() {
   const box = $('syncbox'); if (!box) return;
@@ -299,7 +334,7 @@ function renderBox() {
   if (clerkMode()) {
     const mode = Auth.mode();
     box.innerHTML = `<div class="box"><h2>${signedIn() ? 'Your account' : 'Sign in'} <span class="x" onclick="Sync.toggle()">✕</span></h2>
-      ${signedIn() ? `<div class="team" style="cursor:default"><b>${Auth.email() || 'Signed in'}</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div>
+      ${signedIn() ? `<div class="team" style="cursor:default"><b>${Auth.email() || 'Signed in'}</b><div class="dt">${esc0(syncLine())}</div>
           <div class="dt" style="margin-top:4px">id <code id="uid">${Auth.userId() || ''}</code> <button class="mini" onclick="Sync.copyId(this)">Copy</button></div></div>
         <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out</button></div>
         ${health.passcodeData ? `<details class="imp" ${importMsg ? 'open' : ''}><summary>Import passcode data</summary>
@@ -314,7 +349,7 @@ function renderBox() {
   }
   box.innerHTML = `<div class="box"><h2>Sync across devices <span class="x" onclick="Sync.toggle()">✕</span></h2>
     <p class="dim">Scans, roster, parties and the completion log are stored on your PokeScan server, so every phone and browser sees the same data. Enter the passcode you set on the server.</p>
-    ${S.code ? `<div class="team" style="cursor:default"><b>Connected</b><div class="dt">${lastError ? '⚠ ' + lastError : last ? 'last synced ' + new Date(last).toLocaleString('nl-NL') : 'not synced yet'}${busy ? ' · syncing…' : ''}</div></div>
+    ${S.code ? `<div class="team" style="cursor:default"><b>Connected</b><div class="dt">${esc0(syncLine())}</div></div>
       <div class="acts"><button onclick="Sync.syncNow()">Sync now</button><button onclick="Sync.disconnect()">Sign out on this device</button></div>`
     : `<div class="add"><input id="synccode" type="password" placeholder="passcode" autocomplete="current-password"><button onclick="Sync.connect(document.getElementById('synccode').value)">Connect</button></div>${lastError ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}
     <p class="dim" style="font-size:12px;margin-top:10px">Local storage stays the working copy, so the app keeps working offline. Changes are pushed a moment after you make them and pulled when you open the app.</p></div>`;
@@ -366,9 +401,8 @@ async function importPasscode() {              // one-time: the passcode era's r
 function copyId(btn) { const id = (window.Auth && Auth.userId()) || ''; if (!id) return; navigator.clipboard && navigator.clipboard.writeText(id).then(() => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } }).catch(() => {}); }
 async function init() {
   if (await detect() && !clerkMode() && S.code) {
-    try { await pull(); dirty.add('scans'); dirty.add('roster'); dirty.add('battles'); await flush(); }   // push too: edits made while the server was unreachable
-    catch (e) { lastError = e.message; }
-    paint(); if (window.Planner) Planner.renderToday();
+    await resync();                             // push too: edits made while the server was unreachable
+    if (window.Planner) Planner.renderToday();
   } else if (dirty.size && signedIn()) flush();  // edits queued before this load (dirty is persisted)
 }
 window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
@@ -376,14 +410,19 @@ window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect,
                visionAvailable: () => !!(health && health.vision && signedIn() && isPro()), visionOffered: () => !!(health && health.vision && signedIn() && !isPro()),
                coachOffered: () => !!(health && health.coach && signedIn() && !isPro())};   // the server has the AI, this account has not unlocked it yet
 window.addEventListener('load', () => setTimeout(init, 300));
-window.addEventListener('online', async () => { if (!signedIn()) return; if (available === false) await detect(); flush(); });
+window.addEventListener('online', async () => { if (!signedIn()) return; if (available === false) await detect(); if (lastError || dirty.size) resync(); else paint(); });
 // the server may gain the coach (or sync) after a redeploy: re-read /api/health when the app comes back to the foreground
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible') return;
-  if (available !== false && Date.now() - detectedAt < 120e3) { if (dirty.size && signedIn()) flush(); return; }
-  const before = JSON.stringify(health);
-  await detect();
-  if (JSON.stringify(health) !== before && window.Planner) Planner.renderToday();
-  if (dirty.size && signedIn()) flush();        // offline edits go out as soon as the app is visible and the server reachable
+  if (!(available !== false && Date.now() - detectedAt < 120e3)) {
+    const before = JSON.stringify(health);
+    await detect();
+    if (JSON.stringify(health) !== before && window.Planner) Planner.renderToday();
+  }
+  if (!signedIn()) return;
+  // back in the app: an old error or a sync more than 2 minutes ago means pull and push now (quietly retried), else just push
+  if (lastError || Date.now() - (S.syncedAt || 0) > 120e3) { lastError = ''; retryN = 0; await resync(); }
+  else if (dirty.size) flush();
 });
+window.addEventListener('offline', () => paint());
 })();
