@@ -833,8 +833,21 @@ function renderLog(){
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
 function showErr(msg){ if(!CARD_FILM){ const pr=$('prog'); if(pr) pr.style.display='flex'; } status('⚠ '+msg); pballState('err'); console.error(msg); }
-window.addEventListener('error', e=>showErr((e.error&&e.error.message)||e.message||'script error'));
-window.addEventListener('unhandledrejection', e=>showErr('import failed: '+((e.reason&&e.reason.message)||e.reason)));
+/* Global handlers: show the error, and report a trimmed copy to the server (rate-limited there; no image data, no ids).
+   A rejection is only labelled "import failed" while an import is actually running — sync and coach failures keep their own message. */
+let reported=0;
+function reportErr(msg, stack){
+  if(reported>=5 || !navigator.onLine) return; reported++;   // at most 5 per page load
+  try { fetch('/api/client-error', {method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({message:String(msg||'').slice(0,300), stack:String(stack||'').slice(0,1200), url:location.hash.slice(0,200), version:(document.querySelector('.sub')||{}).textContent||''})}).catch(()=>{}); } catch {}
+}
+window.addEventListener('error', e=>{ const m=(e.error&&e.error.message)||e.message||'script error'; showErr(m); reportErr(m, e.error&&e.error.stack); });
+window.addEventListener('unhandledrejection', e=>{
+  const m=(e.reason&&e.reason.message)||String(e.reason||'unexpected error');
+  const busy=typeof IMPORTING!=='undefined'&&IMPORTING;      // only an active import gets the import label
+  showErr(busy?'import failed: '+m:m);
+  reportErr(m, e.reason&&e.reason.stack);
+});
 const results=JSON.parse(localStorage.getItem('scans')||'[]').filter(r=>r&&typeof r.species==='string'); results.forEach(r=>{ if(!Array.isArray(r.combos)) r.combos=[]; });
 function migrateScans(){                          // v9.22 and earlier filled a lone charged move up with PvPoke's default; drop that guess when the unlock state was never seen
   if(!APP || localStorage.getItem('mig-moves')==='1') return;

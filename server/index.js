@@ -77,11 +77,13 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     if (plan !== 'pro') return reply.code(403).send({ error: 'upgrade_required', message: 'This is a PokeScan Pro feature.' });
   };
 
-  app.get('/api/health', async () => {
+  app.get('/api/health', async (req, reply) => {
     let dbOk = false;
     try { dbOk = await db.ping(); } catch { dbOk = false; }
-    return { ok: true, db: dbOk, storage: db.kind, sync: authMode !== 'none', auth: authMode, ...(authMode === 'clerk' && clerkPublishableKey ? { clerkPublishableKey } : {}),
-             ...(authMode === 'clerk' && passcode ? { passcodeData: true } : {}), coach: !!coach, vision: !!vision, sources: true, version: VERSION };
+    const body = { ok: dbOk, db: dbOk, storage: db.kind, sync: authMode !== 'none', auth: authMode, ...(authMode === 'clerk' && clerkPublishableKey ? { clerkPublishableKey } : {}),
+                   ...(authMode === 'clerk' && passcode ? { passcodeData: true } : {}), coach: !!coach, vision: !!vision, sources: true, version: VERSION };
+    if (!dbOk) { req.log.error({ evt: 'health', db: false }, 'health: database ping failed'); return reply.code(503).send(body); }   // 503: the uptime monitor and Railway's healthcheck both notice
+    return body;
   });
   // One-time import of the passcode era's rows into a signed-in account: the passcode proves ownership of that data.
   // Only kinds the account does not have yet move over, so it never overwrites what the account already synced.
@@ -100,7 +102,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   // Public schedule (Leek Duck via ScrapedDuck, event pages enriched server-side). No passcode: nothing personal in it.
   app.get('/api/sources', async (req, reply) => {
     try { const data = await sources.current(); reply.header('cache-control', 'public, max-age=600'); return data; }
-    catch (e) { req.log.error(e); return reply.code(502).send({ error: 'sources_unavailable', message: e.message }); }
+    catch (e) { req.log.error({ evt: 'sources', errClass: e.constructor.name, err: e.message }, 'sources refresh failed'); return reply.code(502).send({ error: 'sources_unavailable', message: e.message }); }
   });
   // AI coach: the browser sends a compact roster/meta summary, the server asks Claude. Passcode-protected and rate-limited,
   // because every call costs money on the server owner's API key.
@@ -132,7 +134,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     coach({ context, mode }).then(out => {
       if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to answer' });
       else Object.assign(job, { status: 'done', text: out.text, model: out.model, usage: out.usage });
-    }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the coach did not answer' }); });
+    }, e => { req.log.error({ evt: 'ai_job', action: mode === 'battle' ? 'coach_battle' : 'coach_review', userId: req.userId, errClass: e.constructor.name, err: e.message }, 'coach job failed'); Object.assign(job, { status: 'error', error: e.message || 'the coach did not answer' }); });
     return reply.code(202).send({ jobId: id, status: 'running' });
   });
   // Share anything: a screenshot the on-device reader could not place goes to the model, which says what it is and what it shows.
@@ -164,7 +166,7 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     vision({ image: body.image, mediaType, images, hint: typeof body.hint === 'string' ? body.hint : '' }).then(out => {
       if (out.refused) Object.assign(job, { status: 'error', error: 'the model declined to read this screenshot' });
       else Object.assign(job, { status: 'done', data: out.data, model: out.model, usage: out.usage });
-    }, e => { req.log.error(e); Object.assign(job, { status: 'error', error: e.message || 'the screenshot could not be read' }); });
+    }, e => { req.log.error({ evt: 'ai_job', action: 'vision', userId: req.userId, frames: images ? images.length : 1, errClass: e.constructor.name, err: e.message }, 'vision job failed'); Object.assign(job, { status: 'error', error: e.message || 'the screenshot could not be read' }); });
     return reply.code(202).send({ jobId: id, status: 'running' });
   });
   app.get('/api/jobs/:id', { preHandler: auth }, async (req, reply) => {
@@ -212,7 +214,10 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     return null;
   };
   app.post('/api/stripe/webhook', async (req, reply) => {
-    if (!stripeSignatureOk(req.rawBody || '', req.headers['stripe-signature'])) return reply.code(400).send({ error: 'bad_signature' });
+    if (!stripeSignatureOk(req.rawBody || '', req.headers['stripe-signature'])) {
+      req.log.warn({ evt: 'webhook', src: 'stripe', err: 'bad_signature', hasHeader: !!req.headers['stripe-signature'] }, 'stripe webhook refused');
+      return reply.code(400).send({ error: 'bad_signature' });
+    }
     const ev = req.body || {}, o = (ev.data && ev.data.object) || {};
     if (ev.id && db.seenEvent && await db.seenEvent(ev.id, ev.type)) { req.log.info(`stripe: duplicate ${ev.id} (${ev.type}) skipped`); return { received: true }; }
     if (ev.type === 'checkout.session.completed' && o.client_reference_id && (o.payment_status === 'paid' || o.status === 'complete')) {
@@ -244,6 +249,19 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
     }
     return { received: true };
   });
+  // Browser crashes, without Sentry: the app's global error handlers POST a trimmed message here; we only log it.
+  // Public but tightly rate-limited per IP; no cookies, no user id, nothing echoed back.
+  const clientErrs = new Map();
+  app.post('/api/client-error', async (req, reply) => {
+    const now2 = Date.now(), seen = (clientErrs.get(req.ip) || []).filter(t => t >= now2 - 3600e3);
+    if (seen.length >= 20) return reply.code(429).send({ ok: false });
+    seen.push(now2); clientErrs.set(req.ip, seen);
+    if (clientErrs.size > 5000) clientErrs.clear();                      // bounded either way
+    const b = req.body || {};
+    req.log.warn({ evt: 'client_error', msg: String(b.message || '').slice(0, 300), stack: String(b.stack || '').slice(0, 1200), url: String(b.url || '').slice(0, 200), version: String(b.version || '').slice(0, 20) }, 'browser error');
+    return { ok: true };
+  });
+
   app.get('/api/state', { preHandler: auth }, async req => ({ user: req.userId, state: await db.all(req.userId) }));
   app.get('/api/state/:kind', { preHandler: auth }, async (req, reply) => {
     if (!KINDS.has(req.params.kind)) return reply.code(404).send({ error: 'unknown_kind' });

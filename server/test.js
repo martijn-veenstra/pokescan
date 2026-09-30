@@ -404,3 +404,23 @@ console.log('accounts-mode tests passed');
   }
   console.log('compare-and-set tests passed');
 }
+
+// /api/health answers 503 when the database ping fails, so the uptime monitor and Railway's healthcheck notice
+{
+  const sick = await buildServer({ passcode: 'x', logger: false, coach: null, sourcesFetch: async () => ({ ok: false, status: 404, text: async () => '', json: async () => ({}) }) });
+  sick.db.ping = async () => { throw new Error('connection refused'); };
+  let r = await sick.inject({ method: 'GET', url: '/api/health' });
+  assert.equal(r.statusCode, 503, 'a failing db ping is a 503');
+  assert.equal(r.json().ok, false); assert.equal(r.json().db, false);
+  sick.db.ping = async () => true;
+  r = await sick.inject({ method: 'GET', url: '/api/health' });
+  assert.equal(r.statusCode, 200, 'healthy again');
+
+  // /api/client-error: logs and rate-limits, never echoes anything back
+  r = await sick.inject({ method: 'POST', url: '/api/client-error', payload: { message: 'x is not a function', stack: 'at boom (app.js:1)', url: '#/scans', version: 'v10.38' } });
+  assert.equal(r.statusCode, 200); assert.deepEqual(r.json(), { ok: true });
+  for (let i = 0; i < 20; i++) r = await sick.inject({ method: 'POST', url: '/api/client-error', payload: { message: 'again' } });
+  assert.equal(r.statusCode, 429, 'per-IP rate limit');
+  await sick.close();
+  console.log('health-503 and client-error tests passed');
+}

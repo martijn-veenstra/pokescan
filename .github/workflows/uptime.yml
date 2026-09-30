@@ -1,0 +1,26 @@
+name: Uptime check
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every ~10 minutes (GitHub may add a few minutes of jitter)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check /api/health
+        env:
+          APP_URL: ${{ vars.APP_URL || 'https://pokescan-production.up.railway.app' }}
+        run: |
+          # /api/health answers 503 when the database is down, so curl -f fails on both a dead app and a dead db.
+          # Two attempts a minute apart: one blip never emails, a real outage does (GitHub notifies on workflow failure).
+          for attempt in 1 2; do
+            if out=$(curl -sf --max-time 15 "$APP_URL/api/health"); then
+              echo "healthy: $out"
+              exit 0
+            fi
+            [ "$attempt" -lt 2 ] && sleep 60
+          done
+          echo "::error::$APP_URL/api/health is down (two attempts, one minute apart)"
+          exit 1
