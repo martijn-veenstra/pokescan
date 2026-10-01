@@ -15,11 +15,11 @@ def sub(path, pattern, repl, count=0):
     p.write_text(n); return k
 k = sub("index.html", r"\?v=" + re.escape(old) + r"\b", f"?v={new}")
 sub("index.html", r"· v" + re.escape(old) + r"</div>", f"· v{new}</div>")
-sub("scanner.js", r"const APP_VERSION='" + re.escape(old) + "'", f"const APP_VERSION='{new}'")
-sub("sw.js", r"const VERSION = 'pokescan-v" + re.escape(old) + "'", f"const VERSION = 'pokescan-v{new}'")
+sub("scanner.js", r"const APP_VERSION='\d+\.\d+'", f"const APP_VERSION='{new}'")   # whatever it says: a missed bump must not stop the next one
+sub("sw.js", r"const VERSION = 'pokescan-v\d+\.\d+'", f"const VERSION = 'pokescan-v{new}'")
 pkg["version"] = new + ".0"
 (ROOT / "package.json").write_text(json.dumps(pkg, indent=2) + "\n")
 lock = ROOT / "package-lock.json"
 if lock.exists():
-    sub("package-lock.json", r'"version": "' + re.escape(old) + r'\.0"', f'"version": "{new}.0"', count=2)
+    sub("package-lock.json", r'"version": "\d+\.\d+\.0"', f'"version": "{new}.0"', count=2)
 print(f"{old} → {new} ({k} script tags)")

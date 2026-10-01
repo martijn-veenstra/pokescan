@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.38';
+const APP_VERSION='10.40';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -343,6 +343,10 @@ async function scanFrame(ctx, W, H, trainer){
     out.hp=parseHp(t2); if(t2.length>flat.length*0.6) flat=t2+' '+flat;
   }
   m=flat.match(/CP\s*(\d{2,4})/i); if(m) out.cpCandidates.push(parseInt(m[1]));
+  { // weight and height ("40,33kg", "0,81m"): they differ per Pokémon and stay the same over power-ups, so they tell copies apart
+    const wm=flat.match(/(\d{1,4})\s*[.,]\s*(\d{1,2})\s*kg/i), hm=flat.match(/\b(\d{1,2})\s*[.,]\s*(\d{1,2})\s*m\b/i);
+    if(wm) out.wt=parseFloat(wm[1]+'.'+wm[2]); if(hm) out.ht=parseFloat(hm[1]+'.'+hm[2]);
+  }
   out.hints=[];
   const words=flat.toUpperCase().match(/[A-Z]{3,}/g)||[];
   const candy=new Set(), mega=new Set(); words.forEach((w,i)=>{ if(DATA.stats[w] && /^CANDY|^SNOEP/.test(words[i+1]||'')) candy.add(w); if(DATA.stats[w] && /^MEGA/.test(words[i+1]||'')) mega.add(w); });
@@ -622,8 +626,23 @@ function applyVisionScan(p){                      // returns {key, what} or null
    video frame) asks sameCopy() before creating a card, so the pieces land on one card. A power-up changes CP and HP, so it
    makes a new card and archives the old one (onNewScan in planner.js recognises the IV overlap). Two copies of one species
    with identical CP and HP are treated as one card; that is the one case we cannot tell apart from a screenshot. */
-function sameCopy(species, cp, hp, skipKey){
-  const live=results.filter(x=>!x.superseded && x.species===species);
+/* bodyCmp(a,b): weight and height of two cards. 'diff' when a value both have differs (two copies), 'same' when the ones both
+   have agree, null when there is nothing to compare (a card scanned before weights were read, an appraisal or attacks screen). */
+function bodyCmp(a, b){
+  if(!a||!b) return null; let n=0;
+  for(const f of ['wt','ht']){ if(a[f]==null||b[f]==null) continue; if(Math.abs(a[f]-b[f])>0.005) return 'diff'; n++; }
+  return n?'same':null;
+}
+function fillBody(card, s){ if(!card||!s) return; if(card.wt==null&&s.wt!=null) card.wt=s.wt; if(card.ht==null&&s.ht!=null) card.ht=s.ht; }
+let IMP=null;                                       // the running import: its start time marks the cards it made or touched
+const IMP_RANK={new:3, updated:2, known:1};
+function markImp(card, kind){                       // new beats updated beats already-known within one import
+  if(!IMP||!card) return;
+  if(card.impAt===IMP.at && (IMP_RANK[card.impKind]||0)>=IMP_RANK[kind]) return;
+  card.impAt=IMP.at; card.impKind=kind;
+}
+function sameCopy(species, cp, hp, skipKey, body){
+  const live=results.filter(x=>!x.superseded && x.species===species && bodyCmp(x, body)!=='diff');   // a different weight or height is another copy
   if(skipKey){ const prev=live.find(x=>x.key===skipKey); if(prev && (!cp||prev.cp===cp||!prev.cp) && (!hp||!prev.hp||prev.hp===hp)) return prev; }
   if(cp){ const m=live.filter(x=>x.cp===cp && (!hp||!x.hp||x.hp===hp)); if(m.length) return m[0]; }
   if(hp){ const digits=String(cp||''), m=live.filter(x=>x.hp===hp && x.cp && (!digits||String(x.cp).includes(digits)));   // CP lost a digit?
@@ -632,8 +651,9 @@ function sameCopy(species, cp, hp, skipKey){
 }
 function dedupeScans(){                          // fold cards that describe the same physical Pokémon into one; returns how many were folded
   const live=results.filter(x=>!x.superseded && x.cp && x.hp), seen=new Map(); let n=0;
-  for(const r of live){ const k=`${r.species}|${r.cp}|${r.hp}`; const first=seen.get(k); if(!first){ seen.set(k,r); continue; }
-    mergeScan(first, r); results.splice(results.indexOf(r),1); n++; }
+  for(const r of live){ const k=`${r.species}|${r.cp}|${r.hp}`, firsts=seen.get(k)||[], first=firsts.find(f=>bodyCmp(f,r)!=='diff');
+    if(!first){ firsts.push(r); seen.set(k,firsts); continue; }   // same CP and HP but another weight or height: a second copy, kept
+    fillBody(first, r); mergeScan(first, r); results.splice(results.indexOf(r),1); n++; }
   if(n){ save(); render(); if(window.Planner) Planner.markDirty(); }
   return n;
 }
@@ -891,6 +911,7 @@ async function runImportInner(files){
   CANCEL=false; EVT=[]; progBox(true); progress(0); renderEvents();
   status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
   let ok=0, batchKey=null; const before=results.length;
+  IMP={at:Date.now()}; try{ localStorage.setItem('lastImportAt', String(IMP.at)); }catch(e){}   // the new/updated chips are for this import
   UPDATE=window.Planner&&Planner.updateKey?Planner.updateKey():null; if(UPDATE) batchKey=UPDATE;
   if(window.Planner) Planner.beforeImport();
   for(const f of files){
@@ -916,10 +937,13 @@ async function runImportInner(files){
   const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
   if(CANCEL) status(`Stopped · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
-  else { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):''; status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new${hint?' · '+hint:''}`); }
+  else { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):'';
+    const by=k=>results.filter(r=>r.impAt===IMP.at&&r.impKind===k).length, nw=by('new'), up=by('updated'), kn=by('known');
+    const what=[`${nw} new`, up?`${up} updated`:'', kn?`${kn} already in your roster`:''].filter(Boolean).join(' · ');
+    status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${what}${hint?' · '+hint:''}`); }
   progress(1); pballState(CANCEL?'err':ok?'done':'err');   // the ball stops shaking: caught (stars) or not
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
-  CANCEL=false;
+  CANCEL=false; IMP=null; save();
   setTimeout(endCard,2500);
 }
 $('trainer').value=localStorage.getItem('trainer')||'40';
@@ -1296,17 +1320,22 @@ async function handleScan(ctx,W,H,trainer,skipKey){
     if(target){
       const tid=pvpokeIdFor(target.species,(DATA.stats[target.species]||[])[0]), evos=tid?evosOf(tid).map(x=>x.split('_')[0].toUpperCase()):[];
       const sameFam=target.species===s.species||evos.includes(s.species);
-      if(sameFam && updateCard(target,s,mvSeen)){ UPDATE=target.key; note(`${seen(s)} → updated the ${target.species} card`); return target.key; }
+      if(sameFam && updateCard(target,s,mvSeen)){ fillBody(target,s); markImp(target,'updated'); UPDATE=target.key; note(`${seen(s)} → updated the ${target.species} card`); return target.key; }
       note(sameFam?`${seen(s)} does not share IVs with the ${target.species} ${target.cp} CP card: kept as a separate copy`:`${seen(s)} is not a ${target.species}: kept as a separate card`);
     }
   }
-  const key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
-  const dup=results.find(r=>r.key===key);
-  if(dup){ dup.seenAt=Date.now(); save(); if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
+  let key=`${s.species}|${s.cp}|${s.hp}|${s.level??''}|${s.dust??''}`;
+  const dup=results.find(r=>r.key===key && bodyCmp(r,s)!=='diff');
+  if(!dup && results.some(r=>r.key===key)) key+=`|${s.wt??''}|${s.ht??''}`;   // a second copy with the same CP and HP: its own key
+  if(dup){ fillBody(dup,s); markImp(dup,'known'); dup.seenAt=Date.now(); save(); if(mvSeen&&applyMoves(dup,mvSeen)){ save(); render(); gain('moves',dup.species); if(window.Planner) Planner.onMovesScan(dup); status(`${s.species}: moves updated`); } note(`${seen(s)} → already have it`); return key; }   // dedupe
   if(key===skipKey) return key;
-  const same=sameCopy(s.species, s.cp, s.hp);   // the same physical Pokémon already has a card (its appraisal card, or an earlier scan)
-  if(same){ same.seenAt=Date.now(); save(); if(mvSeen&&applyMoves(same,mvSeen)){ save(); render(); gain('moves',same.species); if(window.Planner) Planner.onMovesScan(same); } note(`${seen(s)} → same copy as the ${same.cp} CP card`); return same.key; }
-  s.key=key; if(mvSeen) applyMoves(s,mvSeen);
+  const same=sameCopy(s.species, s.cp, s.hp, null, s);   // the same physical Pokémon already has a card (its appraisal card, or an earlier scan)
+  if(same){ fillBody(same,s); markImp(same,'known'); same.seenAt=Date.now(); save(); if(mvSeen&&applyMoves(same,mvSeen)){ save(); render(); gain('moves',same.species); if(window.Planner) Planner.onMovesScan(same); } note(`${seen(s)} → same copy as the ${same.cp} CP card`); return same.key; }
+  { // the same weight and height with another CP: this card powered up (the IVs must still fit); update it instead of a new card
+    const grown=results.find(r=>!r.superseded && r.species===s.species && r.wt!=null && r.ht!=null && s.wt!=null && s.ht!=null && bodyCmp(r,s)==='same' && (r.cp!==s.cp || r.hp!==s.hp));
+    if(grown && s.combos.length && updateCard(grown,s,mvSeen)){ markImp(grown,'updated'); note(`${seen(s)} → same weight and height: updated the ${grown.species} card`); return grown.key; }
+  }
+  s.key=key; if(mvSeen) applyMoves(s,mvSeen); markImp(s,'new');
   { const ks=apKeys(s.species,s.cp,s.hp), hit=ks.find(k=>APPR[k]);
     if(hit){ const ivs=APPR[hit]; ks.forEach(k=>delete APPR[k]); applyAppraisal(s,ivs); apKeys(s.species,s.cp,s.hp).forEach(k=>delete APPR[k]); saveAppr(); } }
   s.seenAt=Date.now(); results.unshift(s); if(window.Planner) Planner.onNewScan(s); save(); render(); gain('new',s); note(`${seen(s)} → new card`);
@@ -1398,7 +1427,9 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
     else if(gl.lv>40) status=`<span class="chip warn">needs L${gl.lv} · XL candy</span>`;
     else if(gl.lv>best[0]){ const c=costTo(best[0],gl.lv); status=`<span class="chip ul">→ L${gl.lv} · ${c.dust>=1000?(c.dust/1000).toFixed(c.dust%1000?1:0)+'k':c.dust} dust · ${c.candy} candy</span>`; }
     else status=`<span class="chip meta1">ready for ${LEAGUE.abbr}</span>`; }
-  const tags=[r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
+  const lastImp=(()=>{ try{ return Number(localStorage.getItem('lastImportAt'))||0; }catch(e){ return 0; } })();
+  const tags=[r.impAt&&r.impAt===lastImp&&r.impKind==='new'?'<span class="chip impnew">new</span>':'', r.impAt&&r.impAt===lastImp&&r.impKind==='updated'?'<span class="chip impup">updated</span>':'',
+    r.superseded?'<span class="chip">archived</span>':'', r.bench?'<span class="chip">benched</span>':'',
     r.shadow?'<span class="chip ul">shadow</span>':'',
     r.cpInferred?'<span class="chip warn" title="the CP was not read completely; it was inferred from HP, level and IVs">CP inferred</span>':'',
     (!r.moves||!r.moves.length)&&!r.superseded&&r.combos.length&&!(ex&&ex.movesSaid)?'<span class="chip" title="no attacks screenshot yet; the planner falls back to the recommended moveset without showing it as fact">moves not read</span>':'',
@@ -1408,7 +1439,7 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
   const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
   return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan('${r.key.replace(/'/g,'')}')`}">${lineageBanner(r)}
     <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon((Planner.scanId(r)||{}).id,'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
-      <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
+      <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${r.wt!=null&&results.some(x=>x!==r&&!x.superseded&&x.species===r.species&&x.cp===r.cp)?` · ${r.wt.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})} kg`:''}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
     <div class="ivrow">
       <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>
       <span><small>IV%</small><b class="pctc">${ivpct}</b></span>

@@ -2439,6 +2439,8 @@ function scanSection(m, r) {
     rows.push([alt ? `Best moves <span class="dim">${esc(alt.title)}</span>` : 'Best moves', !known ? esc(rec.map(mvName).join(' · ')) : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> ${esc(rec.map(mvName).join(' · '))}`]);
   }
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> appraisal' : 'CP & HP'}${r.cpInferred ? ' · CP from appraisal' : ''}`]);
+  if (r.wt != null || r.ht != null) { const nl = (v, d) => v.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d});   // as the game shows it: tells two copies apart
+    rows.push(['Size', `${r.wt != null ? nl(r.wt, 2) + ' kg' : ''}${r.wt != null && r.ht != null ? ' · ' : ''}${r.ht != null ? nl(r.ht, 2) + ' m' : ''}`]); }
   const nk = nickFor(r);
   if (nk) { const np = nickPrefs(), sty = (NICK_STYLES.find(x => x[0] === np.style) || NICK_STYLES[0])[0];
     rows.push(['Nickname', `<span class="nickrow"><span class="nick">${esc(nk)}</span><button class="copy" onclick="Planner.copyText(${attr(nk)},this)">Copy</button></span>

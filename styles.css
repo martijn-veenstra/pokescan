@@ -617,3 +617,5 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .nickrow .copy{background:transparent;border:1px solid rgba(72,213,151,.55);color:var(--green);border-radius:9px;padding:4px 10px;font-weight:600;font-size:12.5px}
 .nicksel,.nicktpl{display:block;width:100%;margin-top:6px;padding:7px 9px;background:#0E1626;border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px}
 .yourscans .dt a{color:var(--green);text-decoration:none;font-weight:600}
+/* cards the last import made or updated */
+.chip.impnew{background:rgba(72,213,151,.16);color:#7FE3B6}.chip.impup{background:rgba(91,141,239,.16);color:#9DBCF7}
