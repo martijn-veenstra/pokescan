@@ -8,7 +8,7 @@ test('the matrix drives roles, threat counts and the Game plan page', async ({ p
   await expect(page.locator('#builder .hero')).toContainText(/Beaten by \d+ of the common Pokémon|No common Pokémon beats all three of yours/);
   await page.evaluate(() => Planner.nav('#/matchups'));
   await expect(page.locator('#matchups')).toContainText('Simulated battles for');
-  await expect(page.locator('#matchups .tchips .chip.ok')).toContainText('Builder');
+  await expect(page.locator('#matchups .gphead b')).toHaveText('Builder');
   // their leads, each with one piece of advice; a row opens the three shield scenarios
   await expect(page.locator('#matchups .gpl .ga b').first()).toHaveText(/Stay in|Stay, shield once|Swap to|Nobody wins/);
   await page.locator('#matchups .gpl:has-text("Tinkaton")').click();

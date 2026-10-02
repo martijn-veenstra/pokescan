@@ -16,7 +16,9 @@ test('Game plan: meta rank, leads, record and the teams you met, from the battle
   const errors = await openApp(page, '#/matchups');
   await expect(page.locator('#view-matchups .ptitle')).toContainText('Game plan');
   // the most played party is picked first
-  await expect(page.locator('#matchups .tchips .chip.ok')).toContainText('Rain');
+  await expect(page.locator('#matchups .gphead b')).toHaveText('Rain');
+  await expect(page.locator('#matchups .gphead')).toContainText('played 0–2');
+  await expect(page.locator('#matchups .tchips')).toHaveCount(0);
   // 1. against the meta: a score and a rank among the meta teams
   await expect(page.locator('#matchups .hero')).toContainText(/#\d+ of \d+/);
   const [n, of] = (await page.locator('#matchups .gprk b').textContent()).match(/\d+/g).map(Number);
@@ -44,8 +46,23 @@ test('Game plan: meta rank, leads, record and the teams you met, from the battle
   await expect(page.locator('#matchups .gpm:has-text("other team")')).toHaveCount(1);
   // switching team from the ranking
   await page.locator('#matchups .gpt:has-text("Steel")').click();
-  await expect(page.locator('#matchups .tchips .chip.ok')).toContainText('Steel');
+  await expect(page.locator('#matchups .gphead b')).toHaveText('Steel');
   await expect(page.locator('#matchups')).toContainText(/vs Tinkaton lead 1–0/);
+  // the chooser: a sheet with your teams, the Builder and the meta teams; picking one closes it
+  await page.locator('#matchups .gphead .gpchg').click();
+  await expect(page.locator('#sheet.open')).toContainText('Choose a team');
+  await expect(page.locator('#sheet .prow.on')).toContainText('Steel');
+  await expect(page.locator('#sheet')).toContainText('Open the Builder');
+  await expect(page.locator('#sheet .prow:has-text("Meta team #")')).toHaveCount(8);
+  await page.locator('#sheet .prow:has-text("Rain")').click();
+  await expect(page.locator('#sheet')).not.toHaveClass(/open/);
+  await expect(page.locator('#matchups .gphead b')).toHaveText('Rain');
+  // a meta team to compare: it joins the ranking against the teams you met
+  await page.locator('#matchups .gphead').click();
+  await page.locator('#sheet .prow:has-text("Meta team #1")').click();
+  await expect(page.locator('#matchups .gphead b')).toHaveText('Meta team #1');
+  await expect(page.locator('#matchups .gpt')).toHaveCount(3);
+  await expect(page.locator('#matchups')).toContainText('No battles logged with this team yet');
   expect(errors).toEqual([]);
 });
 
@@ -59,7 +76,7 @@ test('Game plan: no battles logged, and a party member the cup does not allow', 
   await page.evaluate(() => Planner.setLeague('colormega-1500'));
   await expect.poll(() => page.evaluate(() => APP.league.slug)).toBe('colormega-1500');
   await page.evaluate(() => Planner.nav('#/matchups'));
-  await expect(page.locator('#matchups')).toContainText(/not allowed in/);
+  await expect(page.locator('#matchups')).toContainText(/Medicham and Altaria aren.t allowed in Mega Color Cup/);
   await expect(page.locator('#matchups')).not.toContainText('hit an error');
   await expect(page.locator('#matchups .hero')).toContainText(/Beats \d+ of \d+/);
   expect(errors).toEqual([]);

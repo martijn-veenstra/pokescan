@@ -2018,6 +2018,37 @@ function trioVsTrio(L, mine, theirs) {           // the average 1-1 rating over 
   return n ? s / n : 500;
 }
 const simCall = v => v >= 520 ? {t: 'favoured', c: 'ok'} : v < 480 ? {t: 'unfavoured', c: 'warn'} : {t: 'even', c: ''};
+function gpCurrent(teams) {                     // the chosen team: a saved party, the Builder, or a meta team picked to compare with
+  const mt = /^meta:(\d+)$/.exec(MU.team || ''), t = mt && (APP.metaTeams || [])[+mt[1]];
+  if (t) return {key: MU.team, label: `Meta team #${+mt[1] + 1}`, ids: t.members.slice(0, 3), n: 0, meta: true};
+  return teams.find(x => x.key === MU.team && x.ids.length) || teams.find(x => x.ids.length) || teams[teams.length - 1];
+}
+function gpFacts(L, t, st) {                      // "played 2–1 · score 505" for a team row
+  const u = t.ids.filter(id => L.pokemon[id]), rec = st.teams.find(x => teamKey(x.ids) === teamKey(t.ids)), out = [];
+  if (rec && rec.w + rec.l) out.push(`played ${rec.w}–${rec.l}`);
+  if (u.length) out.push(`score ${L.evaluate(u).score.toFixed(0)}`);
+  if (u.length < t.ids.length) out.push(`${t.ids.length - u.length} not allowed here`);
+  return out.join(' · ');
+}
+function gpHead(L, cur, st) {                     // the chosen team as one card; tapping it opens the team chooser
+  const ids = cur.ids, out = ids.filter(id => !L.pokemon[id]);
+  if (!ids.length) return `<div class="gphead" onclick="Planner.muPick()"><span class="tx"><b>${esc(cur.label)}</b><div class="dt">empty</div></span><span class="gpchg">Choose team</span></div>`;
+  return `<div class="gphead" onclick="Planner.muPick()"><span class="trio">${ids.map(id => icon(id, 'm' + (L.pokemon[id] ? '' : ' nt'))).join('')}</span>
+    <span class="tx"><b>${esc(cur.label)}</b><div class="dt">${esc(ids.map(gpName).join(' · '))}</div><div class="dt">${esc(gpFacts(L, cur, st))}</div></span><span class="gpchg">Change</span></div>` +
+    (out.length ? `<div class="note">${esc(out.map(gpName).join(' and '))} ${out.length === 1 ? "isn't" : "aren't"} allowed in ${esc(LEAGUE.title)}${out.length < ids.length ? `: the plan below uses the other ${ids.length - out.length === 1 ? 'one' : ids.length - out.length}` : ''}.</div>` : '') +
+    (ids.some(id => L.pokemon[id] && !APP.pokemon[id]) ? `<div class="note">${esc(ids.filter(id => L.pokemon[id] && !APP.pokemon[id]).map(nm).join(' and '))}: not ranked here, estimated from types.</div>` : '');
+}
+function muPick() {                               // the team chooser: your parties, the Builder, and the meta teams to compare with
+  const m = M(), st = battleStats(LEAGUE.slug), teams = gpTeams(st), metas = (APP.metaTeams || []).slice(0, 8);
+  const L = builderLeague(m, teams.flatMap(t => t.ids)), cur = gpCurrent(teams);
+  const row = t => `<div class="prow ${t.key === cur.key ? 'on' : ''}" onclick="Planner.muTeam(${attr(t.key)});Planner.closeSheet()">${t.ids.length ? `<span class="trio">${t.ids.map(id => icon(id, 's' + (L.pokemon[id] ? '' : ' nt'))).join('')}</span>` : ''}<span class="tx"><b>${esc(t.label)}</b><div class="dt">${t.ids.length ? esc(t.ids.map(gpName).join(' / ')) : 'empty: pick three in the Builder first'}</div>${t.ids.length ? `<div class="dt">${esc(gpFacts(L, t, st))}</div>` : ''}</span>${t.key === cur.key ? '<span class="tick">✓</span>' : ''}</div>`;
+  const saved = teams.filter(t => t.key !== 'builder'), b = teams.find(t => t.key === 'builder');
+  $('sheet').innerHTML = `<div class="box"><h2><span>Choose a team</span><span class="x" onclick="Planner.closeSheet()">✕</span></h2>
+    <div class="uh">Your teams</div><div class="plist">${saved.length ? saved.map(row).join('') : '<div class="dt">No saved teams yet: build one and save it in the Builder.</div>'}</div>
+    <div class="uh" style="margin-top:12px">Builder</div><div class="plist">${b.ids.length ? row(b) : `<div class="prow" onclick="Planner.closeSheet();Planner.nav('#/builder')"><span class="tx"><b>Open the Builder</b><div class="dt">try any three Pokémon, then come back here</div></span></div>`}</div>
+    ${metas.length ? `<div class="uh" style="margin-top:12px">Meta teams <small class="dim">to compare against what you meet</small></div><div class="plist">${metas.map((t, i) => row({key: 'meta:' + i, label: `Meta team #${i + 1}`, ids: t.members.slice(0, 3)})).join('')}</div>` : ''}</div>`;
+  $('sheet').classList.add('open');
+}
 function renderMatchups() {
   const el = $('matchups'); if (!el) return;
   try { el.innerHTML = matchupsInner(); } catch (e) { el.innerHTML = errorCard('Game plan', e); }
@@ -2026,14 +2057,10 @@ function matchupsInner() {
   if (!APP || !window.PVP) return '<div class="note">Loading battle data…</div>';
   const m = M(), st = battleStats(LEAGUE.slug), teams = gpTeams(st);
   const L = builderLeague(m, teams.flatMap(t => t.ids));
-  const cur = teams.find(t => t.key === MU.team && t.ids.length) || teams.find(t => t.ids.length) || teams[teams.length - 1];
-  let h = `<div class="tchips">${teams.map(t => `<span class="chip ${t === cur ? 'ok' : ''}" onclick="Planner.muTeam(${attr(t.key)})">${esc(t.label)}${t.n ? ` <span style="opacity:.7">${t.n}</span>` : ''}</span>`).join('')}</div>`;
+  const cur = gpCurrent(teams);
+  let h = gpHead(L, cur, st);
   if (!cur.ids.length) return h + `<div class="empty"><b>No team yet.</b><br>Fill the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a> or save an in-game party, then come back.</div>`;
-  const ids = cur.ids, use = ids.filter(id => L.pokemon[id]), out = ids.filter(id => !L.pokemon[id]);
-  h += `<div class="team" style="cursor:default"><div class="chips">${ids.map(id => L.pokemon[id]
-    ? `<span class="chip" onclick="Planner.openMon('${id}')" style="cursor:pointer">${icon(id, 'xs')}${esc(nm(id))} <span style="opacity:.7">${esc(L.movesOf(id).filter(Boolean).map(mvName).join(' · '))}${APP.pokemon[id] ? '' : ' · estimated from types'}</span></span>`
-    : `<span class="chip warn">${icon(id, 'xs')}${esc(gpName(id))} <span style="opacity:.7">not allowed in ${esc(LEAGUE.title)}</span></span>`).join('')}</div>
-    ${out.length ? `<div class="dt" style="margin-top:6px">${esc(out.map(gpName).join(' and '))} can't enter ${esc(LEAGUE.title)}: the plan below uses the other ${use.length === 1 ? 'one' : use.length}.</div>` : ''}</div>`;
+  const ids = cur.ids, use = ids.filter(id => L.pokemon[id]);
   if (!use.length) return h + `<div class="note">Nobody in this team can enter ${esc(LEAGUE.title)}. Pick another team or switch league.</div>`;
   h += gpMeta(m, L, use);
   if (use.length > 1) h += gpLeads(L, use, st);
@@ -2108,7 +2135,7 @@ function gpMet(L, cur, use, teams, st) {         // card 4: your teams against t
   let h = `<div class="sec">Against the teams you met <small>${met.length ? `${met.length} logged battle${met.length === 1 ? '' : 's'} with their team read` : 'from your battle log'}</small></div>`;
   if (!met.length) return h + `<div class="note">Share your end-of-battle screens in the <a href="#" onclick="Planner.nav('#/battles');return false">Battle log</a>: once their teams are logged, every team of yours is simulated against the teams you actually meet.</div>`;
   // every team of yours, simulated against those trios, next to what it really did
-  const rows = teams.map(t => { const u = t.ids.filter(id => L.pokemon[id]); if (!u.length) return null;
+  const rows = (cur.meta ? teams.concat([cur]) : teams).map(t => { const u = t.ids.filter(id => L.pokemon[id]); if (!u.length) return null;
     const rec = st.teams.find(x => teamKey(x.ids) === teamKey(t.ids)), wins = met.filter(x => trioVsTrio(L, u, x.opp) >= 500).length;
     return {t, wins, rec: rec && rec.w + rec.l ? `${rec.w}–${rec.l}` : null}; }).filter(Boolean).sort((a, b) => b.wins - a.wins);
   h += `<div class="team card" style="cursor:default"><div class="uh">Your teams against them</div>`;
@@ -3260,7 +3287,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
