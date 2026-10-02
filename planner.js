@@ -468,7 +468,7 @@ function renderTodayInner(el) {
   const pctBar = Math.max(4, Math.min(100, (best.teamScore - 300) / (bm.best - 300) * 100)), medPos = (bm.median - 300) / (bm.best - 300) * 100;
   h += `<div class="hero" onclick="Planner.openTeam(${attr(ids)},null)">
     <div class="sec" style="margin:0 0 10px">Run this team <small>best of ${rep.todayAll.length >= 12 ? '12+' : rep.todayAll.length} buildable · tap for details</small></div>
-    <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
+    <div class="roles">${rl.map(r => { const mv = L.movesOf(r.id); return `<div class="role"><span class="rl">${r.role}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${mvH(mv[0])} · ${mvH(mv[1])}</span></div>`; }).join('')}</div>
     <div class="scorebar"><span class="big">${best.teamScore.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
     <div class="dim" style="font-size:12px;margin-top:8px">${coverText({holes: best.unansweredMeta}, L)}. Tap for the ones it loses to.</div>
   </div>`;
@@ -796,7 +796,7 @@ function teamInner(m, ids, name) {
   let h = `<div class="monhead"><button class="back" onclick="Planner.closeTeam()">‹ ${back}</button><div class="chips" style="margin:0">${saved ? chip('in-game party', 'gl') : ''}${isBest ? chip('recommended', 'ok') : ''}${metaRank ? chip('meta team #' + metaRank, 'meta1') : ''}</div>${menu}</div>`;
   h += `<div class="hero" style="cursor:default">
     <div class="sec" style="margin:0 0 10px">${esc(saved || name || ids.map(nm).join(' / '))} <small>${saved ? 'your in-game party · your order' : isBest ? 'best from your roster' : metaRank ? `meta team #${metaRank}` : name ? 'shared team' : 'team'}</small></div>
-    <div class="roles">${show.map((r, i) => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${saved && i > 0 ? `<b class="mvs" onclick="Planner.moveSlot(${attr(saved)},${i},${i - 1});event.stopPropagation()">‹</b>` : ''}${r.role}${saved && i < 2 ? `<b class="mvs" onclick="Planner.moveSlot(${attr(saved)},${i},${i + 1});event.stopPropagation()">›</b>` : ''}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${esc(mvName(mv[0]))} · ${esc(mvName(mv[1]))}</span></div>`; }).join('')}</div>
+    <div class="roles">${show.map((r, i) => { const mv = L.movesOf(r.id); return `<div class="role" onclick="Planner.openMon('${r.id}')" style="cursor:pointer"><span class="rl">${saved && i > 0 ? `<b class="mvs" onclick="Planner.moveSlot(${attr(saved)},${i},${i - 1});event.stopPropagation()">‹</b>` : ''}${r.role}${saved && i < 2 ? `<b class="mvs" onclick="Planner.moveSlot(${attr(saved)},${i},${i + 1});event.stopPropagation()">›</b>` : ''}</span>${icon(r.id, 'l')}<span class="rn">${esc(nm(r.id))}</span><span class="rm">${mvH(mv[0])} · ${mvH(mv[1])}</span></div>`; }).join('')}</div>
     ${saved ? (differs ? `<div class="ord"><div>The numbers say <b>${rl.map(r => `${r.role} ${esc(nm(r.id))}`).join(' · ')}</b></div>${rl.some(r => r.why) ? `<div class="dim">${rl.filter(r => r.why).map(r => `${esc(nm(r.id))}: ${esc(r.why)}`).join(' · ')}</div>` : ''}<button class="btn sec mini" onclick="Planner.reorderTeam(${attr(saved)},${attr(rl.map(r => r.id))})">Use this order</button></div>` : `<div class="ord dim">Your order matches the app's numbers. Tap ‹ › on a tile to change it.</div>`) : ''}
     <div class="scorebar"><span class="big">${ev.score.toFixed(0)}</span><div class="track"><div class="fill" style="width:${pctBar}%"></div><div class="tick" style="left:${medPos}%"></div></div><span class="dim">meta best ${bm.best.toFixed(0)}</span></div>
     <div class="dim" style="font-size:12px;margin-top:8px">${coverText({holes: d.unansweredMeta}, L)}. What it loses to is below.</div>
@@ -806,7 +806,7 @@ function teamInner(m, ids, name) {
   h += `<div class="sec">Members <small>role · moves · status</small></div><div class="team members" style="cursor:default">` + show.map(r => {
     const mv = L.movesOf(r.id), st = ownership(m, r.id), o = own[r.id];
     const status = st === 'owned' ? (o && !o.manual ? (o.toLevel > 40 && o.toLevel > o.level ? `needs L${o.toLevel}, XL candy` : o.toLevel > o.level ? `${o.cp} CP · power up to L${o.toLevel}` : `${o.cp} CP · ready`) : 'owned, not scanned') : st === 'pending' ? 'pending: you are building it' : st === 'wanted' ? 'on your wanted list' : 'not in your roster';
-    return `<div class="mb"><span class="rl">${r.role}</span>${icon(r.id, 'm')}<span class="mn"><b onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span class="dim">#${rankOf(r.id)}</span><div class="dt">${mv.map(mvName).map(esc).join(' · ')} · ${esc(status)}</div></span>${ownChip(st) || chip('missing', 'warn')}</div>`;
+    return `<div class="mb"><span class="rl">${r.role}</span>${icon(r.id, 'm')}<span class="mn"><b onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span class="dim">#${rankOf(r.id)}</span><div class="dt">${mv.map(mvH).join(' · ')} · ${esc(status)}</div></span>${ownChip(st) || chip('missing', 'warn')}</div>`;
   }).join('') + '</div>';
   // to-dos for these members
   const todo = openMoves(m).filter(x => (x.species && ids.includes(x.species)) || (x.id.startsWith('get:') && ids.includes(x.id.slice(4))) || (x.id.startsWith('park:') && ids.includes(x.id.slice(5))));
@@ -1053,6 +1053,52 @@ function moveIdByName(name) {
   return null;
 }
 const moveInfo = k => (APP.moves || {})[k] || ALT_MOVES[k] || null;
+/* ---------- type badges: a coloured disc with a white glyph per type, drawn here (one SVG sprite, used by reference) ---------- */
+const TYPE_COL = {normal: '#9A9DA1', fire: '#F5A04A', water: '#4F92D6', grass: '#5DB85A', electric: '#EBCB3A', ice: '#6CCDC0', fighting: '#CE4069', poison: '#AB6AC8',
+  ground: '#D97845', flying: '#8FA8DD', psychic: '#F97176', bug: '#91C12F', rock: '#C5B78C', ghost: '#5269AD', dragon: '#0B6DC3', dark: '#5A5465', steel: '#5A8EA2', fairy: '#EC8FE6'};
+const TYPE_GLYPH = {
+  normal: '<circle cx="12" cy="12" r="4.6" fill="none" stroke="#fff" stroke-width="2.6"/>',
+  fire: '<path fill="#fff" d="M12.3 4c.9 3.1 4.2 4.7 4.2 8.8a4.5 4.5 0 0 1-9 0c0-1.8.8-3 1.9-3.9.1 1.4.7 2.2 1.6 2.6-.4-2.7-.1-5.2 1.3-7.5z"/>',
+  water: '<path fill="#fff" d="M12 4.3c2.7 3.5 4.7 6.2 4.7 8.6a4.7 4.7 0 0 1-9.4 0c0-2.4 2-5.1 4.7-8.6z"/>',
+  grass: '<path fill="#fff" d="M6.3 17.7C5.9 11 10.1 6.3 17.7 6.3c0 6.8-4.2 11.4-11.4 11.4z"/><path d="M7.5 16.5 14 10" stroke="COL" stroke-width="1.6" stroke-linecap="round"/>',
+  electric: '<path fill="#fff" d="M13.8 3.8 7.2 13.2h4.3l-1.2 7 6.5-9.6h-4.3z"/>',
+  ice: '<g stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 4.8v14.4M5.8 8.4l12.4 7.2M5.8 15.6l12.4-7.2"/></g>',
+  fighting: '<path fill="#fff" d="M7.6 9.2a1.7 1.7 0 0 1 1.7-1.7h6.6a2 2 0 0 1 2 2v4.1a4.4 4.4 0 0 1-4.4 4.4h-2.8a3.1 3.1 0 0 1-3.1-3.1z"/><path d="M10.4 7.8v3M13.1 7.8v3M15.6 8.4v2.4M7.8 12.6h4.4" stroke="COL" stroke-width="1.2" stroke-linecap="round"/>',
+  poison: '<g fill="#fff"><circle cx="10" cy="13.4" r="4.2"/><circle cx="15.8" cy="8.6" r="2.5"/><circle cx="16.2" cy="15.6" r="1.7"/></g>',
+  ground: '<path fill="#fff" d="M4.3 17.2 9.9 7.8l3 5.1 2.1-3.2 4.7 7.5z"/>',
+  flying: '<path fill="#fff" d="M4.6 14.6c4.3.3 7.6-1.7 9.6-6.2 1.2 2.8.5 5-.6 6.4 2.2.1 4.3-.9 6-2.8-.7 4.3-4.8 6.6-10.2 6.6-2.4 0-3.9-1.3-4.8-4z"/>',
+  psychic: '<path fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" d="M12 6.8a5.2 5.2 0 1 0 5.2 5.2 3.5 3.5 0 0 0-3.5-3.5 2 2 0 0 0-2 2"/>',
+  bug: '<ellipse cx="12" cy="13.6" rx="3.9" ry="5" fill="#fff"/><path d="M10.4 8.7 8.4 5.6M13.6 8.7l2-3.1" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><path d="M8.3 13.2h7.4" stroke="COL" stroke-width="1.2"/>',
+  rock: '<path fill="#fff" d="m7 8.8 4.2-3.5 5.6 2 1.6 5.6-4.2 5-6.1-.9-2.6-4.2z"/><path d="m11.2 5.3.8 6.2 6.4 1.6M12 11.5l-4.9 2.3" stroke="COL" stroke-width="1" fill="none"/>',
+  ghost: '<path fill="#fff" d="M6.8 18.6V11a5.2 5.2 0 0 1 10.4 0v7.6l-1.8-1.5-1.7 1.5-1.7-1.5-1.7 1.5-1.7-1.5z"/><circle cx="10.2" cy="11.2" r="1.1" fill="COL"/><circle cx="13.8" cy="11.2" r="1.1" fill="COL"/>',
+  dragon: '<path fill="#fff" d="M5.6 18c.7-5.6 4-9.8 10.6-12-1.6 2.1-2.2 3.7-2 5.3 1.1-.8 2.5-1.1 4.2-1.1-2.7 2.2-3.3 4.8-3.2 7.8l-2.6-2.2z"/>',
+  dark: '<path fill="#fff" d="M14.6 4.8a7.4 7.4 0 1 0 4.6 11.9A5.9 5.9 0 0 1 14.6 4.8z"/>',
+  steel: '<path fill="#fff" d="m12 4.6 6.4 3.7v7.4L12 19.4l-6.4-3.7V8.3z"/><circle cx="12" cy="12" r="2.6" fill="COL"/>',
+  fairy: '<path fill="#fff" d="m12 4.2 1.9 5.9 5.9 1.9-5.9 1.9-1.9 5.9-1.9-5.9L4.2 12l5.9-1.9z"/>',
+};
+(function typeSprite() {
+  const sym = Object.keys(TYPE_COL).map(t => `<symbol id="ty-${t}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${TYPE_COL[t]}"/>${TYPE_GLYPH[t].replace(/COL/g, TYPE_COL[t])}</symbol>`).join('');
+  const put = () => { if (!document.getElementById('ty-sprite')) document.body.insertAdjacentHTML('afterbegin', `<svg id="ty-sprite" width="0" height="0" style="position:absolute" aria-hidden="true">${sym}</svg>`); };
+  if (document.body) put(); else document.addEventListener('DOMContentLoaded', put);
+})();
+const ti = t => TYPE_COL[t] ? `<svg class="ty" role="img" aria-label="${t}"><use href="#ty-${t}"/></svg>` : '';   // one type badge
+const tchip = (t, cls) => `<span class="chip tc ${cls || 't-' + t}">${ti(t)}${esc(t)}</span>`;          // a type as a chip: badge and name
+const mvType = m => (moveInfo(m) || {}).t;
+const tset = types => (types || []).map(ti).join('');                                                // a Pokémon's types as badges
+const xE = e => '×' + (+e.toFixed(2));                                                                 // ×1.6, ×2.56, ×0.63: as the battle check writes it
+function typeWhy(L, me, opp) {                  // why a matchup goes the way it does, in types: your best hit, what you resist, what hits you
+  const P = id => (L && L.pokemon[id]) || APP.pokemon[id] || APP.unranked[id]; const A = P(me), D = P(opp); if (!A || !D) return '';
+  const mv = id => ((L && L.pokemon[id] ? L.movesOf(id) : (P(id).moveset || [])) || []).filter(m => moveInfo(m));
+  const best = (moves, def) => moves.map(m => ({m, e: PVP.eff(mvType(m), def)})).sort((a, b) => b.e - a.e)[0];
+  const mine = best(mv(me), D.types), theirs = best(mv(opp), A.types), out = [];
+  if (mine && mine.e > 1) out.push(`<span class="gd">${mvH(mine.m)} ${xE(mine.e)} on ${tset(D.types)}</span>`);
+  if (theirs && theirs.e < 1) out.push(`<span class="gd">resists ${mvH(theirs.m)} ${xE(theirs.e)}</span>`);
+  if (theirs && theirs.e > 1) out.push(`<span class="bd">${mvH(theirs.m)} hits ${tset(A.types)} ${xE(theirs.e)}</span>`);
+  if (mine && mine.e < 1) out.push(`<span class="bd">${mvH(mine.m)} resisted ${xE(mine.e)}</span>`);
+  return out.length ? `<div class="why">${out.join('')}</div>` : `<div class="why">neutral on types: stats and energy decide</div>`;
+}
+const mvH = m => `<span class="mvh">${ti(mvType(m))}${esc(mvName(m))}</span>`;                      // a move name with its type badge, for HTML
+
 const effWord = e => e >= 2.5 ? 'double super effective' : e > 1 ? 'super effective' : e >= 1 ? 'neutral' : e >= 0.6 ? 'not very effective' : 'resisted twice';
 function battleFacts(b) {
   if (!APP || !window.PVP || !b) return null;
@@ -1142,7 +1188,9 @@ function battleCheckCard(b) {                    // the facts, free for everyone
   const f = battleFacts(b); if (!f) return '';
   const all = [...f.moves, ...f.matchups, ...f.shields];
   if (!all.length) return `<div class="sec">Battle check <small>from the recording, with the type chart and matchup ratings</small></div><div class="note">Not enough of the match was read to judge the moves and matchups: no charged move and send-out pair it could place.</div>`;
-  const row = x => `<div class="bck ${x.bad ? 'bad' : x.good ? 'good' : 'warn'}"><span class="bi">${x.bad ? '✕' : x.good ? '✓' : '!'}</span><span class="bt">${x.t != null ? `<span class="dim">${tclock(x.t)}</span> ` : ''}${esc(x.text)}${x.fix ? `<div class="fx">→ ${esc(x.fix)}</div>` : ''}</span></div>`;
+  const L = M().L, vis = x => x.type && x.def && APP.pokemon[x.def] ? `<div class="why"><span class="${x.eff > 1 ? 'gd' : x.eff < 1 ? 'bd' : ''}">${ti(x.type)}<b>${esc(x.move)}</b> → ${tset(APP.pokemon[x.def].types)} ${esc(nm(x.def))} ${xE(x.eff)}</span></div>`
+    : x.my && x.opp ? typeWhy(L, x.my, x.opp) : '';
+  const row = x => `<div class="bck ${x.bad ? 'bad' : x.good ? 'good' : 'warn'}"><span class="bi">${x.bad ? '✕' : x.good ? '✓' : '!'}</span><span class="bt">${x.t != null ? `<span class="dim">${tclock(x.t)}</span> ` : ''}${esc(x.text)}${vis(x)}${x.fix ? `<div class="fx">→ ${esc(x.fix)}</div>` : ''}</span></div>`;
   const part = (title, list) => list.length ? `<div class="bcg"><div class="uh">${title}</div>${list.map(row).join('')}</div>` : '';
   const sum = f.n.bad ? `${f.n.bad} thing${f.n.bad === 1 ? '' : 's'} to fix` : 'nothing obvious to fix';
   return `<div class="sec">Battle check <small>${sum} · from the recording, with the type chart and matchup ratings</small></div><div class="team card bcheck" style="cursor:default">${part('Moves', f.moves)}${part('Matchups', f.matchups)}${part('Shields', f.shields)}</div>`;
@@ -1345,13 +1393,13 @@ function moveRows(id, moves, handler, placeholder, e = APP.pokemon[id]) {  // Fa
 function moveUsage(id, cur, e = APP.pokemon[id], league) {   // its own card on the PvP tab: how often the simulated meta battles run each move
   const use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
   if (!Object.keys(use).length) {              // the rankings carry no usage for it (Cramorant): list its moves, the recommended ones first
-    const list = (ks, label) => { const o = (ks || []).slice().sort((a, b) => (set.has(b) ? 1 : 0) - (set.has(a) ? 1 : 0)); return o.length ? `<div class="uh">${label}</div>` + o.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${esc(mvName(m))}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="pc dim">${esc(((moveInfo(m) || {}).t) || '')}</span></div>`).join('') : ''; };
+    const list = (ks, label) => { const o = (ks || []).slice().sort((a, b) => (set.has(b) ? 1 : 0) - (set.has(a) ? 1 : 0)); return o.length ? `<div class="uh">${label}</div>` + o.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${mvH(m)}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="pc dim">${esc(((moveInfo(m) || {}).t) || '')}</span></div>`).join('') : ''; };
     return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}no usage numbers for it yet: the recommended set is starred</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${list(e.fast, 'Fast')}${list(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
   }
   const rows = (list, label) => {
     const ranked = list.filter(m => use[m] !== undefined).sort((a, b) => (use[b] || 0) - (use[a] || 0));
     if (!ranked.length) return '';
-    return `<div class="uh">${label}</div>` + ranked.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${esc(mvName(m))}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="bar"><i style="width:${Math.max(3, use[m])}%"></i></span><span class="pc">${use[m]}%</span></div>`).join('');
+    return `<div class="uh">${label}</div>` + ranked.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${mvH(m)}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="bar"><i style="width:${Math.max(3, use[m])}%"></i></span><span class="pc">${use[m]}%</span></div>`).join('');
   };
   return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}share of simulated meta battles running each move</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
 }
@@ -1565,9 +1613,9 @@ function strongVs(moveIds) {                  // defending types its moves hit s
   if (!ts.length) return [];
   return TYPES18.map(d => ({d, e: Math.max(...ts.map(t => PVP.eff(t, [d])))})).filter(x => x.e > 1).sort((a, b) => b.e - a.e).map(x => x.d);
 }
-const typeRows = (types, weak, strong, from) => `<div class="typerow"><span class="chips" style="margin:0">${types.map(t => chip(t, 't-' + t)).join('')}</span></div>`
-  + `<div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => chip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`
-  + (strong ? `<div class="typerow"><span class="dim">strong against</span><span class="chips" style="margin:0">${strong.length ? strong.map(t => chip(t, 'strong')).join('') : '<span class="dim">nothing: its moves hit neutral at best</span>'}</span></div>` : '');
+const typeRows = (types, weak, strong, from) => `<div class="typerow"><span class="chips" style="margin:0">${types.map(t => tchip(t)).join('')}</span></div>`
+  + `<div class="typerow"><span class="dim">weak to</span><span class="chips" style="margin:0">${weak.length ? weak.map(t => tchip(t, 'weak')).join('') : '<span class="dim">nothing</span>'}</span></div>`
+  + (strong ? `<div class="typerow"><span class="dim">strong against</span><span class="chips" style="margin:0">${strong.length ? strong.map(t => tchip(t, 'strong')).join('') : '<span class="dim">nothing: its moves hit neutral at best</span>'}</span></div>` : '');
 function weakToTypes(t) {                      // attacking types that hit these types for more than neutral
   return TYPES18.filter(a => PVP.eff(a, t) > 1).sort((a, b) => PVP.eff(b, t) - PVP.eff(a, t));
 }
@@ -1864,15 +1912,20 @@ function battlesInner() {
   return h;
 }
 /* the saved party a battle was played with: an exact trio first, else the party sharing the most members */
+const famKey = id => String(id || '').split('_')[0];   // chesnaught_mega, chesnaught_shadow and chesnaught are one species for "is it in this party"
+function partyMatches(ids) {                    // saved parties ranked by how much of what was read is in them: the one ranking the sheet and the auto-pick share
+  const read = [...new Set((ids || []).filter(Boolean))], used = {};
+  for (const b of BATTLES) if (b.team) used[b.team] = (used[b.team] || 0) + 1;
+  return Object.entries(ROSTER.tagged).map(([name, v]) => {
+    const fam = new Set(v.map(famKey));
+    return {name, ids: v, hit: read.filter(x => fam.has(famKey(x))).length, exact: read.filter(x => v.includes(x)).length, used: used[name] || 0, size: read.length};
+  }).sort((a, c) => c.hit - a.hit || c.exact - a.exact || c.used - a.used || a.name.localeCompare(c.name));
+}
 function matchParty(ids) {
   if (!ids || !ids.length) return null;
   const exact = partyFor(ids); if (exact) return exact;
-  let best = null, bn = 0;
-  for (const [name, v] of Object.entries(ROSTER.tagged)) {
-    const n = v.filter(x => ids.includes(x)).length;
-    if (n > bn) { bn = n; best = name; }
-  }
-  return bn >= 2 ? best : null;                 // two of three is a suggestion; one is a coincidence
+  const best = partyMatches(ids)[0];
+  return best && best.hit >= Math.min(2, ids.length) ? best.name : null;   // two of three is a match; one is a coincidence
 }
 function battleById(id) { return BATTLES.find(b => b.id === id) || null; }
 function setBattleTeam(id, name) {              // attributing a battle is what makes the team page and the stats count it
@@ -1907,13 +1960,12 @@ function pickTeam(id) {                        // id: a saved battle, or null fo
   const readNames = (b && b.myNames && b.myNames.length ? b.myNames : read.map(nm)).join(' / ');
   const cur = b ? b.team : DRAFT.team;
   const set = n => `${id ? `Planner.setBattleTeam(${attr(id)},${n})` : `Planner.draftTeam(${n})`};Planner.closeSheet()`;
-  const rows = Object.entries(ROSTER.tagged).map(([name, ids]) => ({name, ids, hit: ids.filter(x => read.includes(x)).length}))
-    .sort((a, c) => c.hit - a.hit || a.name.localeCompare(c.name));
+  const rows = partyMatches(read);
   const why = r => !read.length ? 'nothing was read to compare it with'
     : r.hit === 0 ? 'none of what was read is in it'
     : r.hit >= read.length ? 'every Pokémon the recording read is in it'
     : `${r.hit} of the ${read.length} read ${r.hit === 1 ? 'is' : 'are'} in it`;
-  const best = rows[0] && rows[0].hit >= 2 && cur !== rows[0].name ? rows[0].name : null;
+  const best = rows[0] && rows[0].hit >= Math.min(2, read.length) && cur !== rows[0].name ? rows[0].name : null;
   const list = rows.map(r => `<div class="prow ${cur === r.name ? 'on' : ''}" onclick="${set(attr(r.name))}">${trio(r.ids.slice(0, 3))}<span class="tx"><b>${esc(r.name)}</b><div class="dt">${esc(r.ids.map(nm).join(' / '))}</div><div class="dt why">${esc(why(r))}</div></span>${cur === r.name ? '<span class="tick">✓</span>' : r.name === best ? '<span class="sug">best match</span>' : ''}</div>`).join('');
   $('sheet').innerHTML = `<div class="box"><h2><span>Which party did you play?</span><span class="x" onclick="Planner.closeSheet()">✕</span></h2>
     <div class="dt" style="margin:-4px 0 10px">${readNames ? `Read on your side: ${esc(readNames)}.` : 'Nothing was read on your side.'} Attributing the battle is what makes your team page and the stats count it.</div>
@@ -2113,7 +2165,7 @@ function gpLeads(L, use, st) {                   // card 2: the leads you meet (
   let h = `<div class="sec">Their lead <small>you lead ${esc(nm(use[0]))} · tap a row for the shield table</small></div><div class="team card gpleads" style="cursor:default">`;
   for (const o of leads) {
     const p = leadPlan(L, use, o), open = MU.lead === o;
-    h += `<div class="gpl gk-${p.kind}" onclick="Planner.muLead('${o}')">${icon(o, 'xs')}<span class="gn">${esc(nm(o))}${seen[o] ? ` <span class="chip">×${seen[o]}</span>` : ''}</span><span class="ga"><b>${esc(p.short)}</b><small>${esc(p.why)}</small></span></div>`;
+    h += `<div class="gpl gk-${p.kind}" onclick="Planner.muLead('${o}')">${icon(o, 'xs')}<span class="gn">${esc(nm(o))}<span class="gt">${tset(L.pokemon[o].types)}</span>${seen[o] ? ` <span class="chip">×${seen[o]}</span>` : ''}</span><span class="ga"><b>${esc(p.short)}</b><small>${esc(p.why)}</small>${typeWhy(L, p.who, o)}</span></div>`;
     if (open) {
       const rows = L.matchup(use, o);
       h += `<div class="mut" style="grid-template-columns:1fr repeat(${scen.length},minmax(48px,60px))"><div class="mh"></div>${scen.map(sc => `<div class="mh">${sc === '0-0' ? 'no shields' : sc === '1-1' ? '1 each' : sc === '2-2' ? '2 each' : sc}</div>`).join('')}` +
@@ -2174,7 +2226,7 @@ function gpThreats(m, L, use, st) {              // card 5: what beats every mem
   let h = `<div class="sec">Threats <small>beat ${use.length === 1 ? 'it' : use.length === 2 ? 'both' : 'all three'} · ${tl.count} of ${tl.pool}</small></div><div class="team card" style="cursor:default">`;
   for (const t of list) {
     const ans = owned.map(c => ({c, r: L.rating(c, t.id, '1-1')})).filter(x => x.r >= 500).sort((a, b) => b.r - a.r).slice(0, 2);
-    h += `<div class="gpm"><span class="gi" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${icon(t.id, 'xs')}<span class="gn">${esc(nm(t.id))}</span></span>${met[t.id] ? `<span class="chip warn">met ×${met[t.id]}</span>` : ''}<div class="dt">${ans.length ? `answer from your roster: ${ans.map(x => `<b style="color:var(--ink)">${esc(nm(x.c))}</b> ${Math.round(x.r)}`).join(', ')}` : 'nothing you own beats it'}</div></div>`;
+    h += `<div class="gpm"><span class="gi" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${icon(t.id, 'xs')}<span class="gn">${esc(nm(t.id))}</span>${tset(L.pokemon[t.id].types)}</span>${met[t.id] ? `<span class="chip warn">met ×${met[t.id]}</span>` : ''}<div class="dt">${ans.length ? `answer from your roster: ${ans.map(x => `<b style="color:var(--ink)">${esc(nm(x.c))}</b> ${Math.round(x.r)}`).join(', ')}` : 'nothing you own beats it'}</div>${ans.length ? typeWhy(L, ans[0].c, t.id) : typeWhy(L, use.slice().sort((a, b) => L.rating(b, t.id) - L.rating(a, t.id))[0], t.id)}</div>`;
   }
   return h + `</div>`;
 }
@@ -2564,14 +2616,14 @@ function scanSection(m, r) {
     const id0 = mid, e0 = APP.pokemon[id0] || eAlt, known = knownMoves(r, id0), cur = known ? known.filter(Boolean) : [], rec = e0.moveset;
     const second = r.secondMove === false ? false : (r.secondMove === true || (r.moves && r.moves.filter(Boolean).length >= 3)) ? true : null;   // null: never scanned or set
     const tips = [];
-    if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${esc(mvName(rec[0]))}</b>`);
+    if (cur[0] && cur[0] !== rec[0]) tips.push(`Fast TM to <b>${mvH(rec[0])}</b>`);
     const missingC = rec.slice(1).filter(m => !cur.slice(1).includes(m));
-    if (second && missingC.length) tips.push(`Charged TM to <b>${esc(mvName(missingC[0]))}</b>`);
+    if (second && missingC.length) tips.push(`Charged TM to <b>${mvH(missingC[0])}</b>`);
     rows.push(...moveRows(id0, known, `Planner.setScanMove(${idx},SLOT,this.value)`, undefined, e0));
     if (!r.superseded) { rows.push(['', updBtn(r.key)]); updPlaced = true; }
     const unlockTxt = e0.thirdMove ? `${fmt(e0.thirdMove[0])} dust · ${e0.thirdMove[1]} candy` : '';
-    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → <b>${esc(mvName(missingC[0] || rec[2]))}</b></span>` : `<span class="dim">unknown${unlockTxt ? ` · unlock ${unlockTxt}` : ''}</span>`]);
-    rows.push([alt ? `Best moves <span class="dim">${esc(alt.title)}</span>` : 'Best moves', !known ? esc(rec.map(mvName).join(' · ')) : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> ${esc(rec.map(mvName).join(' · '))}`]);
+    rows.push(['2nd move', second === true ? `<span class="okc">✓</span> unlocked` : second === false ? `${chip('locked', 'ul')} <span class="dim">${unlockTxt} → <b>${mvH(missingC[0] || rec[2])}</b></span>` : `<span class="dim">unknown${unlockTxt ? ` · unlock ${unlockTxt}` : ''}</span>`]);
+    rows.push([alt ? `Best moves <span class="dim">${esc(alt.title)}</span>` : 'Best moves', !known ? rec.map(mvH).join(' · ') : tips.length ? tips.join(' · ') : `<span class="okc">✓</span> ${rec.map(mvH).join(' · ')}`]);
   }
   rows.push(['Source', `${r.appraisal ? '<span class="okc">✓</span> appraisal' : 'CP & HP'}${r.cpInferred ? ' · CP from appraisal' : ''}`]);
   if (r.wt != null || r.ht != null) { const nl = (v, d) => v.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d});   // as the game shows it: tells two copies apart
@@ -2750,9 +2802,9 @@ function monInner(m, id, scanR) {               // the species part; under a sca
     const cur = (known || []).filter(Boolean), secondOpen = !known || cur.length < 3;
     const src = known ? (o ? (o.scan && o.scan.movesSeen ? 'read from your screenshot' : 'set by hand') : 'set for planning') : (o && !o.manual ? 'not scanned yet' : 'not set yet');
     const mrows = moveRows(id, known, null, o && !o.manual ? 'not scanned' : 'not set');
-    mrows.push(['Best moves', !known ? `planning uses <b>${esc(rec.map(mvName).join(' · '))}</b> until the moves are known` : notRec.length ? `recommends <b>${esc(rec.map(mvName).join(' · '))}</b>` : `<span class="okc">✓</span> your moves match the recommended set`]);
+    mrows.push(['Best moves', !known ? `planning uses <b>${rec.map(mvH).join(' · ')}</b> until the moves are known` : notRec.length ? `recommends <b>${rec.map(mvH).join(' · ')}</b>` : `<span class="okc">✓</span> your moves match the recommended set`]);
     const cnt = PVP.counts ? PVP.counts(APP.moves, cur.length ? cur : rec) : null;
-    if (cnt && cnt.charged.length) mrows.push(['Counts', `<b>${esc(mvName(cnt.fast))}</b> ${cnt.gain} energy per ${cnt.turns} turn${cnt.turns > 1 ? 's' : ''} → ${cnt.charged.map(c => `<b>${esc(mvName(c.id))}</b> in ${c.first} <span class="dim">(${c.seq}, ${c.turns} turns)</span>`).join(' · ')}`]);
+    if (cnt && cnt.charged.length) mrows.push(['Counts', `<b>${mvH(cnt.fast)}</b> ${cnt.gain} energy per ${cnt.turns} turn${cnt.turns > 1 ? 's' : ''} → ${cnt.charged.map(c => `<b>${mvH(c.id)}</b> in ${c.first} <span class="dim">(${c.seq}, ${c.turns} turns)</span>`).join(' · ')}`]);
     if (secondOpen && e.thirdMove) mrows.push(['Unlock', `2nd charged move: ${fmt(e.thirdMove[0])} dust · ${e.thirdMove[1]} candy${e.buddy ? ` · or walk ${e.buddy} km as buddy` : ''}`]);
     h += `<div class="sec">Moves <small>${src}</small></div><div class="team card" style="cursor:default">${kv(mrows)}</div>`;
   }
@@ -2905,7 +2957,7 @@ function renderBuilder(m, L) {
     : `<div class="role slot empty" onclick="Planner.pickFor(${i})"><span class="rl">${SLOT_NAMES[i]}</span>${icon(null, 'l ph')}<span class="rn dim" style="font-size:14px">＋ pick</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
   h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
   // per-slot move choice
-  if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvName).map(esc).join(' · ')}</span></div>${L.pokemon[id] ? movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`, L.pokemon[id]) : ''}</div>`).join('');
+  if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvH).join(' · ')}</span></div>${L.pokemon[id] ? movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`, L.pokemon[id]) : ''}</div>`).join('');
   if (filled.length === 3) {                     // name it and keep it: the saved party shows up under Saved teams, Today and the battle log
     const saved = partyFor(filled);
     h += saved ? `<div class="team row" onclick="Planner.openTeam(${attr(filled)},${attr(saved)})"><span class="tx"><span class="nm">★ Saved as ${esc(saved)}</span><div class="dt">open the team page · record, review, how to get the missing pieces</div></span><span class="go">›</span></div>`
@@ -3027,7 +3079,7 @@ function renderRankings(m) {
   if (shown.length) h += colHead([{k: 'c1', label: '#', help: "The overall rank in this league, best first."},
     {k: 'cx', label: 'Pokémon', help: "The name, its rating out of 100 and whether you own one, then its types and the recommended moves."}], 'rk');
   h += shown.map(([id, e]) => !APP.pokemon[id] ? `<div class="rank unr"><span class="rk">–</span><div class="rb" onclick="Planner.pickInto('${id}')" style="cursor:pointer"><div class="rn">${icon(id, 'm')}<b>${esc(e.name)}</b> <span class="dim">not ranked in ${esc(LEAGUE.title)}</span></div><div class="dt">${e.types.join(' / ')}</div></div><div class="ra"></div></div>`
-    : `<div class="rank"><span class="rk">#${e.rank}</span><div class="rb" onclick="${pick ? `Planner.pickInto('${id}')` : `Planner.openMon('${id}')`}" style="cursor:pointer"><div class="rn">${icon(id, 'm')}<b>${esc(e.name)}</b> <span class="dim">${e.score}</span> ${ownChip(ownership(m, id))}</div><div class="dt">${e.types.join(' / ')} · ${e.moveset.map(mvName).map(esc).join(' · ')}</div></div>
+    : `<div class="rank"><span class="rk">#${e.rank}</span><div class="rb" onclick="${pick ? `Planner.pickInto('${id}')` : `Planner.openMon('${id}')`}" style="cursor:pointer"><div class="rn">${icon(id, 'm')}<b>${esc(e.name)}</b> <span class="dim">${e.score}</span> ${ownChip(ownership(m, id))}</div><div class="dt">${e.types.map(t => `<span class="mvh">${ti(t)}${t}</span>`).join(' ')} · ${e.moveset.map(mvH).join(' · ')}</div></div>
     <div class="ra">${ctxMenu([['Add to builder', `Planner.fillSlot('${id}')`], ownership(m, id) ? null : ['Add to wanted', `Planner.want('${id}')`], ['Copy Pokémon GO search', `Planner.copyText(${attr(searchFor(id))})`]])}</div></div>`).join('');
   if (all.length > shown.length) h += `<div class="note" style="cursor:pointer" onclick="Planner.rankMore()">▸ show ${Math.min(100, all.length - shown.length)} more</div>`;
   return h;
@@ -3070,9 +3122,10 @@ function raidCombos(id, eIn) {
 const raidGrade = p => p >= 90 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D';
 function monTab(k) { UI.monTab = k; renderMon(); const el = document.querySelector('#mon .montabs'); if (el) el.scrollIntoView({block: 'nearest'}); }
 function raidRowsHTML(rows, mine, n) {           // the ranked fast + charged pairs, shared by the moves card and the PvE tab
-  return rows.slice(0, n).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${esc(mvName(x.f))}</span><span class="c">+ ${esc(mvName(x.c))}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('');
+  return rows.slice(0, n).map((x, i) => `<div class="ur ${mine(x) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm"><span class="f">${mine(x) ? '<em class="y">✓</em> ' : ''}${mvH(x.f)}</span><span class="c">+ ${mvH(x.c)}</span></span><span class="bar"><i style="width:${x.pct}%"></i></span><span class="pc">${x.pct}% <em class="s">${raidGrade(x.pct)}</em></span></div>`).join('');
 }
-const pveMv = id => (PVE && PVE.moves[id] ? PVE.moves[id].n : mvName(id));   // game-master move ids (FAIRY_WIND_FAST) → names
+const pveMv = id => (PVE && PVE.moves[id] ? PVE.moves[id].n : mvName(id));
+const pveMvH = id => `<span class="mvh">${ti(PVE && PVE.moves[id] ? PVE.moves[id].t : mvType(id))}${esc(pveMv(id))}</span>`;   // game-master move ids (FAIRY_WIND_FAST) → names
 function pveTab(m, id, known, o, eIn) {       // generic raid-side page for any Pokémon: attacker moves, the types it is best against, its counters, your copy
   const e = APP.pokemon[id] || eIn; let h = '';   // eIn: an unranked species, with the moves another league lists for it
   if (!PVE) { loadPve(); return h + `<div class="note">${pveError ? 'Raid data not available: ' + esc(pveError) : 'Loading the raid data…'}</div>`; }
@@ -3085,8 +3138,8 @@ function pveTab(m, id, known, o, eIn) {       // generic raid-side page for any 
   roles.sort((a, b) => a.rank - b.rank);
   const overall = PVE.overall.findIndex(r => r.species === species && !!r.shadow === shadow && !!r.mega === mega);
   h += `<div class="sec">As a raid attacker <small>${overall >= 0 ? `#${overall + 1} overall` : roles.length ? 'ranked by type' : 'not among the ranked attackers'}</small></div>`;
-  if (roles.length) h += `<div class="team" style="cursor:default"><div class="chips">${roles.slice(0, 6).map(x => `<span class="chip t-${x.t}" style="cursor:pointer" onclick="Planner.pveType('${x.t}')">${x.t} <span style="opacity:.8">#${x.rank}</span></span>`).join('')}</div>
-    <div class="dt" style="margin-top:6px">${esc(pveMv(roles[0].r.fast))} + ${esc(pveMv(roles[0].r.charged))}: ${roles[0].r.dps} DPS · ${roles[0].r.tdo} TDO at L40 15/15/15${roles[0].r.legacy && roles[0].r.legacy.length ? ` · needs ${roles[0].r.legacy.map(pveMv).map(esc).join(', ')} (Elite TM or event)` : ''}. Tap a type for the full list.</div></div>`;
+  if (roles.length) h += `<div class="team" style="cursor:default"><div class="chips">${roles.slice(0, 6).map(x => `<span class="chip tc t-${x.t}" style="cursor:pointer" onclick="Planner.pveType('${x.t}')">${ti(x.t)}${x.t} <span style="opacity:.8">#${x.rank}</span></span>`).join('')}</div>
+    <div class="dt" style="margin-top:6px">${pveMvH(roles[0].r.fast)} + ${pveMvH(roles[0].r.charged)}: ${roles[0].r.dps} DPS · ${roles[0].r.tdo} TDO at L40 15/15/15${roles[0].r.legacy && roles[0].r.legacy.length ? ` · needs ${roles[0].r.legacy.map(pveMv).map(esc).join(', ')} (Elite TM or event)` : ''}. Tap a type for the full list.</div></div>`;
   else h += `<div class="note">Outside the top attackers of every type. Fine for PvP, keep it out of raids.</div>`;
   // moves by damage
   h += `<div class="sec">Raid moves <small>${best ? 'best pair = 100%' : 'no rated pairs'}${yb ? ` · yours ${yb.pct}% grade ${raidGrade(yb.pct)}` : cur.length ? ' · your set is not rated' : ''}</small></div>`;
@@ -3094,11 +3147,11 @@ function pveTab(m, id, known, o, eIn) {       // generic raid-side page for any 
   // your copy, for raids: the highest-CP scan of the species, any league
   const mineScan = pveOwned(e);
   if (mineScan) { const lv = mineScan.level || (mineScan.combos && mineScan.combos.length ? bestOf2(mineScan)[0] : null);
-    h += `<div class="sec">Your copy <small>highest CP you scanned</small></div><div class="team row" onclick="Planner.openScan(${attr(mineScan.key)})">${icon(id, 'm')}<span class="tx"><span class="nm">${esc(e.name)} ${mineScan.cp} CP${lv ? ` · L${lv}` : ''}</span><div class="dt">${yb ? `${esc(mvName(yb.f))} + ${esc(mvName(yb.c))} · ${yb.pct}% grade ${raidGrade(yb.pct)}` : 'moves not scanned: screenshot the attacks to grade it'}${lv && lv < 40 ? ' · power up for raids, the CP cap does not apply' : ''}</div></span><span class="go">›</span></div>`; }
+    h += `<div class="sec">Your copy <small>highest CP you scanned</small></div><div class="team row" onclick="Planner.openScan(${attr(mineScan.key)})">${icon(id, 'm')}<span class="tx"><span class="nm">${esc(e.name)} ${mineScan.cp} CP${lv ? ` · L${lv}` : ''}</span><div class="dt">${yb ? `${mvH(yb.f)} + ${mvH(yb.c)} · ${yb.pct}% grade ${raidGrade(yb.pct)}` : 'moves not scanned: screenshot the attacks to grade it'}${lv && lv < 40 ? ' · power up for raids, the CP cap does not apply' : ''}</div></span><span class="go">›</span></div>`; }
   else if (!o) h += `<div class="note">Not in your storage yet. ${roles.length ? 'Worth building as a raid attacker; ' : ''}the PvP tab says how to get it.</div>`;
   // as a raid boss
   const weak = bossWeak(e.types);
-  if (APP.pokemon[id] && weak.length) h += `<div class="sec">When it is the boss <small>weak to</small></div><div class="team row" onclick="Planner.pickBoss('${id}')"><span class="tx"><span class="chips" style="margin:0">${weak.slice(0, 6).map(x => chip(`${x.t} ×${x.e.toFixed(x.e % 1 ? 2 : 0)}`, 't-' + x.t)).join('')}</span><div class="dt" style="margin-top:6px">Rank your own attackers against it ›</div></span></div>`;
+  if (APP.pokemon[id] && weak.length) h += `<div class="sec">When it is the boss <small>weak to</small></div><div class="team row" onclick="Planner.pickBoss('${id}')"><span class="tx"><span class="chips" style="margin:0">${weak.slice(0, 6).map(x => `<span class="chip tc t-${x.t}">${ti(x.t)}${x.t} ×${x.e.toFixed(x.e % 1 ? 2 : 0)}</span>`).join('')}</span><div class="dt" style="margin-top:6px">Rank your own attackers against it ›</div></span></div>`;
   return h;
 }
 function pveType(t) { UI.pveType = t; nav('#/raids'); }
@@ -3155,10 +3208,10 @@ function bossSection(m) {
   if (!boss) return h;
   const weak = bossWeak(boss.types), mine = myRaidAttackers(boss.types, 8), maxEr = mine.length ? mine[0].er : 1;
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center"><span>${esc(boss.name)} <small>${boss.tier ? esc(boss.tier) + ' · ' : ''}${boss.types.map(t => esc(t)).join(' / ') || 'types unknown'}</small></span>${boss.id ? ctxMenu([['Open page', `Planner.openMon('${boss.id}')`]]) : ''}</div>
-    <div class="dt" style="margin-bottom:6px">Weak to</div><div class="chips">${weak.length ? weak.map(w => `<span class="chip t-${w.t}">${w.t}${w.e > 2 ? ' ×2.56' : ''}</span>`).join('') : '<span class="dim">nothing known</span>'}</div></div>`;
+    <div class="dt" style="margin-bottom:6px">Weak to</div><div class="chips">${weak.length ? weak.map(w => `<span class="chip tc t-${w.t}">${ti(w.t)}${w.t}${w.e > 2 ? ' ×2.56' : ''}</span>`).join('') : '<span class="dim">nothing known</span>'}</div></div>`;
   h += `<div class="sec">Your best attackers <small>${mine.length ? 'from your scans, at their own level and IVs' : 'none of your scans can be rated'}</small></div>`;
   if (!mine.length) h += `<div class="note">Scan the Pokémon you would bring: the attackers list below shows what to aim for.</div>`;
-  else h += raidCols() + mine.map((x, i) => `<div class="rank pve" onclick="Planner.openMon('${x.id}')" style="cursor:pointer"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn">${icon(x.id, 'm')}<b>${esc(nm(x.id))}</b> <span class="dim">L${x.level} · ${x.cp} CP</span>${x.movesKnown ? '' : ' <span class="chip">best possible moves</span>'}</div><div class="dt">${esc(mvName(x.f))} · ${esc(mvName(x.c))}</div>
+  else h += raidCols() + mine.map((x, i) => `<div class="rank pve" onclick="Planner.openMon('${x.id}')" style="cursor:pointer"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn">${icon(x.id, 'm')}<b>${esc(nm(x.id))}</b> <span class="dim">L${x.level} · ${x.cp} CP</span>${x.movesKnown ? '' : ' <span class="chip">best possible moves</span>'}</div><div class="dt">${mvH(x.f)} · ${mvH(x.c)}</div>
       <div class="pvb"><span class="lb">DPS</span><span class="bar"><i style="width:${Math.round(x.dps / mine[0].dps * 100)}%"></i></span><span class="v">${x.dps.toFixed(1)}</span><span class="lb">TDO</span><span class="bar"><i class="t" style="width:${Math.round(x.tdo / Math.max(...mine.map(y => y.tdo)) * 100)}%"></i></span><span class="v">${Math.round(x.tdo)}</span></div></div></div>`).join('');
   const bestGlobal = weak.length ? [].concat(...weak.map(w => (PVE.types[w.t] || []).slice(0, 8).map(r => Object.assign({}, r, {vs: w.t})))).sort((a, b) => b.er - a.er).filter((r, i, a) => a.findIndex(x => x.id === r.id) === i).slice(0, 6) : [];
   if (bestGlobal.length) h += `<div class="sec">Best in the game against it <small>same model, level 40</small></div><div class="team" style="cursor:default"><div class="chips">${bestGlobal.map(r => `<span class="chip ${pveOwned(r) ? 'ok' : ''}">${esc(r.name)} <span style="opacity:.7">${r.dps.toFixed(0)} dps</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">Green = you own the species. Your own list above uses your copies' real level, IVs and (when scanned) moves; the boss is the tier-5 stand-in of the model.</div></div>`;
@@ -3177,7 +3230,7 @@ function renderRaids(m) {
   let h = `<div class="note">Best raid attackers when the boss is weak to the type, computed from the game master (${esc(PVE.generated || '')}).</div>`;
   h += bossSection(m);
   h += `<div class="sec">Best attackers by type</div>`;
-  h += `<div class="tchips">${['overall'].concat(TYPES18).map(t => `<span class="chip ${t === type ? 'sel' : ''} ${t !== 'overall' ? 't-' + t : ''}" onclick="Planner.pveType('${t}')">${t === 'overall' ? 'Top' : t}</span>`).join('')}</div>`;
+  h += `<div class="tchips">${['overall'].concat(TYPES18).map(t => `<span class="chip ${t === type ? 'sel' : ''} ${t !== 'overall' ? 'tc t-' + t : ''}" onclick="Planner.pveType('${t}')">${t === 'overall' ? 'Top' : ti(t) + t}</span>`).join('')}</div>`;
   h += `<div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${type === 'overall' ? 'Top attackers across all types (Normal left out: nothing is weak to it)' : `Best <b>${esc(type)}</b> attackers`}</span><label class="tog"><input type="checkbox" ${basic ? 'checked' : ''} onchange="Planner.pveBasic(this.checked)"> no megas / shadows</label></div>`;
   if (!rows.length) return h + `<div class="note">No entries.</div>`;
   const maxDps = Math.max(...rows.map(r => r.dps)), maxTdo = Math.max(...rows.map(r => r.tdo));
@@ -3186,7 +3239,7 @@ function renderRaids(m) {
     const own = pveOwned(r), page = APP.pokemon[r.id] ? r.id : APP.pokemon[r.species.toLowerCase()] ? r.species.toLowerCase() : null;
     const menu = ctxMenu([page ? ['Open page', `Planner.openMon('${page}')`] : null, ['Copy Pokémon GO search', `Planner.copyText(${attr(pveSearch(r))})`], own ? ['Open your scan', `Planner.openScan(${attr(own.key)})`] : null]);
     const legacy = new Set(r.legacy || []);
-    const moveTxt = [r.fast, r.charged].map(id => `${esc(mv(id))}${legacy.has(id) ? ' <span class="dim">(Elite TM)</span>' : ''}`).join(' · ') + (r.offType ? ' <span class="dim">· off-type fast move</span>' : '');
+    const moveTxt = [r.fast, r.charged].map(id => `${pveMvH(id)}${legacy.has(id) ? ' <span class="dim">(Elite TM)</span>' : ''}`).join(' · ') + (r.offType ? ' <span class="dim">· off-type fast move</span>' : '');
     return `<div class="rank pve"><span class="rk">#${i + 1}</span><div class="rb"><div class="rn">${icon(r.id, 'm')}<b>${esc(r.name)}</b>${type === 'overall' && r.type ? ` <span class="dim">${esc(r.type)}</span>` : ''} ${own ? chip('yours · ' + own.cp + ' CP', 'ok') : ''}</div><div class="dt">${moveTxt}</div>
       <div class="pvb"><span class="lb">DPS</span><span class="bar"><i style="width:${Math.round(r.dps / maxDps * 100)}%"></i></span><span class="v">${r.dps.toFixed(1)}</span><span class="lb">TDO</span><span class="bar"><i class="t" style="width:${Math.round(r.tdo / maxTdo * 100)}%"></i></span><span class="v">${r.tdo}</span></div></div><div class="ra">${menu}</div></div>`;
   }).join('');
