@@ -5,7 +5,7 @@ test('page titles: every top-level page names itself', async ({ page }) => {
   const errors = await openApp(page);
   const titles = {
     today: 'Today', builder: 'Builder', teams: 'Saved teams', roster: 'Roster',
-    meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', matchups: 'Matchups', battles: 'Battle log', pro: 'PokeScan Pro',
+    meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', matchups: 'Game plan', battles: 'Battle log', pro: 'PokeScan Pro',
   };
   for (const [k, title] of Object.entries(titles)) {
     await page.evaluate(h => Planner.nav(h), '#/' + k);

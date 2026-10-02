@@ -712,7 +712,7 @@ function renderTeamsInner(el) {
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
 const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'battle', 'pro'];
-const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Roster', matchups: 'Matchups', battles: 'Battle log', battle: 'Battle'};
+const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Roster', matchups: 'Game plan', battles: 'Battle log', battle: 'Battle'};
 const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
@@ -815,7 +815,7 @@ function teamInner(m, ids, name) {
   // weak spots
   const tl = L.mx ? L.threatList(ids, 10) : null;
   h += `<div class="sec">What this team loses to <small>they beat two or three of yours${tl ? ` · <b>${tl.count}</b> beat all three` : ''}</small></div>`;
-  if (tl && tl.count) h += `<div class="team" style="cursor:default"><div class="chips">${tl.threats.map(t => `<span class="chip warn" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${esc(nm(t.id))} <span style="opacity:.7">${t.ratings.map(r => Math.round(r)).join('/')}</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">Simulated with one shield each: all three of yours lose to these. <a href="#" onclick="Planner.nav('#/matchups');return false">Open Matchups</a> to see them per shield scenario.</div></div>`;
+  if (tl && tl.count) h += `<div class="team" style="cursor:default"><div class="chips">${tl.threats.map(t => `<span class="chip warn" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${esc(nm(t.id))} <span style="opacity:.7">${t.ratings.map(r => Math.round(r)).join('/')}</span></span>`).join('')}</div><div class="dt" style="margin-top:6px">Simulated with one shield each: all three of yours lose to these. <a href="#" onclick="Planner.nav('#/matchups');return false">Open the Game plan</a> for their leads, your record and the teams you meet.</div></div>`;
   if (!th.length) h += `<div class="note">Nothing common beats two of your three.</div>`;
   else h += `<div class="team" style="cursor:default">` + fold(th.map(r => `<div class="thr"><b style="cursor:pointer" onclick="Planner.openMon('${r.id}')">${esc(nm(r.id))}</b> <span>#${r.rank}</span> · ${r.hole ? 'beats all three of yours' : `beats your ${esc(r.beats.map(nm).join(' and '))}`}${r.answer ? ` · <span class="good">swap to ${esc(nm(r.answer))}</span>` : ''}</div>`), 8, {label: n => `${n} more threats`}) + '</div>';
   // search strings
@@ -1994,57 +1994,154 @@ function battleRow(b, noChips) {                // one line per battle; a film e
   return row + (!noChips && b.src === 'film' && !b.team ? teamChips(b) : '');
 }
 
-/* ---------- Matchups page: your team against one opponent per shield scenario, and "their lead is X" ---------- */
-const MU = Object.assign({team: 'builder', opp: null, mode: 'matchup', q: '', recent: []}, JSON.parse(localStorage.getItem('mu') || '{}'));
-const saveMU = () => localStorage.setItem('mu', JSON.stringify(MU));
-function muTeamIds(m) {
-  if (MU.team !== 'builder' && ROSTER.tagged[MU.team]) return ROSTER.tagged[MU.team].slice();
-  return UI.build.slots.filter(Boolean);
+/* ---------- Game plan: one of your teams against the meta, their leads, your logged record, the teams you met, and what beats it ---------- */
+const MU = Object.assign({team: null, lead: null}, JSON.parse(localStorage.getItem('mu') || '{}'));
+const saveMU = () => localStorage.setItem('mu', JSON.stringify({team: MU.team, lead: MU.lead}));
+const gpName = id => APP.pokemon[id] || APP.unranked[id] ? nm(id) : id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());   // a species this cup lists nowhere
+const SC = (L, sc) => L.mx && L.mx.scen.has(sc) ? sc : '1-1';   // a scenario the matrix has, else the one rating there is
+function gpTeams(st) {                          // saved parties, most played first, then the Builder
+  const played = ids => { const t = st.teams.find(x => teamKey(x.ids) === teamKey(ids)); return t ? t.w + t.l : 0; };
+  const out = Object.entries(ROSTER.tagged).filter(([, v]) => v && v.length).map(([n, v]) => ({key: n, label: n, ids: v.slice(0, 3), n: played(v.slice(0, 3))}));
+  out.sort((a, b) => b.n - a.n);
+  return out.concat([{key: 'builder', label: 'Builder', ids: UI.build.slots.filter(Boolean), n: 0}]);
 }
+function leadPlan(L, ids, opp) {                 // their lead against your party: stay, stay and shield, swap, or nobody wins
+  const lead = ids[0], r11 = id => L.rating(id, opp, '1-1'), r22 = id => L.rating(id, opp, SC(L, '2-2'));
+  const best = ids.slice(1).sort((a, b) => r11(b) - r11(a))[0];
+  if (r11(lead) >= 500 && r22(lead) >= 500) return {kind: 'stay', who: lead, short: 'Stay in', why: `${nm(lead)} wins with or without shields`};
+  if (r11(lead) >= 500) return {kind: 'stay', who: lead, short: 'Stay, shield once', why: `${nm(lead)} wins 1-1 (${Math.round(r11(lead))}) but loses 2-2 (${Math.round(r22(lead))})`};
+  if (best && r11(best) >= 500) return {kind: 'swap', who: best, short: `Swap to ${nm(best)}`, why: `wins 1-1 (${Math.round(r11(best))})${r22(best) >= 500 ? ' and 2-2' : ', needs a shield'}`};
+  return {kind: 'none', who: best || lead, short: 'Nobody wins', why: `${nm(best || lead)} does best (${Math.round(r11(best || lead))}): save shields for the back line`};
+}
+function trioVsTrio(L, mine, theirs) {           // the average 1-1 rating over every pair: 500 is even
+  let s = 0, n = 0; for (const a of mine) for (const o of theirs) { s += L.rating(a, o, '1-1'); n++; }
+  return n ? s / n : 500;
+}
+const simCall = v => v >= 520 ? {t: 'favoured', c: 'ok'} : v < 480 ? {t: 'unfavoured', c: 'warn'} : {t: 'even', c: ''};
 function renderMatchups() {
   const el = $('matchups'); if (!el) return;
-  try { el.innerHTML = matchupsInner(); } catch (e) { el.innerHTML = errorCard('Matchups', e); }
+  try { el.innerHTML = matchupsInner(); } catch (e) { el.innerHTML = errorCard('Game plan', e); }
 }
 function matchupsInner() {
   if (!APP || !window.PVP) return '<div class="note">Loading battle data…</div>';
-  const m = M(), L = builderLeague(m), ids = muTeamIds(m), mx = L.mx;
-  const cls = r => r >= 500 ? 'w' : r < 400 ? 'l' : 'e';
-  let h = `<div class="note">${mx ? `Battles simulated for ${mx.rows.length} × ${mx.cols.length} Pokémon in ${esc(LEAGUE.title)} (${esc(String(mx.gamemasterTimestamp || '').slice(0, 10))}), with the default IVs and movesets, three shield scenarios.` : matrixBad ? `The simulated matrix for ${esc(LEAGUE.title)} disagrees with the published matchup ratings (median ${matrixBad} points), so it is switched off here: ratings below are published matchup ratings where known, else a type estimate (one scenario).` : `No simulated matrix for ${esc(LEAGUE.title)} yet: ratings below are published matchup ratings where known, else a type estimate (one scenario).`}</div>`;
-  const teams = [['builder', 'Builder']].concat(Object.keys(ROSTER.tagged).map(n => [n, n]));
-  h += `<div class="sec">Your team</div><div class="tchips">${teams.map(([k, l]) => `<span class="chip ${MU.team === k ? 'ok' : ''}" onclick="Planner.muTeam(${attr(k)})">${esc(l)}</span>`).join('')}</div>`;
-  if (ids.length < 1) return h + `<div class="empty"><b>No team picked.</b><br>Fill the builder or save an in-game party, then come back.</div>`;
-  h += `<div class="team" style="cursor:default"><div class="chips">${ids.map(id => `<span class="chip" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))} <span style="opacity:.7">${esc(L.movesOf(id).filter(Boolean).map(mvName).join(' · '))}</span></span>`).join('')}</div></div>`;
-  h += `<div class="tabs sub seg" style="margin:10px 0 6px"><button class="${MU.mode === 'matchup' ? 'on' : ''}" onclick="Planner.muMode('matchup')">One opponent</button><button class="${MU.mode === 'lead' ? 'on' : ''}" onclick="Planner.muMode('lead')">Their lead</button></div>`;
-  const pool = L.pool(), q = MU.q.toLowerCase();
-  const hits = q ? pool.filter(o => nm(o).toLowerCase().includes(q) || o.includes(q)).slice(0, 8) : [];
-  h += `<div class="add" style="margin:6px 0"><input id="muq" placeholder="opponent: search ${pool.length} ${mx ? 'simulated' : 'meta'} Pokémon" value="${esc(MU.q)}" oninput="Planner.muSearch(this.value)"></div>`;
-  if (hits.length) h += `<div class="tchips">${hits.map(o => `<span class="chip ${MU.opp === o ? 'ok' : ''}" onclick="Planner.muOpp('${o}')">${esc(nm(o))} <span style="opacity:.7">#${rankOf(o)}</span></span>`).join('')}</div>`;
-  else if (MU.recent.length) h += `<div class="tchips">${MU.recent.filter(o => APP.pokemon[o]).map(o => `<span class="chip ${MU.opp === o ? 'ok' : ''}" onclick="Planner.muOpp('${o}')">${esc(nm(o))}</span>`).join('')}</div>`;
-  const opp = MU.opp && APP.pokemon[MU.opp] ? MU.opp : null;
-  if (!opp) return h + `<div class="note">Pick an opponent to see how each of your ${ids.length === 1 ? 'Pokémon does' : 'Pokémon do'} against it.</div>`;
-  const rows = L.matchup(ids, opp), scen = mx ? mx.scenarios : ['1-1'];
-  const oppMoves = mx && mx.moves[opp] ? mx.moves[opp] : APP.pokemon[opp].moveset;
-  h += `<div class="sec">${MU.mode === 'lead' ? 'Their lead' : 'Against'} <b style="color:var(--ink)">${esc(nm(opp))}</b> <small>#${rankOf(opp)} · ${esc(oppMoves.map(mvName).join(' · '))}</small></div>`;
-  h += `<div class="mut" style="grid-template-columns:1fr repeat(${scen.length},minmax(52px,64px))"><div class="mh"></div>${scen.map(sc => `<div class="mh">${sc === '0-0' ? 'no shields' : sc === '1-1' ? '1 shield each' : sc === '2-2' ? '2 shields each' : sc}</div>`).join('')}` +
-    rows.map(r => `<div class="mn" onclick="Planner.openMon('${r.id}')"><b>${icon(r.id, 'xs')}${esc(nm(r.id))}</b><small>${r.verdict === 'wins' ? '<span class="good">wins regardless</span>' : r.verdict === 'loses' ? '<span class="bad">loses</span>' : 'shield-dependent'}${r.source === 'sim-default' ? ' · <span title="simulated with the default moveset, yours differs">default moveset</span>' : r.source === 'est' ? ' · estimated' : ''}</small></div>${scen.map(sc => `<div class="mc ${cls(r.ratings[sc])}">${Math.round(r.ratings[sc])}</div>`).join('')}`).join('') + `</div>`;
-  if (MU.mode === 'lead' && ids.length === 3) {
-    const rl = roles(L, ids), lead = rl.find(x => x.role === 'Lead').id, byId = Object.fromEntries(rows.map(r => [r.id, r]));
-    const r11 = id => byId[id].ratings['1-1'] ?? Object.values(byId[id].ratings)[0], r22 = id => byId[id].ratings['2-2'] ?? r11(id);
-    const others = ids.filter(id => id !== lead).sort((a, b) => r11(b) - r11(a)), best = others[0];
-    let advice;
-    if (r11(lead) >= 500 && r22(lead) >= 500) advice = `<b>Stay in</b> with ${esc(nm(lead))}: it wins with or without shields.`;
-    else if (r11(lead) >= 500) advice = `<b>Stay in</b> with ${esc(nm(lead))} but expect a shield battle: it wins 1-1 (${Math.round(r11(lead))}) and loses 2-2 (${Math.round(r22(lead))}), so bait or shield once.`;
-    else if (r11(best) >= 500) advice = `<b>Swap to ${esc(nm(best))}</b> (${Math.round(r11(best))} in 1-1${r22(best) >= 500 ? ', also wins 2-2' : ', but you will need a shield'}). ${esc(nm(lead))} loses this one (${Math.round(r11(lead))}).`;
-    else advice = `<b>Nobody wins this</b> cleanly: ${esc(nm(best))} does best (${Math.round(r11(best))}). Farm energy, save shields for the back line.`;
-    h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 4px">If they lead ${esc(nm(opp))}</div><div style="font-size:14px;line-height:1.45">${advice}</div><div class="dt" style="margin-top:6px">Your lead is ${esc(nm(lead))} (${rl.find(x => x.role === 'Lead').why || 'from the team roles'}). These are 1v1 ratings with equal shields and no energy carried over; the real answer also depends on their back line.</div></div>`;
-  }
-  h += `<div class="note">Rating 0–1000: 500 is even, above wins. ${mx ? 'Cells come from a battle simulation run for this league; a "default moveset" note means the simulation used the default moves while yours differ.' : ''}</div>`;
+  const m = M(), st = battleStats(LEAGUE.slug), teams = gpTeams(st);
+  const L = builderLeague(m, teams.flatMap(t => t.ids));
+  const cur = teams.find(t => t.key === MU.team && t.ids.length) || teams.find(t => t.ids.length) || teams[teams.length - 1];
+  let h = `<div class="tchips">${teams.map(t => `<span class="chip ${t === cur ? 'ok' : ''}" onclick="Planner.muTeam(${attr(t.key)})">${esc(t.label)}${t.n ? ` <span style="opacity:.7">${t.n}</span>` : ''}</span>`).join('')}</div>`;
+  if (!cur.ids.length) return h + `<div class="empty"><b>No team yet.</b><br>Fill the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a> or save an in-game party, then come back.</div>`;
+  const ids = cur.ids, use = ids.filter(id => L.pokemon[id]), out = ids.filter(id => !L.pokemon[id]);
+  h += `<div class="team" style="cursor:default"><div class="chips">${ids.map(id => L.pokemon[id]
+    ? `<span class="chip" onclick="Planner.openMon('${id}')" style="cursor:pointer">${icon(id, 'xs')}${esc(nm(id))} <span style="opacity:.7">${esc(L.movesOf(id).filter(Boolean).map(mvName).join(' · '))}${APP.pokemon[id] ? '' : ' · estimated from types'}</span></span>`
+    : `<span class="chip warn">${icon(id, 'xs')}${esc(gpName(id))} <span style="opacity:.7">not allowed in ${esc(LEAGUE.title)}</span></span>`).join('')}</div>
+    ${out.length ? `<div class="dt" style="margin-top:6px">${esc(out.map(gpName).join(' and '))} can't enter ${esc(LEAGUE.title)}: the plan below uses the other ${use.length === 1 ? 'one' : use.length}.</div>` : ''}</div>`;
+  if (!use.length) return h + `<div class="note">Nobody in this team can enter ${esc(LEAGUE.title)}. Pick another team or switch league.</div>`;
+  h += gpMeta(m, L, use);
+  if (use.length > 1) h += gpLeads(L, use, st);
+  h += gpRecord(L, ids, use, st);
+  h += gpMet(L, cur, use, teams, st);
+  h += gpThreats(m, L, use, st);
+  h += `<div class="note">Ratings 0–1000, 500 is even. ${L.mx ? `Simulated battles for ${esc(LEAGUE.title)} with the default IVs, three shield scenarios.` : `No battle simulation for ${esc(LEAGUE.title)} yet: published matchup ratings where known, else a type estimate.`}</div>`;
   return h;
 }
-function muTeam(k) { MU.team = k; saveMU(); renderMatchups(); }
-function muMode(k) { MU.mode = k; saveMU(); renderMatchups(); }
-function muSearch(v) { MU.q = v; saveMU(); const pos = $('muq') && $('muq').selectionStart; renderMatchups(); const q = $('muq'); if (q) { q.focus(); if (pos !== null && pos !== undefined) q.setSelectionRange(pos, pos); } }
-function muOpp(id) { MU.opp = id; MU.q = ''; MU.recent = [id].concat(MU.recent.filter(x => x !== id)).slice(0, 6); saveMU(); renderMatchups(); }
+function gpMeta(m, L, use) {                     // card 1: the team score, its place among the meta teams, and the one swap that gains most
+  const ev = L.evaluate(use), metas = (APP.metaTeams || []).filter(t => t.members.every(x => L.pokemon[x])).map(t => L.evaluate(t.members).score);
+  const rank = 1 + metas.filter(s => s > ev.score).length, all = metas.concat([ev.score]), lo = Math.min(...all), hi = Math.max(...all), pos = s => hi > lo ? (s - lo) / (hi - lo) * 100 : 50;
+  let h = `<div class="sec">Against the meta <small>${use.length < 3 ? `${use.length} of 3 members` : 'the same score as Today'}</small></div><div class="hero" style="cursor:default">`;
+  h += `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="big" style="font-family:Sora,sans-serif;font-weight:800;font-size:30px;color:var(--green)">${ev.score.toFixed(0)}</span>`;
+  h += metas.length ? `<span class="gprk"><b>#${rank} of ${metas.length + 1}</b> next to the ${metas.length} meta teams</span>` : '';
+  h += `</div>`;
+  if (metas.length) h += `<div class="gpbar">${metas.map(s => `<i style="left:${pos(s).toFixed(1)}%"></i>`).join('')}<b style="left:${pos(ev.score).toFixed(1)}%"></b></div><div class="dt" style="display:flex;justify-content:space-between"><span>${lo.toFixed(0)}</span><span>meta teams · yours in green</span><span>${hi.toFixed(0)}</span></div>`;
+  h += `<div class="dim" style="font-size:12px;margin-top:6px">Beats <b style="color:var(--ink)">${L.meta.length - ev.holes.length} of ${L.meta.length}</b> common Pokémon${ev.holes.length ? `; no answer to ${esc(ev.holes.slice(0, 5).map(nm).join(', '))}${ev.holes.length > 5 ? '…' : ''}` : ''}.</div>`;
+  // the one change from your roster that gains most: replace a member of a full team, or fill the gap of a short one
+  if (use.length >= 2) {
+    const base = new Set(use.map(PVP.baseSpecies)), pool = Object.keys(m.ri.owned).filter(c => L.pokemon[c] && !base.has(PVP.baseSpecies(c)));
+    let best = null;
+    const tries = use.length === 3 ? use.map((_, i) => i) : [-1];
+    for (const i of tries) for (const c of pool) {
+      const t = i < 0 ? use.concat([c]) : use.map((x, j) => j === i ? c : x);
+      if (i >= 0 && new Set(t.map(PVP.baseSpecies)).size < 3) continue;
+      const s = L.evaluate(t).score; if (!best || s > best.s) best = {s, c, out: i < 0 ? null : use[i]};
+    }
+    if (best && (use.length < 3 || best.s - ev.score >= 1)) h += `<div style="font-size:13px;margin-top:8px">Best change from your roster: <b>${best.out ? `${esc(nm(best.out))} → ${esc(nm(best.c))}` : `add ${esc(nm(best.c))}`}</b> <span class="dim">(${best.s.toFixed(0)}${use.length === 3 ? `, +${(best.s - ev.score).toFixed(0)}` : ''})</span></div>`;
+    else if (best) h += `<div class="dim" style="font-size:12px;margin-top:8px">No single swap from your roster scores higher.</div>`;
+  }
+  return h + `</div>`;
+}
+function gpLeads(L, use, st) {                   // card 2: the leads you meet (from your log first, then the meta), one line of advice each
+  const seen = {}; for (const b of st.fights) if (b.lead && b.result) seen[b.lead] = (seen[b.lead] || 0) + 1;
+  const logged = Object.keys(seen).filter(id => L.pokemon[id] && !use.includes(id)).sort((a, b) => seen[b] - seen[a]);
+  const leads = [...new Set(logged.concat(L.meta.filter(id => !use.includes(id))))].slice(0, 12);
+  const scen = L.mx ? L.mx.scenarios : ['1-1'], cls = r => r >= 500 ? 'w' : r < 400 ? 'l' : 'e';
+  let h = `<div class="sec">Their lead <small>you lead ${esc(nm(use[0]))} · tap a row for the shield table</small></div><div class="team card gpleads" style="cursor:default">`;
+  for (const o of leads) {
+    const p = leadPlan(L, use, o), open = MU.lead === o;
+    h += `<div class="gpl gk-${p.kind}" onclick="Planner.muLead('${o}')">${icon(o, 'xs')}<span class="gn">${esc(nm(o))}${seen[o] ? ` <span class="chip">×${seen[o]}</span>` : ''}</span><span class="ga"><b>${esc(p.short)}</b><small>${esc(p.why)}</small></span></div>`;
+    if (open) {
+      const rows = L.matchup(use, o);
+      h += `<div class="mut" style="grid-template-columns:1fr repeat(${scen.length},minmax(48px,60px))"><div class="mh"></div>${scen.map(sc => `<div class="mh">${sc === '0-0' ? 'no shields' : sc === '1-1' ? '1 each' : sc === '2-2' ? '2 each' : sc}</div>`).join('')}` +
+        rows.map(r => `<div class="mn" onclick="Planner.openMon('${r.id}')"><b>${icon(r.id, 'xs')}${esc(nm(r.id))}</b><small>${r.verdict === 'wins' ? '<span class="good">wins regardless</span>' : r.verdict === 'loses' ? '<span class="bad">loses</span>' : 'shield-dependent'}${r.source === 'est' ? ' · estimated' : ''}</small></div>${scen.map(sc => `<div class="mc ${cls(r.ratings[sc])}">${Math.round(r.ratings[sc])}</div>`).join('')}`).join('') + `</div>`;
+    }
+  }
+  return h + `<div class="dt" style="margin-top:6px">${logged.length ? `${logged.length} of these come from your battle log, most met first; the rest are the meta.` : 'Ordered by the meta. Leads you log in the Battle log move to the top.'} 1v1 ratings with equal shields; the real answer also depends on their back line.</div></div>`;
+}
+function gpRecord(L, ids, use, st) {             // card 3: this team's logged results per lead, next to what the simulation expects
+  const t = st.teams.find(x => teamKey(x.ids) === teamKey(ids));
+  let h = `<div class="sec">Your record with this team <small>${esc(LEAGUE.title)}</small></div>`;
+  if (!t || !(t.w + t.l)) return h + `<div class="note">No battles logged with this team yet. Import a recording or share the end-of-battle screen in the <a href="#" onclick="Planner.nav('#/battles');return false">Battle log</a> and pick this team: its results per lead show up here.</div>`;
+  const leads = {}; for (const b of t.list) if (b.lead && b.result) { const r = leads[b.lead] = leads[b.lead] || {w: 0, l: 0}; if (b.result === 'W') r.w++; else if (b.result === 'L') r.l++; }
+  const rows = Object.entries(leads).map(([id, r]) => Object.assign({id}, r)).sort((a, b) => (b.l - b.w) - (a.l - a.w) || (b.w + b.l) - (a.w + a.l));
+  h += `<div class="team card" style="cursor:default"><div style="display:flex;align-items:baseline;gap:10px"><span class="big" style="font-family:Sora,sans-serif;font-weight:800;font-size:26px">${t.w}–${t.l}</span><span class="dim" style="font-size:12px">${t.w + t.l ? Math.round(t.w / (t.w + t.l) * 100) : 0}% won</span></div>`;
+  for (const r of rows.slice(0, 8)) {
+    let note = '';
+    if (L.pokemon[r.id] && use.length > 1) { const p = leadPlan(L, use, r.id);
+      if (r.l > r.w && p.kind !== 'none') note = `the simulation says ${p.kind === 'swap' ? `${nm(p.who)} wins this: swap to it` : `${nm(p.who)} wins this: stay in`}`;
+      else if (r.l > r.w) note = 'nobody in the team wins it in the simulation either';
+      else if (r.w > r.l && p.kind === 'none') note = 'you beat it more than the simulation expects'; }
+    h += `<div class="dt" style="margin-top:6px"><b style="color:var(--ink)">vs ${esc(nm(r.id))} lead ${r.w}–${r.l}</b>${note ? ` · <span class="${r.l > r.w ? 'bad' : ''}">${esc(note)}</span>` : ''}</div>`;
+  }
+  if (!rows.length) h += `<div class="dt" style="margin-top:6px">Log their lead with each battle to see which leads give this team trouble.</div>`;
+  return h + `</div>`;
+}
+function gpMet(L, cur, use, teams, st) {         // card 4: your teams against the opponent trios you actually met
+  const met = st.fights.filter(b => b.result && b.opp && b.opp.length).sort((a, b) => b.t - a.t).slice(0, 40)
+    .map(b => ({b, opp: b.opp.filter(o => L.pokemon[o])})).filter(x => x.opp.length);
+  let h = `<div class="sec">Against the teams you met <small>${met.length ? `${met.length} logged battle${met.length === 1 ? '' : 's'} with their team read` : 'from your battle log'}</small></div>`;
+  if (!met.length) return h + `<div class="note">Share your end-of-battle screens in the <a href="#" onclick="Planner.nav('#/battles');return false">Battle log</a>: once their teams are logged, every team of yours is simulated against the teams you actually meet.</div>`;
+  // every team of yours, simulated against those trios, next to what it really did
+  const rows = teams.map(t => { const u = t.ids.filter(id => L.pokemon[id]); if (!u.length) return null;
+    const rec = st.teams.find(x => teamKey(x.ids) === teamKey(t.ids)), wins = met.filter(x => trioVsTrio(L, u, x.opp) >= 500).length;
+    return {t, wins, rec: rec && rec.w + rec.l ? `${rec.w}–${rec.l}` : null}; }).filter(Boolean).sort((a, b) => b.wins - a.wins);
+  h += `<div class="team card" style="cursor:default"><div class="uh">Your teams against them</div>`;
+  h += rows.map((r, i) => `<div class="gpt${r.t === cur ? ' on' : ''}" onclick="Planner.muTeam(${attr(r.t.key)})"><span class="gn">${esc(r.t.label)}${i === 0 && rows.length > 1 && r.wins > rows[1].wins ? ' <span class="chip ok">best against what you meet</span>' : ''}</span><span class="gs">sim ${r.wins} of ${met.length}</span><span class="gr">${r.rec ? `played ${r.rec}` : '<span class="dim">not played</span>'}</span></div>`).join('');
+  h += `<div class="dt" style="margin-top:6px">Sim: simulated as favoured (average 1-1 rating over the nine pairs of 500 or more) against that many of the teams you met. Played: what that team really did.</div></div>`;
+  // the chosen team against each of those trios, newest first
+  const mine = teamKey(cur.ids);
+  h += `<div class="team card" style="cursor:default"><div class="uh">${esc(cur.label)} against each</div>`;
+  for (const x of met.slice(0, 10)) {
+    const v = trioVsTrio(L, use, x.opp), c = simCall(v), withThis = x.b.ids && teamKey(x.b.ids) === mine, res = withThis ? x.b.result : null;
+    const flag = res === 'L' && c.t === 'favoured' ? 'the simulation favoured you: check the lead' : res === 'W' && c.t === 'unfavoured' ? 'won an unfavoured one' : '';
+    h += `<div class="gpm"><span class="gi">${x.opp.map(o => icon(o, 'xs')).join('')}<span class="gn">${esc(x.opp.map(nm).join(' / '))}</span></span><span class="chip ${c.c}">${c.t} ${Math.round(v)}</span>${res ? `<span class="chip ${res === 'W' ? 'ok' : 'warn'}">${res === 'W' ? 'won' : res === 'L' ? 'lost' : 'draw'}</span>` : '<span class="dim" style="font-size:11.5px">other team</span>'}${flag ? `<div class="dt">${esc(flag)}</div>` : ''}</div>`;
+  }
+  // the opponents you meet most, one by one
+  const faced = st.faced.filter(f => L.pokemon[f.id] && !use.includes(f.id)).slice(0, 10);
+  if (faced.length) { const ans = faced.filter(f => Math.max(...use.map(a => L.rating(a, f.id, '1-1'))) >= 500);
+    h += `<div class="uh" style="margin-top:10px">The Pokémon you meet most</div><div class="dt">This team answers <b style="color:var(--ink)">${ans.length} of ${faced.length}</b></div><div class="chips" style="margin-top:4px">${faced.map(f => `<span class="chip ${ans.includes(f) ? 'ok' : 'warn'}" onclick="Planner.openMon('${f.id}')" style="cursor:pointer">${esc(nm(f.id))} <span style="opacity:.7">×${f.n}</span></span>`).join('')}</div>`; }
+  return h + `</div>`;
+}
+function gpThreats(m, L, use, st) {              // card 5: what beats every member, the ones you meet first, and who in your roster answers it
+  const tl = L.threatList(use, 40); if (!tl.count) return `<div class="sec">Threats</div><div class="note">No common Pokémon beats all ${use.length === 1 ? 'of it' : use.length === 2 ? 'both of yours' : 'three of yours'}.</div>`;
+  const met = Object.fromEntries(st.faced.map(f => [f.id, f.n]));
+  const list = tl.threats.slice().sort((a, b) => (met[b.id] || 0) - (met[a.id] || 0) || a.worst - b.worst).slice(0, 6);
+  const owned = Object.keys(m.ri.owned).filter(c => L.pokemon[c] && !use.includes(c));
+  let h = `<div class="sec">Threats <small>beat ${use.length === 1 ? 'it' : use.length === 2 ? 'both' : 'all three'} · ${tl.count} of ${tl.pool}</small></div><div class="team card" style="cursor:default">`;
+  for (const t of list) {
+    const ans = owned.map(c => ({c, r: L.rating(c, t.id, '1-1')})).filter(x => x.r >= 500).sort((a, b) => b.r - a.r).slice(0, 2);
+    h += `<div class="gpm"><span class="gi" onclick="Planner.openMon('${t.id}')" style="cursor:pointer">${icon(t.id, 'xs')}<span class="gn">${esc(nm(t.id))}</span></span>${met[t.id] ? `<span class="chip warn">met ×${met[t.id]}</span>` : ''}<div class="dt">${ans.length ? `answer from your roster: ${ans.map(x => `<b style="color:var(--ink)">${esc(nm(x.c))}</b> ${Math.round(x.r)}`).join(', ')}` : 'nothing you own beats it'}</div></div>`;
+  }
+  return h + `</div>`;
+}
+function muTeam(k) { MU.team = k; MU.lead = null; saveMU(); renderMatchups(); }
+function muLead(id) { MU.lead = MU.lead === id ? null : id; saveMU(); renderMatchups(); }
 
 /* ---------- matchup matrix (data/matrix-<league>.json, simulated with PvPoke's engine by scripts/build_matrix.mjs) ---------- */
 let MATRIX = null, matrixSlug = null, matrixLoading = false, matrixBad = null;
@@ -2235,7 +2332,7 @@ function renderPro() {
   h += `<div class="note">${hl.coach ? 'Professor Cedar is PokeScan\'s AI coach. He runs on the PokeScan server; your roster summary is sent for the review and not kept.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
   el.innerHTML = h;
 }
-const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Matchups', '⚑'], ['battles', 'Battle log', '◔']]],
+const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Game plan', '⚑'], ['battles', 'Battle log', '◔']]],
                 ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
                 ['Collection', [['roster', 'Roster', '◎']]]];
 function drawer(open) { const d = $('drawer'); if (!d) return; d.classList.toggle('open', !!open); if (open) paintDrawer(); }
@@ -2717,11 +2814,11 @@ function ownership(m, id) {                    // where a species stands in your
   return null;
 }
 const ownChip = st => st ? chip(st, st === 'owned' ? 'ok' : st === 'pending' ? 'gl' : '') : '';
-function builderLeague(m) {                    // roster movesets plus the builder's own per-slot choices
+function builderLeague(m, more) {              // roster movesets plus the builder's own per-slot choices; more: other ids to estimate (a saved party)
   const ov = Object.assign({}, m.L.overrides);
   for (const [id, mv] of Object.entries(UI.build.moves)) if (mv && mv.length) ov[id] = mv;
   const extra = {};                              // a Pokémon this league does not rank gets an entry of its own, scored from types
-  for (const id of UI.build.slots) if (id && !APP.pokemon[id]) { const e = builderEntry(id); if (e) extra[id] = e; }
+  for (const id of UI.build.slots.concat(more || [])) if (id && !APP.pokemon[id] && !extra[id]) { const e = builderEntry(id); if (e) extra[id] = e; }
   const app = Object.keys(extra).length ? Object.assign({}, APP, {pokemon: Object.assign({}, APP.pokemon, extra), moves: Object.assign({}, ALT_MOVES, APP.moves)}) : APP;
   return new PVP.League(app, ov, mxFor());
 }
@@ -3163,7 +3260,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muMode, muSearch, muOpp, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
