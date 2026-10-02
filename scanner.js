@@ -74,7 +74,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.42';
+const APP_VERSION='10.43';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -596,7 +596,7 @@ function applyVisionScan(p){                      // returns {key, what} or null
   const sp=visionSpecies(p&&p.name); if(!sp) return null;
   const hp=p.hpMax||p.hp||null, mv=visionMoves(sp,p), live=results.filter(x=>!x.superseded);
   const upd=UPDATE?results.find(x=>x.key===UPDATE):null;
-  const tid=upd?pvpokeIdFor(upd.species,(DATA.stats[upd.species]||[])[0]):null, fam=upd&&(upd.species===sp||(tid&&evosOf(tid).map(x=>x.split('_')[0].toUpperCase()).includes(sp)));
+  const tid=upd?pvpokeIdFor(upd.species,(DATA.stats[upd.species]||[])[0]):null, fam=upd&&(upd.species===sp||(tid&&evosOf(tid).map(x=>x.split('_')[0].toUpperCase()).includes(sp))||!!(window.Planner&&Planner.evolvesInto&&Planner.evolvesInto(upd.species,sp)));
   const same=live.filter(x=>x.species===sp);
   const target=(fam?upd:null)||sameCopy(sp,p.cp||null,hp)||(same.length===1?same[0]:null);
   const solved=p.cp&&hp?solve(sp,p.cp,hp,null,null):[];
@@ -1319,7 +1319,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
     const target=results.find(x=>x.key===UPDATE);
     if(target){
       const tid=pvpokeIdFor(target.species,(DATA.stats[target.species]||[])[0]), evos=tid?evosOf(tid).map(x=>x.split('_')[0].toUpperCase()):[];
-      const sameFam=target.species===s.species||evos.includes(s.species);
+      const sameFam=target.species===s.species||evos.includes(s.species)||!!(window.Planner&&Planner.evolvesInto&&Planner.evolvesInto(target.species,s.species));
       if(sameFam && updateCard(target,s,mvSeen)){ fillBody(target,s); markImp(target,'updated'); UPDATE=target.key; note(`${seen(s)} → updated the ${target.species} card`); return target.key; }
       note(sameFam?`${seen(s)} does not share IVs with the ${target.species} ${target.cp} CP card: kept as a separate copy`:`${seen(s)} is not a ${target.species}: kept as a separate card`);
     }
@@ -1438,7 +1438,7 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
     ].join('');
   const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
   return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan('${r.key.replace(/'/g,'')}')`}">${lineageBanner(r)}
-    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon((Planner.scanId(r)||{}).id,'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
+    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon(Planner.scanIcon?Planner.scanIcon(r):(Planner.scanId(r)||{}).id,'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
       <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${r.wt!=null&&results.some(x=>x!==r&&!x.superseded&&x.species===r.species&&x.cp===r.cp)?` · ${r.wt.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})} kg`:''}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
     <div class="ivrow">
       <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>

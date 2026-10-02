@@ -45,6 +45,10 @@ function scanId(r) {
   const best = bestOf(r);
   return {best, base: best[4] || DATA.stats[r.species][0], id: pvpokeIdFor(r.species, best[4] || DATA.stats[r.species][0], r.shadow)};
 }
+function scanIcon(r) {                          // the icon for a scan in any league: its ranked id, else the unranked one, else the species itself
+  const id = (scanId(r) || {}).id || unrankedId(r); if (id) return id;
+  const base = String(r.species || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); return base ? base + (r.shadow ? '_shadow' : '') : null;
+}
 function movesFor(r, id) {                     // moves used for scoring: what is on the Pokémon, padded with PvPoke's set while the 2nd charged move is unknown
   const m = ((r && r.moves && r.moves.length) ? r.moves : (ROSTER.moves[id] || detectMoves(id, r && r.txt))).filter(Boolean);
   if (m.length === 2 && !(r && r.secondMove === false) && APP.pokemon[id]) { const extra = APP.pokemon[id].moveset.slice(1).find(x => !m.includes(x)); if (extra) return m.concat(extra); }
@@ -232,10 +236,11 @@ function onNewScan(s) {                        // called by the scanner after a 
       r.superseded = {by: s.key, why: `powered up to L${newLv ?? '?'}`, t: Date.now()};
       hint(s, r, 'powerup');
       logEntry({kind: 'powerup', id: 'pu:' + rid, title: `${nm(rid || s.species)} powered up ${r.cp} → ${s.cp} CP`, evidence: s.key});
-    } else if (rid && newId && (APP.pokemon[rid] || {}).evo && APP.pokemon[rid].evo.includes(newId) && (!oldLv || !newLv || newLv >= oldLv)) {   // evolution
-      r.superseded = {by: s.key, why: `evolved into ${nm(newId)}`, t: Date.now()};
+    } else if (((rid && newId && (APP.pokemon[rid] || {}).evo && APP.pokemon[rid].evo.includes(newId)) || (r.species !== s.species && evolvesInto(r.species, s.species))) && (!oldLv || !newLv || newLv >= oldLv)) {   // evolution, also when this league does not rank the pre-evolution
+      const from = nm(rid || unrankedId(r) || r.species.toLowerCase()), to = nm(newId || unrankedId(s) || s.species.toLowerCase());
+      r.superseded = {by: s.key, why: `evolved into ${to}`, t: Date.now()};
       hint(s, r, 'evolution');
-      logEntry({kind: 'evolve', id: 'get:' + newId, title: `${nm(rid)} evolved into ${nm(newId)}`, evidence: s.key});
+      logEntry({kind: 'evolve', id: 'get:' + (newId || s.species.toLowerCase()), title: `${from} evolved into ${to}`, evidence: s.key});
     }
   }
   if (newId && (ROSTER.candidates[newId] !== undefined || ROSTER.pending[newId] !== undefined) && s.cp <= LEAGUE.cp) {
@@ -1417,6 +1422,12 @@ async function loadEvo() {
   try { const r = await fetch('data/evo.json?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), {cache: 'no-cache'}); if (r.ok) { EVO = await r.json(); localStorage.setItem('evo', JSON.stringify(EVO)); if (UI.mon && onView() === 'mon') whenIdle(renderMon); } } catch {}
 }
 const evoBase = id => id.replace(/_shadow$/, '');
+function evolvesInto(fromSp, toSp) {           // scanner species names (MARILL → AZUMARILL): from the game's own evolution table, so it works in any league
+  const ev = EVO && EVO.evolve; if (!ev || !fromSp || !toSp) return false;
+  const from = String(fromSp).toLowerCase(), to = String(toSp).toLowerCase();
+  const walk = (k, d) => (ev[k] || []).some(x => x.to.split('_')[0] === to || (d < 2 && walk(x.to, d + 1)));
+  return Object.keys(ev).some(k => (k === from || k.startsWith(from + '_')) && walk(k, 1));
+}
 function evoBranch(preId, toId) {             // the game master's evolution branch pre → to: candy plus every condition (shadow ids share the base species' entry)
   const lst = EVO && EVO.evolve && EVO.evolve[evoBase(preId)]; if (!lst) return null;
   return lst.find(x => x.to === evoBase(toId)) || (lst.length === 1 ? lst[0] : null);
@@ -2520,7 +2531,7 @@ function scanSection(m, r) {
   ]);
   let h = lineageBanner(r) + `<div class="monhead"><button class="back" onclick="Planner.closeMon()">‹ ${back}</button><div class="chips" style="margin:0">${r.superseded ? chip('archived') : ''}${r.bench ? chip('benched') : ''}${r.shadow ? chip('shadow', 'ul') : ''}${r.apMismatch ? chip('appraisal ≠ CP/HP', 'warn') : ''}${r.cpInferred ? chip('CP inferred', 'gl') : ''}</div>${menu}</div>`;
   const hid = scanId(r);
-  h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon((hid && hid.id) || unrankedId(r) || String(r.species || '').toLowerCase(), 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
+  h += `<div class="scanhero"><div class="dh" style="display:flex;align-items:center;gap:10px">${icon(scanIcon(r), 'xl')}<span style="flex:1;min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="nm" style="font-family:Sora,sans-serif;font-weight:700;font-size:20px">${r.fav ? '<span class="star on">★</span>' : ''}${esc(nice(r.species))}</span><span class="dim"><b style="color:var(--ink)">${r.cp ?? '?'}</b> CP · ${r.hp ?? '?'} HP · L${r.level ?? '?'}</span></span></div>`;
   {                                              // types, weaknesses and the meta rank: the species facts in the same card
     const e = UI.mon && APP.pokemon[UI.mon], form = best && best[4], types = e ? e.types : form ? [form[3], form[4]].filter(t => t && t !== 'none').map(t => t.toLowerCase()) : [];
     const alt0 = e ? null : altEntry(r), known0 = knownMoves(r, (hid && hid.id) || (alt0 && alt0.id)), mv0 = known0 || (e ? e.moveset : alt0 ? alt0.e.moveset : []);
@@ -2530,7 +2541,7 @@ function scanSection(m, r) {
   }
   let updPlaced = false;
   const rows = [], mine = hid && hid.id && m.own[hid.id] && m.own[hid.id].key === r.key ? hid.id : null;   // the copy your roster plays
-  if (mine && best) h += cpMeter(r, best);
+  if (best && r.combos && r.combos.length) h += cpMeter(r, best);   // every copy, ranked here or not: the arc is about levels and dust
   if (mine) h += todoList(m, mine);
   if (best) {
     const bb = best[4] || DATA.stats[r.species][0], gl = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp), ul = pvpRank(bb, best[1], best[2], best[3], LEAGUE.cp === 2500 ? 1500 : 2500);
@@ -3287,7 +3298,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
