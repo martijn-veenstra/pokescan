@@ -941,7 +941,7 @@ function coachContext(m) {
   const team = t => `${t.members.map(x => x.name).join(' / ')} — score ${t.teamScore.toFixed(0)}${t.unansweredMeta.length ? `, no answer to ${t.unansweredMeta.join(', ')}` : ''}${t.sharedWeaknesses.length ? `, two lose to ${t.sharedWeaknesses.join(', ')}` : ''}`;
   const scanned = {}; for (const r of results) { const s = scanId(r); if (!s || !s.id || r.bench || r.superseded) continue; const lv = lvl(r); if (lv && (!scanned[s.id] || scanned[s.id] < lv)) scanned[s.id] = lv; }
   return {
-    league: APP.league.title, gamemaster: APP.gamemasterTimestamp.slice(0, 10), trainerLevel: localStorage.getItem('trainer') || null,
+    league: APP.league.title, rules: (APP.league.rules || []).length ? APP.league.rules : undefined, cupConditions: cupConditions().lines.map(l => l.text), gamemaster: APP.gamemasterTimestamp.slice(0, 10), trainerLevel: localStorage.getItem('trainer') || null,
     owned: Object.keys(own).filter(id => APP.pokemon[id]).map(id => mon(id) + (scanned[id] ? ` at L${scanned[id]}` : '')),
     pending: Object.keys(ri.pending).filter(id => APP.pokemon[id] && !own[id]).map(mon),
     wanted: Object.keys(ri.candidates).filter(id => APP.pokemon[id]).map(mon),
@@ -2121,7 +2121,7 @@ function matchupsInner() {
   const m = M(), st = battleStats(LEAGUE.slug), teams = gpTeams(st);
   const L = builderLeague(m, teams.flatMap(t => t.ids));
   const cur = gpCurrent(teams);
-  let h = gpHead(L, cur, st);
+  let h = gpHead(L, cur, st) + cupCard(false);
   if (!cur.ids.length) return h + `<div class="empty"><b>No team yet.</b><br>Fill the <a href="#" onclick="Planner.nav('#/builder');return false">Builder</a> or save an in-game party, then come back.</div>`;
   const ids = cur.ids, use = ids.filter(id => L.pokemon[id]);
   if (!use.length) return h + `<div class="note">Nobody in this team can enter ${esc(LEAGUE.title)}. Pick another team or switch league.</div>`;
@@ -3047,11 +3047,56 @@ function metaPick(kind) { UI.metaPick = UI.metaPick === kind ? null : kind; rend
 function metaDrop(kind, id) { META_F[kind] = META_F[kind].filter(x => x !== id); saveMetaF(); renderMeta('teams'); }
 function metaOwned(on) { META_F.owned = !!on; saveMetaF(); renderMeta('teams'); }
 function metaClear() { META_F.inc = []; META_F.exc = []; META_F.owned = false; UI.metaPick = null; saveMetaF(); renderMeta('teams'); }
+
+/* ---------- cup conditions: what this league's rules and meta mean for a team, worked out from the data ---------- */
+let CUPC = {app: null, v: null};
+function cupConditions() {
+  if (CUPC.app === APP) return CUPC.v;
+  const meta = (APP.meta || []).filter(id => APP.pokemon[id]), N = meta.length || 1, lg = APP.league || {};
+  const rules = (lg.rules || []).filter(r => !/at or below [\d,.]+ CP/i.test(r));     // the cap is in the header already
+  const only = []; for (const r of lg.rules || []) { const m = /only (.+?) pok[eé]mon are eligible/i.exec(r); if (m) only.push(...TYPES18.filter(t => new RegExp('\\b' + t + '\\b', 'i').test(m[1])).sort((a, b) => m[1].toLowerCase().indexOf(a) - m[1].toLowerCase().indexOf(b))); }   // in the order the rule names them
+  const metaT = {}, atkT = {};
+  for (const id of meta) {
+    const e = APP.pokemon[id]; for (const t of e.types) metaT[t] = (metaT[t] || 0) + 1;
+    for (const t of new Set((e.moveset || []).map(mvType).filter(Boolean))) atkT[t] = (atkT[t] || 0) + 1;
+  }
+  const byN = o => Object.entries(o).map(([t, n]) => ({t, n})).sort((a, b) => b.n - a.n);
+  // defending: every typing this league actually allows (its ranked Pokémon), scored by how the moves this meta carries land on it
+  const typings = {};
+  for (const [id, e] of Object.entries(APP.pokemon)) { const k = e.types.filter(t => t && t !== 'none').slice().sort().join('/'); if (!k) continue; if (!typings[k] || (e.rank || 9999) < (typings[k].rank || 9999)) typings[k] = {id, rank: e.rank, types: e.types.filter(t => t && t !== 'none')}; }
+  const def = Object.values(typings).map(x => { let s = 0; for (const [a, n] of Object.entries(atkT)) s += n * Math.log2(PVP.eff(a, x.types)); return Object.assign({s}, x); }).sort((a, b) => a.s - b.s);
+  // attacking with a type: how many meta Pokémon it hits super effectively, and how many resist it
+  const off = TYPES18.map(t => { let se = 0, rs = 0; for (const id of meta) { const e = PVP.eff(t, APP.pokemon[id].types); if (e > 1) se++; if (e < 1) rs++; } return {t, se, rs}; });
+  const hits = off.slice().sort((a, b) => (b.se - b.rs) - (a.se - a.rs)), walled = off.slice().sort((a, b) => (b.rs - b.se) - (a.rs - a.se));
+  const absent = TYPES18.filter(t => !metaT[t]);
+  const top = byN(metaT), lines = [];
+  if (top[0]) { const t = top[0].t, ans = hits.filter(x => PVP.eff(x.t, [t]) > 1).slice(0, 2).map(x => x.t);
+    lines.push({k: 'most', types: [t], text: `${cap1(t)} is everywhere: ${top[0].n} of the ${N} most common Pokémon${ans.length ? `. ${ans.map(cap1).join(' and ')} moves hit it` : ''}.`, ans}); }
+  const tn = x => `${x.types.map(cap1).join('/')} (${nm(x.id)})`;
+  lines.push({k: 'bring', types: [...new Set(def.slice(0, 3).flatMap(x => x.types))], text: `Best typings to bring: ${def.slice(0, 3).map(tn).join(', ')}. They resist most of the moves this meta carries.`});
+  lines.push({k: 'avoid', types: [...new Set(def.slice(-3).reverse().flatMap(x => x.types))], text: `Punished here: ${def.slice(-3).reverse().map(tn).join(', ')}. Much of the meta hits them super effectively.`});
+  lines.push({k: 'moves', types: hits.slice(0, 3).map(x => x.t), text: `Moves that pay off: ${hits.slice(0, 3).map(x => `${cap1(x.t)} (${x.se} weak to it, ${x.rs} resist)`).join(', ')}.`});
+  lines.push({k: 'walled', types: walled.slice(0, 3).map(x => x.t), text: `Moves that get walled: ${walled.slice(0, 3).map(x => `${cap1(x.t)} (${x.rs} resist it, ${x.se} weak to it)`).join(', ')}. Coverage of these types is worth less here.`});
+  if (absent.length && lg.cup !== 'all') lines.push({k: 'absent', types: absent, text: `Not in this meta: ${absent.map(cap1).join(', ')}. Moves that only answer those can go; Pokémon that fear them are safer here.`});
+  CUPC = {app: APP, v: {rules, only, meta: top, atk: byN(atkT), def, hits, walled, absent, lines, N, open: lg.cup === 'all'}};
+  return CUPC.v;
+}
+const cap1 = t => t.charAt(0).toUpperCase() + t.slice(1);
+function cupCard(full) {                          // full: the Meta teams card; otherwise one line with a link to it
+  const c = cupConditions(); if (!c) return '';
+  if (!full) return c.only.length || c.rules.length ? `<div class="note cupline">${esc(LEAGUE.title)}: ${c.only.length ? `only ${c.only.map(ti).join('')}` : esc(c.rules[0])} · <a href="#" onclick="Planner.nav('#/meta');return false">what that means for your team</a></div>` : '';
+  const bar = (list, max) => list.slice(0, 8).map(x => `<div class="cbar"><span class="ct">${ti(x.t)}${esc(cap1(x.t))}</span><span class="cb"><i style="width:${Math.round(x.n / max * 100)}%"></i></span><span class="cn">${x.n}</span></div>`).join('');
+  let h = `<details class="team card cupc"${c.open ? '' : ' open'}><summary><span class="sec" style="margin:0">${c.open ? 'League conditions' : 'Cup conditions'} <small>${esc(LEAGUE.title)} · what it means for a team</small></span></summary>`;
+  if (c.only.length || c.rules.length) h += `<div class="crules">${c.only.length ? `<div><b>Allowed types</b> ${c.only.map(t => tchip(t)).join('')}</div>` : ''}${c.rules.filter(r => !/only .+ eligible/i.test(r)).map(r => `<div class="dt">• ${esc(r)}</div>`).join('')}</div>`;
+  h += `<div class="cgrid"><div><div class="uh">The meta's types <small class="dim">top ${c.N}</small></div>${bar(c.meta, c.meta[0] ? c.meta[0].n : 1)}</div><div><div class="uh">Their move types</div>${bar(c.atk, c.atk[0] ? c.atk[0].n : 1)}</div></div>`;
+  h += `<div class="uh" style="margin-top:8px">What that means</div>` + c.lines.map(l => `<div class="cl">${l.types.slice(0, 6).map(ti).join('')}<span>${esc(l.text)}</span></div>`).join('');
+  return h + `<div class="dt" style="margin-top:6px">Worked out from the cup rules, the ${c.N} most common Pokémon and the moves they run, with the type chart.</div></details>`;
+}
 function renderMetaTeams(m) {
   if (!APP.meta || !APP.meta.length) return '<div class="note">No meta group in the data file yet.</div>';
   const f = META_F, active = f.inc.length || f.exc.length || f.owned;
   const rows = metaTrios(f, m);
-  let h = `<div class="note">The ${META_TOP} best trios from the top ${META_POOL} of the ${esc(LEAGUE.title)} meta, with the recommended movesets. Tap a team for roles, weak spots and what you still need.</div>`;
+  let h = cupCard(true) + `<div class="note">The ${META_TOP} best trios from the top ${META_POOL} of the ${esc(LEAGUE.title)} meta, with the recommended movesets. Tap a team for roles, weak spots and what you still need.</div>`;
   const fchip = (kind, id) => `<span class="chip ${kind === 'inc' ? 'ok' : 'warn'} f">${icon(id, 'xs')}${esc(nm(id))}<span class="x" onclick="Planner.metaDrop('${kind}','${id}')">✕</span></span>`;
   h += `<div class="tchips mf">
     <span class="chip ${UI.metaPick === 'inc' ? 'sel' : ''} ${f.inc.length >= 3 ? 'dim' : ''}" onclick="Planner.metaPick('inc')">＋ must have</span>
@@ -3351,7 +3396,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {cupConditions, scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

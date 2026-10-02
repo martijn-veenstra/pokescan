@@ -646,3 +646,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .gpl .gn .gt{display:inline-flex;margin-left:4px;vertical-align:-.15em}.gpl .gn .gt .ty{margin-right:1px}
 .gpm .gi .ty{margin:0 0 0 2px}
 .bck .why{margin-top:3px}
+/* cup conditions */
+.cupc summary{list-style:none;cursor:pointer}.cupc summary::-webkit-details-marker{display:none}
+.cupc .crules{margin:8px 0 4px}.cupc .crules b{font-size:12.5px;margin-right:6px}.cupc .crules .chip{margin:2px 4px 2px 0}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.cbar{display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0}.cbar .ct{width:76px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cbar .cb{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}.cbar .cb i{display:block;height:100%;background:var(--green);border-radius:3px}.cbar .cn{width:18px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+.cl{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4;padding:6px 0;border-top:1px solid var(--line)}.cl:first-of-type{border-top:none}.cl .ty{margin:2px 0 0;flex:none}.cl .ty+.ty{margin-left:-4px}.cl span{flex:1}
+.cupline .ty{margin:0 2px 0 0}
