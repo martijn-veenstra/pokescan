@@ -22,10 +22,14 @@ async function shrink(cv, max) {               // JPEG at most `max` px on the l
   return {image: b64, mediaType: 'image/jpeg'};
 }
 async function ask(payload) {                  // POST /api/vision, then poll the job (phones drop long requests)
-  const r = await fetch('/api/vision', {method: 'POST', headers: await Sync.headers(), body: JSON.stringify(payload)});
+  let r;
+  try { r = await fetch('/api/vision', {method: 'POST', headers: await Sync.headers(), body: JSON.stringify(payload)}); }
+  catch { throw new Error(navigator.onLine === false ? "you're offline — try again when you have a connection" : 'the server could not be reached — try again in a moment'); }
   const j = await r.json().catch(() => ({}));
   if (r.status === 403) throw new Error('PokeScan Pro reads screenshots');
   if (r.status === 429) throw new Error(j.message || 'too many screenshots this hour');
+  if (r.status === 402) throw new Error(j.message || 'you are out of credits this month');
+  if (r.status >= 500) throw new Error(j.message || 'the server is having trouble — try again in a few minutes');
   if (!r.ok) throw new Error(j.message || j.error || ('server ' + r.status));
   if (j.data) return j.data;
   const t0 = Date.now();

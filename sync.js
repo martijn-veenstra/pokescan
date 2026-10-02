@@ -99,7 +99,10 @@ async function detect() {
     const j = r.ok ? await r.json() : null;
     health = j;
     available = !!(j && j.ok && j.sync);
-    if (available && window.Auth) Auth.init(j).then(() => paint());
+    if (available && window.Auth) Auth.init(j).then(() => paint()).catch(e => {   // the sign-in service, not the server: sync waits, local data keeps working
+      console.warn('sign-in service unreachable', e);
+      lastError = 'sign-in service unreachable'; lastErrorAt = Date.now(); paint();
+    });
   } catch { available = false; }
   paint();
   return available;
@@ -305,7 +308,18 @@ async function syncNow() {
   retryN = 0; clearTimeout(retryT); retrying = false;
   await resync();
 }
+/* One toast per session when sync starts failing, one when it recovers — the cloud button alone is easy to miss.
+   Quiet retries (retrying) and being offline never toast: offline is not an error and retries usually heal themselves. */
+let toldFail = false, wasFailing = false;
+function announce() {
+  if (typeof toast !== 'function') return;
+  const failing = !!lastError && navigator.onLine !== false && signedIn();
+  if (failing && !wasFailing && !toldFail) { toldFail = true; toast(`⚠ Sync is failing: ${lastError}. Your data is safe on this device.`, "document.getElementById('syncbtn') && document.getElementById('syncbtn').click()"); }
+  if (!failing && wasFailing && !lastError && signedIn()) { toldFail = false; toast('✓ Sync is back: everything saved to your account'); }
+  wasFailing = failing;
+}
 function paint() {
+  announce();
   const b = $('syncbtn'); if (!b) return;
   if (available === false) { b.style.display = 'none'; return; }
   b.style.display = '';
@@ -359,10 +373,12 @@ async function coach(context, onProgress, mode) {   // server-side Claude review
   if (!signedIn()) throw new Error(clerkMode() ? 'sign in first (cloud button)' : 'connect sync first (cloud button)');
   let r, j;
   try { r = await fetch('/api/coach', {method: 'POST', headers: await hdr(), body: JSON.stringify({context, mode: mode || 'review'})}); }
-  catch (e) { throw new Error('could not reach the server (' + (e.message || e) + ')'); }
+  catch { throw new Error(navigator.onLine === false ? "you're offline — the coach needs a connection" : 'the server could not be reached — try again in a moment'); }
   j = await r.json().catch(() => ({}));
   if (r.status === 401) throw new Error(authErr());
   if (r.status === 429) throw new Error('the reviewer is resting: ' + (j.message || 'too many reviews this hour'));
+  if (r.status === 402) throw new Error(j.message || 'you are out of credits this month');
+  if (r.status >= 500) throw new Error(j.message || 'the server is having trouble — try again in a few minutes');
   if (!r.ok) throw new Error(j.message || j.error || ('server ' + r.status));
   if (j.text) return j.text;
   // the server hands back a job; poll it (a single long request would be cut off by the phone after about a minute)
