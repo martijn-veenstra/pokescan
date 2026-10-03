@@ -263,6 +263,13 @@ export async function buildServer({ dbUrl = process.env.DATABASE_URL, passcode =
   });
 
   app.get('/api/state', { preHandler: auth }, async req => ({ user: req.userId, state: await db.all(req.userId) }));
+  // GDPR: delete everything stored under this account (state, history snapshots). The confirm phrase guards against an accidental call.
+  app.delete('/api/state', { preHandler: auth }, async (req, reply) => {
+    if ((req.body || {}).confirm !== 'delete') return reply.code(400).send({ error: 'missing_confirm', message: "send {\"confirm\":\"delete\"}" });
+    await db.clear(req.userId);
+    req.log.info({ evt: 'gdpr_delete', userId: req.userId }, 'synced data deleted on request');
+    return { ok: true };
+  });
   app.get('/api/state/:kind', { preHandler: auth }, async (req, reply) => {
     if (!KINDS.has(req.params.kind)) return reply.code(404).send({ error: 'unknown_kind' });
     return (await db.get(req.userId, req.params.kind)) || { data: null, updatedAt: null };

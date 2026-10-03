@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · PokeScan</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{--bg:#0E1626;--card:#17222F;--text:#EAF1F7;--dim:#8FA3B5;--green:#3BC489;--line:#223243}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:28px;line-height:1.25;margin:18px 0 4px}
+  h2{font-size:19px;margin:36px 0 8px}
+  p,li{color:var(--text)}
+  .dim{color:var(--dim)}
+  a{color:var(--green)}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0}
+  th,td{text-align:left;padding:8px 10px;border:1px solid var(--line);vertical-align:top}
+  th{background:var(--card)}
+  .top{font-size:14px}
+  code{background:var(--card);padding:1px 5px;border-radius:4px;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<p class="top"><a href="/">← PokeScan</a></p>
+<h1>Privacy policy</h1>
+<p class="dim">Last updated: 30 September 2026</p>
+
+<p>PokeScan is an IV scanner and battle planner for Pokémon GO. It is built so that your data stays on your device
+unless you choose otherwise: scanning works entirely in your browser, and only features you actively use — an account,
+sync, or the AI features in Pro — send data to a server. This page says exactly what leaves your device, where it goes,
+and why.</p>
+
+<h2>Who is responsible</h2>
+<p>The data controller is <b>Martijn Veenstra</b>, sole trader (eenmanszaak) registered with the Dutch Chamber of
+Commerce (KvK) under number <b>42120153</b>, operating PokeScan. Contact:
+<a href="mailto:martijn.veenstra84@gmail.com">martijn.veenstra84@gmail.com</a>.</p>
+
+<h2>What stays on your device</h2>
+<p>Screenshots and recordings you scan are read <b>on your device</b>, in your browser. Without an account, your scans,
+roster, teams, battle log and settings live only in this browser's storage and are sent nowhere. The schedule of events
+and raids is fetched from public sources, which see your IP address like any website you visit does.</p>
+
+<h2>What leaves your device, and when</h2>
+<table>
+<tr><th>When you…</th><th>What is processed</th><th>Where</th></tr>
+<tr><td>Create an account and sign in</td><td>Your e-mail address, name if you provide one, and session tokens</td><td>Clerk (auth provider), our server</td></tr>
+<tr><td>Sync your data</td><td>Your scans (Pokémon stats, no images), roster, teams, battle log and progress, stored under your account id</td><td>Our server (Railway, Postgres database)</td></tr>
+<tr><td>Subscribe to Pro</td><td>Payment details, e-mail and a customer id — handled by Stripe; we never see your card number</td><td>Stripe</td></tr>
+<tr><td>Use the AI coach (Pro)</td><td>A text summary of your roster, team or battle — no images, no account details</td><td>Our server → Anthropic (Claude)</td></tr>
+<tr><td>Let Professor Cedar read a screenshot or recording (Pro)</td><td>The screenshot or sampled video frames you shared — these can show your trainer name and what is on the screen</td><td>Our server → Anthropic (Claude)</td></tr>
+<tr><td>The app hits an error</td><td>A trimmed error message and stack trace — no personal data, no images</td><td>Our server (logs)</td></tr>
+</table>
+
+<h2>Our processors</h2>
+<ul>
+<li><b>Clerk</b> (US) — accounts and sign-in. Legal basis: performance of the contract.</li>
+<li><b>Stripe</b> (US/EU) — payments and subscription management. Legal basis: performance of the contract and legal obligations (bookkeeping).</li>
+<li><b>Anthropic</b> (US) — the AI model that writes reviews and reads screenshots, only when you use those features. Anthropic does not train models on this data under its commercial API terms. Legal basis: performance of the contract (you ask for the feature).</li>
+<li><b>Railway</b> (US) — hosting of the server and the Postgres database that holds synced data.</li>
+<li><b>GitHub</b> (US) — the event schedule is fetched from raw.githubusercontent.com, which sees your IP address. Legal basis: legitimate interest (showing the schedule).</li>
+</ul>
+<p>Some of these providers are in the United States. Transfers rely on the EU–US Data Privacy Framework or standard
+contractual clauses, depending on the provider.</p>
+
+<h2>How long we keep things</h2>
+<ul>
+<li><b>Synced data</b>: for as long as you keep it in your account. You can delete it at any time (below).</li>
+<li><b>History snapshots</b>: the server keeps up to 50 recent snapshots per data type to guard against data loss; old ones are pruned automatically. Deleting your synced data deletes these too.</li>
+<li><b>AI jobs</b>: a review or screenshot read lives in server memory for at most one hour and is never written to disk. The screenshot itself is not stored.</li>
+<li><b>Payment records</b>: Stripe retains what tax law requires; we keep your subscription status and a Stripe reference, not your payment details.</li>
+<li><b>Server logs</b>: kept briefly for operations and debugging, then rotated away.</li>
+</ul>
+
+<h2>Your rights</h2>
+<p>You can ask for access to, correction of, or deletion of your personal data, ask us to restrict or stop processing,
+and take your data elsewhere (portability). In the app: <b>account box → Delete my synced data</b> removes everything
+stored under your account on the server, and the Export button gives you a full copy. Deleting your Clerk account
+removes your sign-in data. For anything else, e-mail
+<a href="mailto:martijn.veenstra84@gmail.com">martijn.veenstra84@gmail.com</a> — we answer within 30 days.</p>
+<p>If you believe we handle your data unlawfully, you have the right to complain to the Dutch supervisory authority,
+the <a href="https://www.autoriteitpersoonsgegevens.nl" rel="noopener">Autoriteit Persoonsgegevens</a>.</p>
+
+<h2>Changes</h2>
+<p>When this policy changes in a way that matters, the date above changes and the app points it out. Questions:
+<a href="mailto:martijn.veenstra84@gmail.com">martijn.veenstra84@gmail.com</a>.</p>
+
+<p class="dim" style="margin-top:40px;font-size:13px">PokeScan is not affiliated with Niantic or The Pokémon Company.
+See also the <a href="/terms.html">terms of service</a>.</p>
+</main>
+</body>
+</html>

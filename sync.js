@@ -356,9 +356,11 @@ function renderBox() {
           <p class="dim" style="font-size:12px">One-time: move the scans, roster, teams and battles saved under the old passcode into this account. Only what this account does not have yet is moved.</p>
           <div class="add" style="margin:6px 0"><input id="impcode" type="password" placeholder="server passcode" autocomplete="off"><button onclick="Sync.importPasscode()" ${busy ? 'disabled' : ''}>Import</button></div>
           ${importMsg ? `<div class="note" ${/^⚠/.test(importMsg) ? 'style="color:#F59A8B"' : ''}>${importMsg}</div>` : ''}</details>` : ''}
-        <p class="dim" style="font-size:12px;margin-top:10px">Scans, roster, parties, battles and the completion log follow your account to every device. Local storage stays the working copy, so the app keeps working offline.</p>`
+        <p class="dim" style="font-size:12px;margin-top:10px">Scans, roster, parties, battles and the completion log follow your account to every device. Local storage stays the working copy, so the app keeps working offline.</p>
+        <p class="dim" style="font-size:12px;margin-top:6px"><a href="#" onclick="Sync.deleteData();return false" style="color:#F59A8B">Delete my synced data</a> · removes everything stored under this account on the server. This device keeps its local copy.</p>
+        <p class="dim" style="font-size:11px;margin-top:8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>`
       : mode === 'offline' ? `<p class="dim">Could not reach the sign-in service. You can keep using the app; sync resumes when you are back online.</p>`
-      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}`}</div>`;
+      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}<p class="dim" style="font-size:11px;margin-top:8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>`}</div>`;
     if (!signedIn() && mode === 'clerk') Auth.mountSignIn($('clerk-signin'));
     return;
   }
@@ -416,13 +418,24 @@ async function importPasscode() {              // one-time: the passcode era's r
   busy = false; renderBox(); paint();
 }
 function copyId(btn) { const id = (window.Auth && Auth.userId()) || ''; if (!id) return; navigator.clipboard && navigator.clipboard.writeText(id).then(() => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } }).catch(() => {}); }
+async function deleteData() {                    // GDPR: wipe everything stored under this account on the server; the local copy stays
+  if (!signedIn()) return;
+  if (!confirm('Delete everything stored under this account on the server?\n\nThis device keeps its local copy, but other devices will no longer receive it, and the server copy (including history) is gone for good.')) return;
+  try {
+    const r = await fetch('/api/state', { method: 'DELETE', headers: await hdr(), body: JSON.stringify({ confirm: 'delete' }) });
+    if (!r.ok) throw new Error('server ' + r.status);
+    S.base = {}; S.last = {}; save();            // the server is empty: push everything fresh on the next sync, pull nothing stale
+    importMsg = '✓ Your synced data has been deleted from the server.';
+  } catch (e) { importMsg = '⚠ Could not delete: ' + (e.message || e); }
+  renderBox();
+}
 async function init() {
   if (await detect() && !clerkMode() && S.code) {
     await resync();                             // push too: edits made while the server was unreachable
     if (window.Planner) Planner.renderToday();
   } else if (dirty.size && signedIn()) flush();  // edits queued before this load (dirty is persisted)
 }
-window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
+window.Sync = {touch, connect, disconnect, syncNow, toggle, init, flush, detect, coach, importPasscode, copyId, deleteData, refreshMe, state: S, error: () => lastError, available: () => available, signedIn,
                health: () => health, me: () => me, plan, isPro, headers: hdr, coachAvailable: () => !!(health && health.coach && signedIn() && isPro()),
                visionAvailable: () => !!(health && health.vision && signedIn() && isPro()), visionOffered: () => !!(health && health.vision && signedIn() && !isPro()),
                coachOffered: () => !!(health && health.coach && signedIn() && !isPro())};   // the server has the AI, this account has not unlocked it yet
