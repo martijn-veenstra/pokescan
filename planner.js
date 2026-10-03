@@ -462,6 +462,7 @@ function renderTodayInner(el) {
   h += changesCard(m);
   h += eventsCard(m);
   h += Planner.investCard ? Planner.investCard() : '';
+  h += Planner.quizCard ? Planner.quizCard() : '';
   if (!best) {
     h += `<div class="empty"><b>No team yet.</b><br>${ONBOARD.dismissed ? `Scan at least three Pokémon at or under ${LEAGUE.cp} CP, add them by name in Roster, or load the saved roster from its ⋮ menu.` : 'The checklist above says what to scan next.'}</div>`;
     el.innerHTML = h; return;
@@ -3323,7 +3324,7 @@ window.Planner = {gblMatch, cupConditions, scanIcon, evolvesInto, nav, route, ba
 /* the helpers the feature files (gameplan.js, invest.js) build on; mutable state through getters so they never hold a stale copy */
 window.PS = {M, UI, ROSTER, ALT_DATA, ALT_PROM, altData, attr, battleStats, bestSwaps, builderLeague, capT, chip, coverText, cupCard, errorCard, esc, evoDescendants,
   familyKey, fold, gpName, haveOf, icon, kdust, loadPve, nice, nm, onView, scanIcon, scanId, teamKey, teamOf, ti, trio, tset, typeWhy, unrankedId, when, whenIdle,
-  pve: () => PVE, evo: () => EVO};
+  tchip, mvH, TYPES18, weakToTypes, pve: () => PVE, evo: () => EVO};
 const boot = () => { route(); loadCups(); loadChanges(); loadEvo(); };   // after every script has run: the feature files add their pages to Planner first
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

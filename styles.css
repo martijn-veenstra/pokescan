@@ -688,3 +688,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .x,[aria-label=Close]{position:relative}
 .x::after{content:'';position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%)}
 .pill .x::after,.role.slot .x::after{width:32px;height:32px}   /* chips sit in rows: a full 44px hit area would swallow the neighbour */
+/* type quiz */
+.qlv{margin:0 0 8px}
+.quiz .qtext{font-size:15px;line-height:1.5}.quiz .qtext .pi{vertical-align:-.3em;margin-right:3px}
+.qvs{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin:12px 0 2px;text-align:center}.qside{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}.qside b{font-size:14px;line-height:1.25}.qvs .qty{display:inline-flex;gap:2px}.qvs .qty .ty{margin:0}
+.qopts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.qopt{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:10px 8px;font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;text-align:center;min-height:46px}
+.qopt .dim{font-size:12px}.qopt.right{border-color:var(--green);background:rgba(72,213,151,.14)}.qopt.wrong{border-color:var(--bad);background:rgba(245,154,139,.14)}.qopt.off{opacity:.55}
+.qwhy{margin-top:10px;font-size:13px;line-height:1.5;color:var(--dim)}.qwhy b{color:var(--ink)}.qwhy.ok>b:first-child{color:var(--green)}.qwhy.no>b:first-child{color:var(--bad)}.qwhy .why{margin-top:4px}

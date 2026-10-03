@@ -12,6 +12,7 @@ const PAGE_LIST = [
   {key: 'meta',     label: 'Meta teams',  bar: '',        top: true, menu: ['Meta', '♛'],       render: 'renderMeta', arg: 'teams', meta: 'teams'},
   {key: 'rank',     label: 'Rankings',    bar: '',        top: true, menu: ['Meta', '#'],       render: 'renderMeta', arg: 'rank', meta: 'rank'},
   {key: 'raids',    label: 'Raids',       bar: '',        top: true, menu: ['Meta', '⚔'],       render: 'renderMeta', arg: 'raids', meta: 'raids'},
+  {key: 'quiz',     label: 'Type quiz',   bar: '',        top: true, menu: ['Meta', '✪'],       render: 'renderQuiz'},
   {key: 'roster',   label: 'Roster',      bar: 'roster',  top: true, menu: ['Collection', '◎'], render: 'renderRoster', alias: 'scans'},
   {key: 'invest',   label: 'Invest',      bar: 'roster',  top: true, menu: ['Collection', '✦'], render: 'renderInvest'},
   {key: 'team',     label: 'Team',        bar: 'builder', render: 'renderTeam'},
