@@ -1,5 +1,5 @@
 /* ---------- data & solver ---------- */
-const DATA = JSON.parse(document.getElementById('pogodata').textContent);
+const DATA = window.POGODATA;                     // pogodata.js: base stats and CP multipliers
 const SPECIES = Object.keys(DATA.stats);
 const UP = {"candy":[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,6,6,8,8,10,10,12,12,15,0,0,0,0,0,0,0,0,0,0,0],"dust":[200,200,400,400,600,600,800,800,1000,1000,1300,1300,1600,1600,1900,1900,2200,2200,2500,2500,3000,3000,3500,3500,4000,4000,4500,4500,5000,5000,6000,6000,7000,7000,8000,8000,9000,9000,10000,10000,11000,11000,12000,12000,13000,13000,14000,14000,15000],"xl":[10,10,12,12,15,15,17,17,20,20]};   // official per-level power-up costs
 const DUST = [...new Set(UP.dust)];
@@ -83,7 +83,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.50';
+const APP_VERSION='10.51';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1513,16 +1513,13 @@ function planFor(r,best){                       // the evolution chain of a scan
   return lines.length?`<div class="plan">${lines.join('<br>')}</div>`:'';
 }
 
-const PAGES=['today','builder','teams','team','roster','meta','rank','raids','scans','mon','matchups','battles','battle','pro','invest'];
-const TOP_PAGES=['today','builder','teams','roster','meta','rank','raids','matchups','battles','invest'];
-const BAR_FOR={today:'today',builder:'builder',teams:'builder',team:'builder',matchups:'builder',battles:'builder',battle:'builder',roster:'roster',scans:'roster',mon:'roster',invest:'roster',meta:'',rank:'',raids:'',pro:''};
+const TOP_PAGES=PAGE_LIST.filter(p=>p.top).map(p=>p.key);   // pages.js holds the page list; the remembered last tab is one of these
 function showView(t){                              // switch the visible page; navigation goes through Planner.nav so the URL hash stays in step
-  if(t==='scans') t='roster';                       // Scans & import is part of the Roster page now
-  if(!PAGES.includes(t)) t='today';
-  for(const k of PAGES){ const v=$('view-'+k); if(v) v.classList.toggle('on',k===t); }
-  for(const k of ['today','builder','roster']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',BAR_FOR[t]===k); }
-  if(TOP_PAGES.includes(t)) localStorage.setItem('tab',t);
-  if(window.Planner){ const P=Planner; ({today:P.renderToday,builder:()=>P.renderMeta('build'),teams:P.renderTeams,team:P.renderTeam,roster:P.renderRoster,meta:()=>P.renderMeta('teams'),rank:()=>P.renderMeta('rank'),raids:()=>P.renderMeta('raids'),mon:P.renderMon,matchups:P.renderMatchups,invest:P.renderInvest,battles:P.renderBattles,battle:P.renderBattle}[t]||(()=>{}))(); if(P.paintDrawer) P.paintDrawer(); }
+  t=pageKey(t);                                     // #/scans is the Roster page now; an unknown key is Today
+  for(const p of PAGE_LIST){ const v=$('view-'+p.key); if(v) v.classList.toggle('on',p.key===t); }
+  for(const k of ['today','builder','roster']){ const tb=$('tab-'+k); if(tb) tb.classList.toggle('on',PAGE[t].bar===k); }
+  if(PAGE[t].top) localStorage.setItem('tab',t);
+  if(window.Planner){ renderPage(t); if(Planner.paintDrawer) Planner.paintDrawer(); }
 }
 function showTab(t){ if(window.Planner&&Planner.nav&&TOP_PAGES.includes(t)) Planner.nav('#/'+t); else showView(t); }
 if(!location.hash) showView(localStorage.getItem('tab')||'today');

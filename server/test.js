@@ -424,3 +424,14 @@ console.log('accounts-mode tests passed');
   await sick.close();
   console.log('health-503 and client-error tests passed');
 }
+
+// the offline shell: every local script and stylesheet index.html loads is precached by the service worker
+{
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const shell = JSON.parse(sw.match(/const SHELL = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  const local = [...html.matchAll(/<(?:script[^>]*\ssrc|link[^>]*rel="stylesheet"[^>]*\shref)="([^"?#]+)/g)].map(m => m[1]).filter(u => !/^(https?:)?\/\//.test(u) && !u.startsWith('vendor/'));
+  assert.ok(local.length >= 8, 'found the app scripts in index.html');
+  for (const f of local) assert.ok(shell.includes(f), `sw.js SHELL is missing ${f}`);
+  console.log('service worker shell covers', local.length, 'files');
+}

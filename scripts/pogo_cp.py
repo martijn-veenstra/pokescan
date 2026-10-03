@@ -22,7 +22,7 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-INDEX_HTML = os.path.join(HERE, "..", "index.html")
+POGODATA_JS = os.path.join(HERE, "..", "pogodata.js")
 
 # Official per-level power-up costs (index of level L covers L -> L+0.5 and L+0.5 -> L+1).
 UP_CANDY = [1]*10 + [2]*10 + [3]*5 + [4]*5 + [6, 6, 8, 8, 10, 10, 12, 12, 15] + [0]*11
@@ -38,9 +38,8 @@ _DATA = None
 def data():
     global _DATA
     if _DATA is None:
-        html = open(INDEX_HTML, encoding="utf-8").read()
-        m = re.search(r'<script id="pogodata" type="application/json">(.*?)</script>', html, re.S)
-        _DATA = json.loads(m.group(1))
+        js = open(POGODATA_JS, encoding="utf-8").read()
+        _DATA = json.loads(js[js.index("{"):js.rindex("}") + 1])
     return _DATA
 
 

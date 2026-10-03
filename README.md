@@ -446,7 +446,7 @@ python3 scripts/generate_roster_team_comps.py --pretty
 
 ## CP, level and power-up maths
 
-`scripts/pogo_cp.py` uses the base stats and CP multiplier table embedded in `index.html`.
+`scripts/pogo_cp.py` uses the base stats and CP multiplier table in `pogodata.js`.
 
 ```sh
 python3 scripts/pogo_cp.py cost mimikyu 15 15 12 15 23.5        # stardust and candy from level 15 to 23.5
