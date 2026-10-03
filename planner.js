@@ -1066,7 +1066,7 @@ async function askReview(ids, again) {         // one review, because the player
   }, 1000);
   let caught = false;
   try {
-    const m = M(), L = builderLeague(m), ctx = builderContext(m, L, ids);
+    const m = M(), L = builderLeague(m, ids), use = ids.filter(id => L.pokemon[id]), ctx = builderContext(m, L, use);
     const text = await Sync.coach(ctx);
     BCOACH.reviews[key] = {t: Date.now(), text, slots: ids.slice()}; saveBCoach(); caught = true;
   } catch (e) { BCOACH.reviewFailed[key] = (e && e.message) || 'no answer'; }
@@ -3022,12 +3022,13 @@ function renderMetaInner(el, key) {
   el.innerHTML = key === 'build' ? renderBuilder(m, builderLeague(m)) : key === 'teams' ? renderMetaTeams(m) : key === 'raids' ? renderRaids(m) : renderRankings(m);
 }
 function renderBuilder(m, L) {
-  const slots = UI.build.slots, filled = slots.filter(Boolean);
+  const slots = UI.build.slots, all = slots.filter(Boolean), filled = all.filter(id => L.pokemon[id]), out = all.filter(id => !L.pokemon[id]);   // a Pokémon this league does not allow at all stays in its slot but is not scored
   let h = `<div class="note">Pick any three Pokémon: from the rankings, a meta team, or your roster. Scored the same way as Today.</div>`;
   const SLOT_NAMES = ['Lead', 'Swap', 'Closer'];   // slot order is the in-game order: lead, safe swap, closer
-  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">${SLOT_NAMES[i]}</span>${icon(id, 'l')}<span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">${APP.pokemon[id] ? '#' + rankOf(id) : 'not ranked'}${ownership(m, id) ? ' · ' + ownership(m, id) : !APP.pokemon[id] && scannedUnranked(id) ? ' · owned' : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
+  h += `<div class="roles">` + slots.map((id, i) => id ? `<div class="role slot"><span class="rl">${SLOT_NAMES[i]}</span>${icon(id, 'l')}<span class="rn" onclick="Planner.openMon('${id}')" style="cursor:pointer">${esc(nm(id))}</span><span class="rm">${APP.pokemon[id] ? '#' + rankOf(id) : L.pokemon[id] ? 'not ranked' : '<span class="bad">not allowed here</span>'}${ownership(m, id) ? ' · ' + ownership(m, id) : !APP.pokemon[id] && scannedUnranked(id) ? ' · owned' : ''}</span><span class="x" onclick="Planner.setSlot(${i},null)">✕</span></div>`
     : `<div class="role slot empty" onclick="Planner.pickFor(${i})"><span class="rl">${SLOT_NAMES[i]}</span>${icon(null, 'l ph')}<span class="rn dim" style="font-size:14px">＋ pick</span><span class="rm">pick from rankings</span></div>`).join('') + `</div>`;
-  h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${filled.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
+  h += `<div class="add" style="margin-top:8px"><input id="slotid" list="species" placeholder="or type a species id"><button onclick="Planner.addSlotFromInput()">Add</button>${all.length ? `<button onclick="Planner.clearSlots()" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">Clear</button>` : ''}</div>`;
+  if (out.length) h += `<div class="note">${esc(out.map(gpName).join(' and '))} ${out.length === 1 ? "isn't" : "aren't"} allowed in ${esc(LEAGUE.title)}: swap ${out.length === 1 ? 'it' : 'them'} out, or switch league to use ${out.length === 1 ? 'it' : 'them'}. ${filled.length ? 'The score below counts the others.' : ''}</div>`;
   // per-slot move choice
   if (filled.length) h += filled.map(id => `<div class="own"><div class="h"><b>${esc(nm(id))}</b><span>${L.movesOf(id).map(mvH).join(' · ')}</span></div>${L.pokemon[id] ? movesRow(id, L.movesOf(id), `Planner.setBuildMove('${id}',SLOT,this.value)`, L.pokemon[id]) : ''}</div>`).join('');
   if (filled.length === 3) {                     // name it and keep it: the saved party shows up under Saved teams, Today and the battle log
