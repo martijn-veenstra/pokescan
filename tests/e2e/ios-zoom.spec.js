@@ -23,3 +23,25 @@ test('no text field or select is under 16px on a touch device', async ({ page })
   expect(await smallControls(page), 'drawer').toEqual([]);
   expect(errors).toEqual([]);
 });
+
+// double-tap zoom is off (a quick second tap on an answer or a chip must not zoom the page); pinch-zoom stays allowed
+test('no double-tap zoom on a touch device, pinch-zoom still allowed', async ({ page }) => {
+  const errors = await openApp(page, '#/quiz');
+  const ta = sel => page.evaluate(s => { const el = document.querySelector(s); return el ? getComputedStyle(el).touchAction : 'missing'; }, sel);
+  expect(await ta('html')).toBe('manipulation');
+  expect(await ta('body')).toBe('manipulation');
+  expect(await ta('#quiz .qopt')).toBe('manipulation');
+  expect(await ta('#quiz .qlv button')).toBe('manipulation');
+  expect(await ta('#menubtn')).toBe('manipulation');
+  expect(await ta('#navbar button')).toBe('manipulation');
+  await page.evaluate(() => Planner.nav('#/today'));
+  expect(await ta('#today [onclick]')).toBe('manipulation');
+  // the CP meter is dragged: it keeps touch-action none
+  await page.evaluate(() => { const b = DATA.stats['AZUMARILL'][0], lv = 20, m = cpmAt(lv); const r = { species: 'AZUMARILL', cp: calcCP(b, 5, 14, 14, m), hp: calcHP(b, 14, m), level: lv, combos: [[lv, 5, 14, 14, b]], txt: '', cpCandidates: [] }; r.key = 'AZUMARILL|' + r.cp; results.length = 0; results.push(r); save(); Planner.refresh(); Planner.openScan(r.key); });
+  expect(await ta('#meter svg')).toBe('none');
+  // and the viewport does not forbid zooming
+  const vp = await page.getAttribute('meta[name=viewport]', 'content');
+  expect(vp).not.toMatch(/user-scalable\s*=\s*(no|0)/);
+  expect(vp).not.toMatch(/maximum-scale\s*=\s*1(\.0)?\b/);
+  expect(errors).toEqual([]);
+});

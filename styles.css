@@ -698,3 +698,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .qwhy{margin-top:10px;font-size:13px;line-height:1.5;color:var(--dim)}.qwhy b{color:var(--ink)}.qwhy.ok>b:first-child{color:var(--green)}.qwhy.no>b:first-child{color:var(--bad)}.qwhy .why{margin-top:4px}
 .tchips.qown{margin:0 0 6px;align-items:center;gap:8px}
 .qside .dim{font-size:12px}
+/* no double-tap zoom (taps on answers, chips and buttons stay taps); pinch-zoom stays. touch-action is not inherited, but a
+   touch's effective value is the intersection with its ancestors, so the root covers the page; controls carry it themselves too. */
+html,body,button,a,input,select,textarea,[onclick],[role=button]{touch-action:manipulation}
+.meter svg{touch-action:none}
