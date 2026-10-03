@@ -83,7 +83,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.53';
+const APP_VERSION='10.54';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1418,7 +1418,7 @@ function lineageBanner(r){                        // one-tap merge offer on a sc
   const old=results.find(x=>x.key===h.key); if(!old){ delete r.lineageHint; return ''; }
   const nice=x=>String(x||'').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
   const k=r.key.replace(/'/g,''), what=h.kind==='evolution'?`your ${nice(h.species)} (${h.cp} CP) evolved`:`your ${nice(h.species)} ${h.cp} CP powered up`;
-  return `<div class="lin" onclick="event.stopPropagation()"><span class="q">Is this ${what}?</span><span class="a"><button class="yes" onclick="Planner.lineageMerge('${k}')">Yes, one card</button><button class="no" onclick="Planner.lineageDismiss('${k}')">No, another one</button></span>${h.multi?'<div class="dim" style="font-size:11.5px;margin-top:4px">More than one older card fits; this merges with the first. Use ⋮ → Update this Pokémon on the right card if it is not that one.</div>':''}</div>`;
+  return `<div class="lin" onclick="event.stopPropagation()"><span class="q">Is this ${what}?</span><span class="a"><button class="yes" onclick="Planner.lineageMerge('${k}')">Yes, one card</button><button class="no" onclick="Planner.lineageDismiss('${k}')">No, another one</button></span>${h.multi?'<div class="dim" style="font-size:12px;margin-top:4px">More than one older card fits; this merges with the first. Use ⋮ → Update this Pokémon on the right card if it is not that one.</div>':''}</div>`;
 }
 /* the scan list lives on the Roster page: render() redraws it there, batched while an import runs so forty screenshots do not redraw forty times */
 var RENDER_T=null;                                 // var: render() is called during start-up, before this line runs

@@ -899,7 +899,8 @@ function eventsCard(m) {
   const tag = forYou(m), open = UI.evOpen || (UI.evOpen = {});
   const lg = E.leagues.filter(l => l.now), nx = E.leagues.find(l => !l.now);
   if (lg.length || nx) h += gblCard(lg, nx);
-  const monChip = p => { const t = tag(p.name) || {}; return `<span class="evmon ${t.cls || ''}"${t.id ? ` onclick="event.preventDefault();Planner.openMon('${t.id}')"` : ''}>${t.id ? icon(t.id, 's') : ''}${esc(p.name)}${p.shiny ? ' ✨' : ''}${t.t ? `<em>${esc(t.t)}</em>` : ''}</span>`; };
+  // plain: inside the card's <summary> (the open/close toggle) a chip is a label, not a second control; the chips in the opened body open the Pokémon
+  const monChip = (p, plain) => { const t = tag(p.name) || {}; return `<span class="evmon ${t.cls || ''}"${t.id && !plain ? ` onclick="event.preventDefault();Planner.openMon('${t.id}')"` : ''}>${t.id ? icon(t.id, 's') : ''}${esc(p.name)}${p.shiny ? ' ✨' : ''}${t.t ? `<em>${esc(t.t)}</em>` : ''}</span>`; };
   const groups = list => { const g = new Map(); for (const p of list) { const k = p.group || ''; if (!g.has(k)) g.set(k, []); g.get(k).push(p); } return [...g.entries()]; };
   const block = (title, list) => list.length ? `<div class="evsub">${title}</div>${groups(list).map(([g, ps]) => `${g ? `<div class="evgrp">${esc(g)}</div>` : ''}<div class="evmons">${ps.map(monChip).join('')}</div>`).join('')}` : '';
   // bonuses: short ones as chips ("2× Catch Candy"), long ones as a list with the part before the colon in bold
@@ -922,7 +923,7 @@ function eventsCard(m) {
       ${e.now && e.about ? `<div class="evabout clamp evtop">${esc(e.about)}</div>` : ''}
       ${mine.length ? `<div class="evfor">★ ${esc(mine.join(' · '))}</div>` : ''}
       ${e.now && e.bonuses.length ? bonusHtml(e.bonuses, 3, 'evtop') : ''}
-      ${top.length ? `<div class="evmons evtop">${top.map(monChip).join('')}${all.length > top.length ? `<span class="dim">+${all.length - top.length}</span>` : ''}</div>` : ''}
+      ${top.length ? `<div class="evmons evtop">${top.map(p => monChip(p, true)).join('')}${all.length > top.length ? `<span class="dim">+${all.length - top.length}</span>` : ''}</div>` : ''}
       </span><span class="go">›</span></summary><div class="evbody">${body}</div></details>`;
   };
   const live = E.events.filter(e => e.now), soon = E.events.filter(e => !e.now);
@@ -1472,14 +1473,14 @@ function moveUsage(id, cur, e = APP.pokemon[id], league) {   // its own card on 
   const use = e.use || {}, mine = new Set((cur || []).filter(Boolean)), set = new Set(e.moveset);
   if (!Object.keys(use).length) {              // the rankings carry no usage for it (Cramorant): list its moves, the recommended ones first
     const list = (ks, label) => { const o = (ks || []).slice().sort((a, b) => (set.has(b) ? 1 : 0) - (set.has(a) ? 1 : 0)); return o.length ? `<div class="uh">${label}</div>` + o.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${mvH(m)}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="pc dim">${esc(((moveInfo(m) || {}).t) || '')}</span></div>`).join('') : ''; };
-    return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}no usage numbers for it yet: the recommended set is starred</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${list(e.fast, 'Fast')}${list(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
+    return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}no usage numbers for it yet: the recommended set is starred</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${list(e.fast, 'Fast')}${list(e.charged, 'Charged')}<div class="dim" style="font-size:12px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
   }
   const rows = (list, label) => {
     const ranked = list.filter(m => use[m] !== undefined).sort((a, b) => (use[b] || 0) - (use[a] || 0));
     if (!ranked.length) return '';
     return `<div class="uh">${label}</div>` + ranked.map((m, i) => `<div class="ur ${mine.has(m) ? 'mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${mine.has(m) ? '<em class="y">✓</em> ' : ''}${mvH(m)}${set.has(m) ? ' <em class="s">★</em>' : ''}</span><span class="bar"><i style="width:${Math.max(3, use[m])}%"></i></span><span class="pc">${use[m]}%</span></div>`).join('');
   };
-  return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}share of simulated meta battles running each move</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:11.5px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
+  return `<div class="sec">Moves by meta usage <small>${league ? `in ${esc(league)} · ` : ''}share of simulated meta battles running each move</small></div><div class="team card" style="cursor:default"><div class="use" style="margin:0">${rows(e.fast, 'Fast')}${rows(e.charged, 'Charged')}<div class="dim" style="font-size:12px;margin-top:8px"><em class="y">✓</em> ${cur && cur.filter(Boolean).length ? 'your moves' : 'set for planning'} · <em class="s">★</em> in the moveset behind rank #${e.rank}</div></div></div>`;
 }
 
 /* ---------- readiness: a copy is ready for GL when it sits at the cap level and carries PvPoke's moves ---------- */
@@ -2333,7 +2334,7 @@ function renderPro() {
   h += `<div class="sec">Coming to Pro <small>you get them the day they ship</small></div>` + PRO_NEXT.map(x => row(x, true)).join('');
   h += `<div class="sec">Always free</div><div class="prow"><span class="tick full">✓</span><div><b>Everything else</b><div class="dt">Scanning, IV ranks, the roster, Today, the builder, matchups, meta teams, rankings, raids, the battle log with its battle check (moves into a resist, losing matchups, wasted shields) and sync across devices stay free.</div></div></div>`;
   h += `<div class="note">${hl.coach ? 'Professor Cedar is PokeScan\'s AI coach. When you use an AI feature, what you submit — a team or battle summary, or the screenshot/recording frames you share — is sent through the PokeScan server to Anthropic (Claude) to produce the answer. Screenshots can show your trainer name. Nothing is stored on the server: an answer lives in memory for at most an hour, the images not at all.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
-  h += `<div class="dt dim" style="margin-top:8px;font-size:11px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a>${hl.coach ? ' · subscriptions are billed by Stripe and renew monthly until cancelled' : ''}</div>`;
+  h += `<div class="dt dim" style="margin-top:8px;font-size:12px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a>${hl.coach ? ' · subscriptions are billed by Stripe and renew monthly until cancelled' : ''}</div>`;
   el.innerHTML = h;
 }
 const DRAWER = ['Play', 'Meta', 'Collection'].map(g => [g, PAGE_LIST.filter(p => p.menu && p.menu[0] === g).map(p => [p.key, p.label, p.menu[1]])]);
@@ -2548,7 +2549,7 @@ function scanSection(m, r) {
   const nk = nickFor(r);
   if (nk) { const np = nickPrefs(), sty = (NICK_STYLES.find(x => x[0] === np.style) || NICK_STYLES[0])[0];
     rows.push(['Nickname', `<span class="nickrow"><span class="nick">${esc(nk)}</span><button class="copy" onclick="Planner.copyText(${attr(nk)},this)">Copy</button></span>
-      <select class="nicksel" onchange="Planner.setNickStyle(this.value)">${NICK_STYLES.map(([k, l]) => `<option value="${k}" ${sty === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${sty === 'custom' ? `<input class="nicktpl" value="${esc(np.custom || NICK_STYLES[0][2])}" onchange="Planner.setNickCustom(this.value)" onkeydown="if(event.key==='Enter')this.blur()"><div class="dim" style="font-size:11.5px">{name} {ivs} {iv%} {lv} {rank} {cp} {a} {d} {s}</div>` : ''}${r.combos.length > 1 ? '<div class="dim" style="font-size:11.5px">best of the possible spreads: an appraisal makes it exact</div>' : ''}`]); }
+      <select class="nicksel" onchange="Planner.setNickStyle(this.value)">${NICK_STYLES.map(([k, l]) => `<option value="${k}" ${sty === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${sty === 'custom' ? `<input class="nicktpl" value="${esc(np.custom || NICK_STYLES[0][2])}" onchange="Planner.setNickCustom(this.value)" onkeydown="if(event.key==='Enter')this.blur()"><div class="dim" style="font-size:12px">{name} {ivs} {iv%} {lv} {rank} {cp} {a} {d} {s}</div>` : ''}${r.combos.length > 1 ? '<div class="dim" style="font-size:12px">best of the possible spreads: an appraisal makes it exact</div>' : ''}`]); }
   if (sid0 && sid0.id) {                        // the other form's standing: a shadow ranks differently from its purified/normal twin
     const isSh = /_shadow$/.test(sid0.id), alt = isSh ? sid0.id.replace(/_shadow$/, '') : sid0.id + '_shadow', ea = APP.pokemon[alt], e0 = APP.pokemon[sid0.id];
     if (r.shadow && !isSh) rows.push(['Shadow', 'marked Shadow · ranked as normal']);
@@ -3109,7 +3110,7 @@ function pveTab(m, id, known, o, eIn) {       // generic raid-side page for any 
   else h += `<div class="note">Outside the top attackers of every type. Fine for PvP, keep it out of raids.</div>`;
   // moves by damage
   h += `<div class="sec">Raid moves <small>${best ? 'best pair = 100%' : 'no rated pairs'}${yb ? ` · yours ${yb.pct}% grade ${raidGrade(yb.pct)}` : cur.length ? ' · your set is not rated' : ''}</small></div>`;
-  if (rows.length) h += `<div class="team card" style="cursor:default"><div class="use raid" style="margin:0">${raidRowsHTML(rows, mine, 8)}</div><div class="dim" style="font-size:11.5px;margin-top:8px">Neutral damage per second against a raid boss at L40, the same scale as the usual moveset ratings. <em class="y">✓</em> on your copy.</div></div>`;
+  if (rows.length) h += `<div class="team card" style="cursor:default"><div class="use raid" style="margin:0">${raidRowsHTML(rows, mine, 8)}</div><div class="dim" style="font-size:12px;margin-top:8px">Neutral damage per second against a raid boss at L40, the same scale as the usual moveset ratings. <em class="y">✓</em> on your copy.</div></div>`;
   // your copy, for raids: the highest-CP scan of the species, any league
   const mineScan = pveOwned(e);
   if (mineScan) { const lv = mineScan.level || (mineScan.combos && mineScan.combos.length ? bestOf2(mineScan)[0] : null);
