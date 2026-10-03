@@ -50,6 +50,10 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
 .pev .ev:first-child{color:var(--ink)}   /* newest on top: the line being read now */
 .pev[hidden]{display:none}.pev .ev{padding:1px 0;border-bottom:1px solid var(--line)}.pev .ev:last-child{border-bottom:0}
 .pev .ev.none{opacity:.7;border-bottom:0}
+/* "Did you know?" while an import runs: small, dim, fading in on each new tip */
+.ptip{font-size:12px;line-height:1.4;color:var(--dim);animation:ptipIn .5s ease}.ptip[hidden]{display:none}
+@keyframes ptipIn{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.ptip{animation:none}}
 #implog{margin:6px 0 4px}#implog .hd{font-size:12px;color:var(--dim);cursor:pointer;display:flex;justify-content:space-between}#implog .hd a{color:var(--dim)}
 .il{display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:12px;color:var(--dim);padding:6px 0;border-top:1px solid var(--line);line-height:1.45}
 .il .t{font-variant-numeric:tabular-nums}.il .r.ok{color:#7FE3B6}.il .r.err{color:var(--bad)}.il .f{color:var(--ink)}.il .d{font-family:ui-monospace,monospace;font-size:12px;word-break:break-word}

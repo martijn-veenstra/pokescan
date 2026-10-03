@@ -16,12 +16,13 @@ test('the importing card expands to show what the read has found, and stays up w
 
   await page.locator('#fevx').click();
   await expect(page.locator('#fevl')).toBeVisible();
-  await expect(page.locator('#fevl')).toContainText('battle HUD found');
-  await expect(page.locator('#fevl')).toContainText('they lost a Pokémon');
+  await expect(page.locator('#fevl'), 'in the game\'s own words').toContainText('0:02 ⚔️ A Trainer wants to battle! Reading the cards');
+  await expect(page.locator('#fevl')).toContainText('0:14 ✨ The opposing Pokémon fainted!');
+  expect(await page.evaluate(() => EVT.map(e => e.text)), 'what is kept stays the plain text').toEqual(['0:02 battle HUD found — reading the cards', '0:14 they lost a Pokémon']);
   await expect(page.locator('#fevx')).toHaveText('▾ read log · 2 lines');
 
   await page.evaluate(() => evt('0:31 you shielded (1 left)'));     // an open list keeps up with the read
-  await expect(page.locator('#fevl')).toContainText('you shielded (1 left)');
+  await expect(page.locator('#fevl')).toContainText('You put up a Protect Shield (1 left)');
   await expect(page.locator('#fevx')).toHaveText('▾ read log · 3 lines');
 
   await page.evaluate(() => endCard());                             // the import ends: the card normally goes away
@@ -36,7 +37,7 @@ test('the importing card expands to show what the read has found, and stays up w
   await expect(page.locator('#prog .pcx')).toBeVisible();
   await expect(page.locator('#pevx')).toHaveText('▸ read log · 3 lines');
   await page.locator('#pevx').click();
-  await expect(page.locator('#pevl')).toContainText('you shielded (1 left)');
+  await expect(page.locator('#pevl')).toContainText('You put up a Protect Shield (1 left)');
   expect(errors).toEqual([]);
 });
 
@@ -149,5 +150,50 @@ test('a battle recording reads out in a floating loader on every page, separate 
   // one divider under each card's top row: the events button's own border
   for (const sel of ['#prog .prow', '#impfloat .prow'])
     expect(await page.evaluate(s => getComputedStyle(document.querySelector(s)).borderBottomWidth, sel), sel).toBe('0px');
+  expect(errors).toEqual([]);
+});
+
+test('the feed speaks Pokémon: every kind of line the reader writes has its game version', async ({ page }) => {
+  const errors = await openApp(page, '#/battles');
+  const out = await page.evaluate(() => [
+    '0:02 battle HUD found — reading the cards', '0:13 reading the name on their card', '0:14 reading the name on your card',
+    '0:24 you shielded (1 left)', '0:31 they shielded (0 left)', '0:45 you lost a Pokémon', '0:58 they lost a Pokémon',
+    '1:40 the next battle has started', '1:10 15 announcements grabbed to read for moves', 'reading the names and moves',
+    '2 battles in the recording — reading the names and moves',
+    'read: Medicham / Azumarill / Skarmory vs Bastiodon / Lanturn / Swampert · win', 'read: A vs B · loss', 'read: A vs B · draw',
+    'found MEDICHAM 1499', 'found GALARIAN_STUNFISK ?', 'appraisal read for MEDICHAM', 'moves read for MEDICHAM', 'stopped by you',
+    'no status screens in the first 30 s: watching it as a battle recording',
+  ].map(flavor));
+  expect(out).toEqual([
+    '0:02 ⚔️ A Trainer wants to battle! Reading the cards', "0:13 👀 Who's that Pokémon? Reading their card", "0:14 👀 Who's that Pokémon? Reading your card",
+    '0:24 🛡️ You put up a Protect Shield (1 left)', '0:31 🛡️ The opponent blocked with a Protect Shield (0 left)', '0:45 💫 Your Pokémon fainted!', '0:58 ✨ The opposing Pokémon fainted!',
+    '1:40 ⚔️ A new battle begins!', '1:10 💥 15 charged attacks spotted', '📖 Checking the Pokédex: names and moves',
+    '📖 2 battles in the recording · Checking the Pokédex: names and moves',
+    '🏆 You won! Medicham / Azumarill / Skarmory vs Bastiodon / Lanturn / Swampert', '😵 You lost this one… A vs B', "🤝 It's a draw! A vs B",
+    '🎉 Gotcha! Medicham (1499 CP) was caught!', '🎉 Gotcha! Galarian Stunfisk was caught!', '⭐ Appraisal in for Medicham', "📜 Medicham's moves noted", '🏃 Got away safely!',
+    'no status screens in the first 30 s: watching it as a battle recording',
+  ]);
+  expect(errors).toEqual([]);
+});
+
+test('a "Did you know?" tip shows while an import runs, changes every 8 seconds, and goes when it ends', async ({ page }) => {
+  await page.clock.install();
+  const errors = await openApp(page, '#/scans');
+  const tip = page.locator('#ptip');
+  await expect(tip).toBeHidden();
+  await page.evaluate(() => { BATTLE_IMPORT = false; progBox(true); status('Scanning IMG_1.png'); });
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText('💡 Did you know? ');
+  await expect(page.locator('#ftip'), 'the floating card carries the same tip').toHaveText(await tip.textContent());
+  const first = await tip.textContent();
+  await page.clock.runFor(8100);
+  await expect(tip).not.toHaveText(first);
+  const all = await page.evaluate(() => tipList());
+  expect(all, 'type facts come from the chart').toContain('Fairy moves are super effective against Fighting, Dragon and Dark.');
+  expect(all).toContain('Steel Pokémon resist 11 attack types.');
+  expect(all).toContain('Lucky Pokémon power up for half the Stardust.');
+  await page.evaluate(() => { progBox(false); });
+  await expect(tip).toBeHidden();
+  await expect(page.locator('#ftip')).toBeHidden();
   expect(errors).toEqual([]);
 });

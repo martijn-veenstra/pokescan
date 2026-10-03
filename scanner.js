@@ -83,7 +83,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.57';
+const APP_VERSION='10.58';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -861,7 +861,7 @@ function renderLog(){
 
 /* ---------- input handling ---------- */
 const $=id=>document.getElementById(id);
-function showErr(msg){ if(!CARD_FILM){ const pr=$('prog'); if(pr) pr.style.display='flex'; } status('⚠ '+msg); pballState('err'); console.error(msg); }
+function showErr(msg){ if(!CARD_FILM){ const pr=$('prog'); if(pr) pr.style.display='flex'; } status('⚠ Oh no, it broke free! '+msg); pballState('err'); console.error(msg); }
 /* Global handlers: show the error, and report a trimmed copy to the server (rate-limited there; no image data, no ids).
    A rejection is only labelled "import failed" while an import is actually running — sync and coach failures keep their own message. */
 let reported=0;
@@ -918,7 +918,7 @@ async function runImportInner(files){
   const trainer=parseInt($('trainer').value)||40;
   localStorage.setItem('trainer',$('trainer').value);
   CANCEL=false; EVT=[]; progBox(true); progress(0); renderEvents();
-  status(`Preparing ${files.length} file${files.length===1?'':'s'}…`);
+  status(`Getting your Poké Balls ready · ${files.length} file${files.length===1?'':'s'}…`);
   let ok=0, batchKey=null; const before=results.length;
   IMP={at:Date.now()}; try{ localStorage.setItem('lastImportAt', String(IMP.at)); }catch(e){}   // the new/updated chips are for this import
   UPDATE=window.Planner&&Planner.updateKey?Planner.updateKey():null; if(UPDATE) batchKey=UPDATE;
@@ -945,11 +945,11 @@ async function runImportInner(files){
   { const folded=BATTLE_IMPORT?0:dedupeScans(); if(folded) logImport({file:'duplicates', kind:'cleanup', ok:true, msg:`${folded} card${folded===1?'':'s'} folded into the card of the same Pokémon`}); }
   const updated=UPDATE?results.find(x=>x.key===UPDATE)||null:null; UPDATE=null;
   if(window.Planner&&Planner.updateDone) Planner.updateDone(updated);
-  if(CANCEL) status(`Stopped · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new`);
+  if(CANCEL) status(`Stopped · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${results.length-before} new · got away safely`);
   else { const hint=window.Planner&&Planner.nextHint?Planner.nextHint('scans'):'';
     const by=k=>results.filter(r=>r.impAt===IMP.at&&r.impKind===k).length, nw=by('new'), up=by('updated'), kn=by('known');
     const what=[`${nw} new`, up?`${up} updated`:'', kn?`${kn} already in your roster`:''].filter(Boolean).join(' · ');
-    status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${what}${hint?' · '+hint:''}`); }
+    status(`Done · ${ok} of ${files.length} file${files.length===1?'':'s'} processed · ${what} · ${nw?'Gotcha!':'already registered'}${hint?' · '+hint:''}`); }
   progress(1); pballState(CANCEL?'err':ok?'done':'err');   // the ball stops shaking: caught (stars) or not
   if(window.Planner) Planner.afterImport(results.slice(0, results.length-before));
   CANCEL=false; IMP=null; save();
@@ -985,7 +985,46 @@ function progBox(on){                            // the Pokéball loader and sta
   IMPORTING=on; if(on){ STICKY=false; CARD_FILM=BATTLE_IMPORT; }
   const up=on||STICKY;
   $('prog').style.display=up&&!CARD_FILM?'flex':'none';
-  pballState(on?'on':''); syncFloat();
+  pballState(on?'on':''); syncFloat(); tipTick(true);
+}
+/* "Did you know?" under the status line while an import runs: a type-chart fact worked out from the chart itself, or a
+   short game fact, changing every 8 seconds. Gone as soon as the import is. */
+const TIP_FACTS=[
+  'IVs never change when you evolve or power up a Pokémon.',
+  'Lucky Pokémon power up for half the Stardust.',
+  'Shields block charged attacks, never fast attacks.',
+  'Each side gets 2 shields in a GO Battle League battle.',
+  'A move of the Pokémon\'s own type does 20% more damage (STAB).',
+  'Purifying a Shadow Pokémon raises each of its IVs by 2.',
+  'A Best Buddy gets a one-level boost while it is your buddy.',
+  'Fast attacks build up energy, charged attacks spend it.',
+  'Shadow Pokémon deal 20% more damage, and take 20% more.',
+  'Super effective is ×1.6 in Pokémon GO, a resisted hit ×0.625.',
+];
+let TIPS=null, TIPI=0, TIPT=null;
+function tipList(){
+  if(TIPS) return TIPS;
+  const C=(window.PVP&&PVP.CHART)||{}, T=Object.keys(C), nm=t=>t[0].toUpperCase()+t.slice(1);
+  const and=a=>a.length>1?a.slice(0,-1).join(', ')+' and '+a[a.length-1]:a[0]||'';
+  const chart=[];
+  for(const a of T){ const se=Object.keys(C[a]).filter(d=>C[a][d]>1).map(nm); if(se.length) chart.push(`${nm(a)} moves are super effective against ${and(se)}.`); }
+  for(const d of T){
+    const res=T.filter(a=>(C[a][d]||1)<1), imm=T.filter(a=>(C[a][d]||1)<0.5).map(nm);
+    if(res.length>=5) chart.push(`${nm(d)} Pokémon resist ${res.length} attack types.`);
+    if(imm.length) chart.push(`${nm(d)} Pokémon double-resist ${and(imm)} moves.`);
+  }
+  TIPS=[]; const n=Math.max(chart.length,TIP_FACTS.length);   // take turns: a chart fact, then a game fact
+  for(let i=0;i<n;i++){ if(chart[i]) TIPS.push(chart[i]); if(TIP_FACTS[i]) TIPS.push(TIP_FACTS[i]); }
+  TIPI=Math.floor(Math.random()*TIPS.length);
+  return TIPS;
+}
+function tipTick(fresh){
+  const on=IMPORTING, els=[$('ptip'),$('ftip')].filter(Boolean);
+  if(!on){ clearInterval(TIPT); TIPT=null; els.forEach(e=>{ e.hidden=true; }); return; }
+  const L=tipList(); if(!L.length) return;
+  if(!fresh) TIPI=(TIPI+1)%L.length;
+  for(const e of els){ e.textContent='💡 Did you know? '+L[TIPI]; e.hidden=false; e.style.animation='none'; void e.offsetWidth; e.style.animation=''; }   // replay the fade
+  if(!TIPT) TIPT=setInterval(tipTick,8000);
 }
 /* ---------- the loader's own feed: what this import has found so far, behind an expand button ----------
    The import log only appears once a file is finished, which is no help while a three-minute recording is being
@@ -1004,7 +1043,31 @@ window.filmEvent=evt;                            // battlefilm.js reports the ba
    newest at the bottom: on a phone that reset the scroll each time and left it resting on half a line, so reading back
    while a recording was being read meant fighting the list. Now the latest finding is always the top line, and
    anyone who has scrolled down to read stays exactly where they are. */
-function evNode(e){ const d=document.createElement('div'); d.className='ev'; d.textContent=e.text; return d; }
+/* The feed in the game's own words. Display only: EVT, the battle film lines and the import log keep the plain text
+   the rest of the app parses; this only dresses up what the loader shows while it reads. */
+const TC=x=>String(x||'').toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+const FLAVOR=[
+  [/^battle HUD found — reading the cards$/, ()=>'⚔️ A Trainer wants to battle! Reading the cards'],
+  [/^reading the name on (your|their) card$/, (m,w)=>`👀 Who's that Pokémon? Reading ${w} card`],
+  [/^you shielded( \(\d+ left\))?$/, (m,l)=>`🛡️ You put up a Protect Shield${l||''}`],
+  [/^they shielded( \(\d+ left\))?$/, (m,l)=>`🛡️ The opponent blocked with a Protect Shield${l||''}`],
+  [/^you lost a Pokémon$/, ()=>'💫 Your Pokémon fainted!'],
+  [/^they lost a Pokémon$/, ()=>'✨ The opposing Pokémon fainted!'],
+  [/^the next battle has started$/, ()=>'⚔️ A new battle begins!'],
+  [/^(\d+) announcements grabbed to read for moves$/, (m,n)=>`💥 ${n} charged attacks spotted`],
+  [/^(?:(\d+) battles in the recording — )?reading the names and moves$/, (m,n)=>`📖 ${n?n+' battles in the recording · ':''}Checking the Pokédex: names and moves`],
+  [/^read: (.+?)(?: · (win|loss|draw))?$/, (m,v,r)=>`${r==='win'?'🏆 You won! ':r==='loss'?'😵 You lost this one… ':r==='draw'?"🤝 It's a draw! ":'📋 '}${v}`],
+  [/^found (.+) (\d+|\?)$/, (m,sp,cp)=>`🎉 Gotcha! ${TC(sp)}${cp==='?'?'':` (${cp} CP)`} was caught!`],
+  [/^appraisal read for (.+)$/, (m,sp)=>`⭐ Appraisal in for ${TC(sp)}`],
+  [/^moves read for (.+)$/, (m,sp)=>`📜 ${TC(sp)}'s moves noted`],
+  [/^stopped by you$/, ()=>'🏃 Got away safely!'],
+];
+function flavor(text){
+  const t=String(text||''), m=t.match(/^(\d+:\d\d) (.*)$/), clock=m?m[1]+' ':'', body=m?m[2]:t;
+  for(const [re,f] of FLAVOR){ const x=body.match(re); if(x) return clock+f(...x); }
+  return t;
+}
+function evNode(e){ const d=document.createElement('div'); d.className='ev'; d.textContent=flavor(e.text); return d; }
 function fillEvents(el){
   const shown=+(el.dataset.n||0), first=EVT[0];
   // a fresh list, or EVT has been trimmed or reset under it: rebuild
@@ -1031,7 +1094,7 @@ function renderEvents(){
 }
 function toggleEvents(){ evtOpen=!evtOpen; renderEvents(); syncFloat(); }
 function endCard(){                              // the import is over: put the card away, unless it failed or the events are being read
-  if(evtOpen||(cardStat()||{textContent:''}).textContent.startsWith('⚠')){ IMPORTING=false; STICKY=true; syncFloat(); }
+  if(evtOpen||(cardStat()||{textContent:''}).textContent.startsWith('⚠')){ IMPORTING=false; STICKY=true; syncFloat(); tipTick(); }
   else { STICKY=false; progBox(false); }
 }
 let CANCEL=false;                                // the ✕ on the card: stop the import wherever it is
@@ -1151,7 +1214,7 @@ async function scanVideo(file,trainer){
     const s=Math.min(1,768/Math.max(cv.width,cv.height)); SN.width=Math.round(cv.width*s); SN.height=Math.round(cv.height*s); SN.getContext('2d').drawImage(cv,0,0,SN.width,SN.height);
     snaps.push({t:Math.round(t), image:SN.toDataURL('image/jpeg',0.7).split(',')[1], mediaType:'image/jpeg'}); };
   // a long recording with no status screen in its first half minute is a battle: stop pausing for text and only keep the snapshots
-  const checkBattleMode=(t)=>{ if(!battleMode && ((window.Film&&Film.seen()) || (dur>90 && t>30 && reads===0 && results.length===before))){ battleMode=true; mode+='+battle'; gain('note',(window.Film&&Film.seen())?'the battle HUD is on screen: watching it as a battle recording':'no status screens in the first 30 s: watching it as a battle recording'); status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · watching the battle…`); } return battleMode; };
+  const checkBattleMode=(t)=>{ if(!battleMode && ((window.Film&&Film.seen()) || (dur>90 && t>30 && reads===0 && results.length===before))){ battleMode=true; mode+='+battle'; gain('note',(window.Film&&Film.seen())?'the battle HUD is on screen: watching it as a battle recording':'no status screens in the first 30 s: watching it as a battle recording'); status(`Video ${Math.round(t)}s / ${Math.round(dur)}s · the battle rages on…`); } return battleMode; };
   const analyse=async(t)=>{
     ctx.drawImage(vid,0,0); frames++; gain('frames'); snapshot(t);
     if(window.Film) Film.frame(ctx,cv.width,cv.height,t);   // battleMode needs 90 s and 30 s in: this sees the short ones
@@ -1240,7 +1303,7 @@ async function scanVideo(file,trainer){
         try{
           if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); if(window.Film) Film.frame(ctx,cv.width,cv.height,t); progress(Math.min(1,t/dur));   // no pause/play churn: the big file plays through smoothly
             // the line under the ball kept saying the second battle mode began at ("Video 24s / 166s") for the whole read
-            if(Math.round(t)!==lastShown){ lastShown=Math.round(t); status(`Video ${lastShown}s / ${Math.round(dur)}s · watching the battle… keep PokeScan on screen`); } }
+            if(Math.round(t)!==lastShown){ lastShown=Math.round(t); status(`Video ${lastShown}s / ${Math.round(dur)}s · the battle rages on… keep PokeScan on screen`); } }
           else { vid.pause();                                      // hold the frame still while we look at it
             await analyse(t);
             if(!done){ await vid.play().catch(()=>{}); } }
