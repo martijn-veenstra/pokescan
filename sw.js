@@ -1,5 +1,5 @@
 /* PokeScan service worker: app shell cache-first, data stale-while-revalidate, everything else network. */
-const VERSION = 'pokescan-v10.55';
+const VERSION = 'pokescan-v10.56';
 const SHELL = ['./', 'index.html', 'styles.css', 'pvp.js', 'pogodata.js', 'pages.js', 'scanner.js', 'battlefilm.js', 'planner.js', 'gameplan.js', 'invest.js', 'quiz.js', 'auth.js', 'sync.js', 'share.js', 'sources.js', 'a11y.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/pokemon/_missing.svg'];
 const ICONS = 'pokescan-icons';                  // Pokémon icons: cache-first, kept across versions (a species' render does not change)
 const DATA = ['data/app-great.json', 'data/cups.json', 'data/matrix-great.json', 'data/pve.json'];

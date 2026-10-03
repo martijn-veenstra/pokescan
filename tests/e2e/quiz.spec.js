@@ -50,3 +50,43 @@ test('Today asks one question a day: the same all day, answered once', async ({ 
   await expect(page).toHaveURL(/#\/quiz/);
   expect(errors).toEqual([]);
 });
+
+// "My Pokémon only": your side comes from your roster in this league, the other side can be anything
+test('the quiz can use only your own Pokémon for your side', async ({ page }) => {
+  await seedOnce(page, { quiz: null, quizLv: null, quizDaily: null, quizOwn: null, roster: null });
+  const errors = await openApp(page, '#/quiz');
+  // an empty roster: the switch says it falls back to every Pokémon, questions still come
+  await page.locator('#quiz .qown .chip').click();
+  await expect(page.locator('#quiz .qown')).toContainText(/too few in your roster/);
+  await expect(page.locator('#quiz .qopt').first()).toBeVisible();
+  // three of your own, under the cap
+  await page.evaluate(() => { results.length = 0;
+    for (const [sp, lv] of [['AZUMARILL', 30], ['MEDICHAM', 40], ['REGISTEEL', 22]]) { const b = DATA.stats[sp][0], m = cpmAt(lv);
+      const r = { species: sp, cp: calcCP(b, 5, 14, 14, m), hp: calcHP(b, 14, m), level: lv, dust: null, combos: [[lv, 5, 14, 14, b]], appraisal: [5, 14, 14], txt: '', cpCandidates: [] };
+      r.key = `${sp}|${r.cp}|${r.hp}|${lv}|`; results.push(r); }
+    save(); Planner.refresh(); Planner.quizLevel('beginner'); });
+  const pool = await page.evaluate(() => Planner.quizPool());
+  expect(pool.sort()).toEqual(['azumarill', 'medicham', 'registeel']);
+  await expect(page.locator('#quiz .qown .chip.sel')).toContainText('My Pokémon only 3');
+  // every question with the pool uses one of yours (who), with one right answer and a why
+  const bad = await page.evaluate(p => { const out = [], seen = {};
+    for (const lv of ['beginner', 'medium', 'advanced']) for (let seed = 1; seed <= 150; seed++) { const q = Planner.quizQuestion(lv, seed, p);
+      if (q.who) seen[q.who] = 1;
+      if (q.lv === lv && lv !== 'beginner' && !p.includes(q.who)) out.push(`${lv} ${seed}: your side ${q.who} is not yours`);
+      if (q.who && !p.includes(q.who)) out.push(`${lv} ${seed}: ${q.who}`);
+      if (q.options.filter(o => o.ok).length !== 1 || !q.why) out.push(`${lv} ${seed}: answers`); }
+    return {out, seen: Object.keys(seen).sort()}; }, pool);
+  expect(bad.out).toEqual([]);
+  expect(bad.seen, 'all three of yours turn up').toEqual(['azumarill', 'medicham', 'registeel']);
+  // on the page: the beginner questions name your Pokémon
+  let named = false;
+  for (let i = 0; i < 12 && !named; i++) { const t = await page.locator('#quiz .qtext').innerText(); named = /Your|your/.test(t) && /Azumarill|Medicham|Registeel/.test(t);
+    if (!named) await page.evaluate(() => { Planner.quizLevel('beginner'); }); }
+  expect(named).toBe(true);
+  // Today's question follows the switch and stays the same all day
+  await page.evaluate(() => Planner.nav('#/today'));
+  const q1 = await page.locator('#today .quiz.daily .qtext').innerHTML();
+  await page.evaluate(() => Planner.renderToday());
+  expect(await page.locator('#today .quiz.daily .qtext').innerHTML()).toBe(q1);
+  expect(errors).toEqual([]);
+});

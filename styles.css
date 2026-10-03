@@ -696,3 +696,5 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .qopt{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:10px 8px;font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;text-align:center;min-height:46px}
 .qopt .dim{font-size:12px}.qopt.right{border-color:var(--green);background:rgba(72,213,151,.14)}.qopt.wrong{border-color:var(--bad);background:rgba(245,154,139,.14)}.qopt.off{opacity:.55}
 .qwhy{margin-top:10px;font-size:13px;line-height:1.5;color:var(--dim)}.qwhy b{color:var(--ink)}.qwhy.ok>b:first-child{color:var(--green)}.qwhy.no>b:first-child{color:var(--bad)}.qwhy .why{margin-top:4px}
+.tchips.qown{margin:0 0 6px;align-items:center;gap:8px}
+.qside .dim{font-size:12px}
