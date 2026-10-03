@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, seedOnce, roster } from './helpers.js';
 
 // A scan of a species the cup does not rank (Melmetal in Mega Color Cup) still gets its icon and the power-up arc,
 // and an evolution is recognised from the game's evolution table even when the cup does not rank the pre-evolution (Marill).
 test('unranked copies: icon, power-up arc, and evolutions in a cup that ranks neither', async ({ page }) => {
-  await page.addInitScript(() => { if (!sessionStorage.seeded) { localStorage.setItem('league', 'colormega-1500'); sessionStorage.seeded = 1; } });
+  await seedOnce(page, { league: 'colormega-1500' });
   const errors = await openApp(page, '#/scans');
   await expect.poll(() => page.evaluate(() => APP.league.slug)).toBe('colormega-1500');
   await page.waitForFunction(() => window.Planner && Planner.evolvesInto('MARILL', 'AZUMARILL'), null, { timeout: 15000 });

@@ -66,6 +66,15 @@ function pvpTable(b, cap){
   rankCache.set(key,t); return t;
 }
 function pvpRank(b, ia, id, is, cap){ return pvpTable(b,cap).rank.get(ia*256+id*16+is); }
+const ONE_RANK=new Map();
+function pvpRankOne(b, ia, id, is, cap){        // the same answer as pvpRank for one spread, without building and keeping the 4096-row table (other leagues' caps)
+  const t=rankCache.get(b.slice(0,3).join(',')+'|'+cap+'|'+maxL()); if(t) return t.rank.get(ia*256+id*16+is);
+  const key=b.slice(0,3).join(',')+'|'+cap+'|'+maxL()+'|'+ia+'/'+id+'/'+is; if(ONE_RANK.has(key)) return ONE_RANK.get(key);
+  const me=statProduct(b,ia,id,is,cap); let n=1, max=me.prod;
+  for(let a=0;a<16;a++)for(let d=0;d<16;d++)for(let s=0;s<16;s++){ const p=statProduct(b,a,d,s,cap).prod; if(p>me.prod) n++; if(p>max) max=p; }
+  const out={n, lv:me.lv, cp:me.cp, pct:100*me.prod/max};
+  if(ONE_RANK.size>2000) ONE_RANK.clear(); ONE_RANK.set(key,out); return out;
+}
 function pvpTop(b, cap, floor, n){              // the best spreads at the cap, best first; floor 10 = raids, eggs and research, 12 = lucky trades
   const rows=pvpTable(b,cap).rows, out=[];
   for(const r of rows){ if(r.ia>=floor&&r.id>=floor&&r.is>=floor){ out.push(r); if(out.length>=n) break; } }
@@ -596,7 +605,7 @@ function applyVisionScan(p){                      // returns {key, what} or null
   const sp=visionSpecies(p&&p.name); if(!sp) return null;
   const hp=p.hpMax||p.hp||null, mv=visionMoves(sp,p), live=results.filter(x=>!x.superseded);
   const upd=UPDATE?results.find(x=>x.key===UPDATE):null;
-  const tid=upd?pvpokeIdFor(upd.species,(DATA.stats[upd.species]||[])[0]):null, fam=upd&&(upd.species===sp||(tid&&evosOf(tid).map(x=>x.split('_')[0].toUpperCase()).includes(sp))||!!(window.Planner&&Planner.evolvesInto&&Planner.evolvesInto(upd.species,sp)));
+  const fam=upd&&sameFamily(upd.species,sp);
   const same=live.filter(x=>x.species===sp);
   const target=(fam?upd:null)||sameCopy(sp,p.cp||null,hp)||(same.length===1?same[0]:null);
   const solved=p.cp&&hp?solve(sp,p.cp,hp,null,null):[];
@@ -1318,8 +1327,7 @@ async function handleScan(ctx,W,H,trainer,skipKey){
   if(UPDATE && s.combos.length){                          // imported from a card's page: this screenshot is meant to update that card
     const target=results.find(x=>x.key===UPDATE);
     if(target){
-      const tid=pvpokeIdFor(target.species,(DATA.stats[target.species]||[])[0]), evos=tid?evosOf(tid).map(x=>x.split('_')[0].toUpperCase()):[];
-      const sameFam=target.species===s.species||evos.includes(s.species)||!!(window.Planner&&Planner.evolvesInto&&Planner.evolvesInto(target.species,s.species));
+      const sameFam=sameFamily(target.species,s.species);
       if(sameFam && updateCard(target,s,mvSeen)){ fillBody(target,s); markImp(target,'updated'); UPDATE=target.key; note(`${seen(s)} → updated the ${target.species} card`); return target.key; }
       note(sameFam?`${seen(s)} does not share IVs with the ${target.species} ${target.cp} CP card: kept as a separate copy`:`${seen(s)} is not a ${target.species}: kept as a separate card`);
     }
@@ -1438,7 +1446,7 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
     ].join('');
   const ap=r.appraisal?(r.apMismatch?' <span class="flag">≠ appraisal</span>':' <span class="okc" title="exact IVs from the appraisal screen">✓</span>'):'';
   return `<div class="mon compact ${cls} ${r.bench?'benched':''}" onclick="${open||`Planner.openScan('${r.key.replace(/'/g,'')}')`}">${lineageBanner(r)}
-    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon(Planner.scanIcon?Planner.scanIcon(r):(Planner.scanId(r)||{}).id,'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
+    <div class="top"><span class="name"><span class="star ${r.fav?'on':''}" onclick="toggleFav(${i});event.stopPropagation()">${r.fav?'★':'☆'}</span>${window.Planner&&Planner.icon?Planner.icon(Planner.scanIcon(r),'l'):''}<span class="nt">${nice}${r.shadow?' <span class="dim" style="font-size:12px">(Shadow)</span>':''}</span></span>
       <span class="cp"><b>${r.cp??'?'}</b> CP · L${r.level??'?'}${r.wt!=null&&results.some(x=>x!==r&&!x.superseded&&x.species===r.species&&x.cp===r.cp)?` · ${r.wt.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})} kg`:''}${flags?` <span class="flag">${flags}</span>`:''}</span></div>
     <div class="ivrow">
       <span><small>IVs</small><b>${best?`${best[1]}/${best[2]}/${best[3]}`:'?'}</b>${ap}</span>
@@ -1449,22 +1457,37 @@ function cardHTML(r, i, bestCopy, open){          // open: click handler overrid
   </div>`;
 }
 /* ---------- planning helpers ---------- */
-function pvpokeIdFor(species, form, shadow){  // scanner species (UPPERCASE) + base-stat form (+ shadow flag) -> PvPoke speciesId
-  if(!APP||!species) return null;
-  const s=species.toLowerCase();
-  const all=Object.keys(APP.pokemon).filter(k=>k===s||k.startsWith(s+'_'));
+const ID_IDX=new WeakMap();                     // per data file: every id under each of its prefixes ('mr_mime' and 'mr' → 'mr_mime_galarian'), built once
+function idsUnder(data, s){
+  let ix=ID_IDX.get(data);
+  if(!ix){ ix=new Map(); const add=(k,id)=>{ let l=ix.get(k); if(!l) ix.set(k,l=[]); l.push(id); };
+    for(const id of Object.keys(data.pokemon)){ add(id,id); for(let i=id.indexOf('_');i>0;i=id.indexOf('_',i+1)) add(id.slice(0,i),id); }
+    ID_IDX.set(data,ix); }
+  return ix.get(s)||[];
+}
+function pvpokeIdFor(species, form, shadow, data, noMega){  // scanner species (UPPERCASE) + base-stat form (+ shadow flag) -> PvPoke speciesId, in APP or another league's data
+  const d=data||APP; if(!d||!species) return null;
+  let all=idsUnder(d,species.toLowerCase()); if(noMega) all=all.filter(k=>!/_mega/.test(k));
   let ids=all.filter(k=>k.includes('shadow')===!!shadow);
   if(!ids.length) ids=all.filter(k=>!k.includes('shadow'));   // a shadow copy of a species PvPoke ranks only in its normal form
   if(!ids.length) return null;
   if(form&&ids.length>1){ const ft=[form[3],form[4]].filter(Boolean).map(t=>t.toLowerCase()).sort().join('/');
-    const m=ids.filter(k=>APP.pokemon[k].types.slice().sort().join('/')===ft); if(m.length) ids=m; }
-  return ids.reduce((a,b)=>APP.pokemon[a].rank<APP.pokemon[b].rank?a:b);
+    const m=ids.filter(k=>d.pokemon[k].types.slice().sort().join('/')===ft); if(m.length) ids=m; }
+  return ids.reduce((a,b)=>d.pokemon[a].rank<d.pokemon[b].rank?a:b);
+}
+function sameFamily(fromSp, toSp){             // is toSp this species or what it evolves into? the league's evolution list, then the game's own table (any league)
+  if(fromSp===toSp) return true;
+  const tid=pvpokeIdFor(fromSp,(DATA.stats[fromSp]||[])[0]);
+  if(tid&&evosOf(tid).map(x=>x.split('_')[0].toUpperCase()).includes(toSp)) return true;
+  return !!(window.Planner&&Planner.evolvesInto(fromSp,toSp));
+}
+function formByTypes(forms, types){             // the base-stat form (Alolan, Galarian, ...) whose types match, else the first
+  const want=(types||[]).filter(t=>t&&t!=='none').slice().sort().join('/');
+  return forms.find(f=>[f[3],f[4]].filter(t=>t&&t!=='none').map(t=>t.toLowerCase()).sort().join('/')===want)||forms[0];
 }
 function evoBaseStats(evoId){                 // PvPoke evolution id -> scanner base stats form
   const forms=DATA.stats[evoId.split('_')[0].toUpperCase()]; if(!forms) return null;
-  const info=APP.pokemon[evoId]||APP.unranked[evoId]||{types:[]};
-  const want=info.types.slice().sort().join('/');
-  return forms.find(f=>[f[3],f[4]].filter(Boolean).map(t=>t.toLowerCase()).sort().join('/')===want)||forms[0];
+  return formByTypes(forms,(APP.pokemon[evoId]||APP.unranked[evoId]||{types:[]}).types);
 }
 function evosOf(id){                          // direct evolutions of a PvPoke id: ranked entries list them, otherwise the pre-evolution map read backwards
   const e=APP.pokemon[id], out=new Set(e&&e.evo||[]);

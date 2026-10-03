@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, seedOnce, roster } from './helpers.js';
 
 // A cup with type rules gets a conditions card: the allowed types, the meta's types and move types, and what that means.
 test('cup conditions: Mega Color Cup rules, its meta and the advice that follows; Great League folds it away', async ({ page }) => {
-  await page.addInitScript(() => { if (!sessionStorage.seeded) { localStorage.setItem('league', 'colormega-1500'); sessionStorage.seeded = 1; } });
+  await seedOnce(page, { league: 'colormega-1500' });
   const errors = await openApp(page, '#/meta');
   await expect.poll(() => page.evaluate(() => APP.league.slug)).toBe('colormega-1500');
   const card = page.locator('#meta .cupc');

@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, seedOnce, roster } from './helpers.js';
 
 // Type badges next to types and moves, and the type reason behind a lead call and a battle-check line.
 test('type badges: chips, moves, the Game plan reasons and the battle check', async ({ page }) => {
-  await page.addInitScript(() => { if (!sessionStorage.seeded) { localStorage.setItem('roster', JSON.stringify({ tagged: { Rain: ['azumarill', 'medicham', 'altaria'] }, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] })); localStorage.setItem('battles', '[]'); sessionStorage.seeded = 1; } });
+  await seedOnce(page, { roster: roster({ Rain: ['azumarill', 'medicham', 'altaria'] }), battles: [] });
   const errors = await openApp(page, '#/matchups');
   expect(await page.locator('#ty-sprite symbol').count()).toBe(18);
   // Game plan: each lead row carries its types and a reason in types
@@ -22,9 +22,8 @@ test('type badges: chips, moves, the Game plan reasons and the battle check', as
 
 // The party a recording is attributed to is the best match: Chesnaught read on screen counts for a party with Chesnaught (Mega).
 test('battle attribution picks the best match, forms included', async ({ page }) => {
-  await page.addInitScript(() => { if (!sessionStorage.seeded) { localStorage.setItem('roster', JSON.stringify({ tagged: {
-    'New idea': ['chesnaught', 'mimikyu', 'cramorant'], 'Color cup': ['chesnaught_mega', 'cramorant', 'toxtricity'], 'First pick': ['cramorant', 'quagsire', 'tinkaton'] },
-    candidates: {}, pending: {}, exclude: [], moves: {}, log: [] })); localStorage.setItem('battles', '[]'); sessionStorage.seeded = 1; } });
+  await seedOnce(page, { roster: roster({
+    'New idea': ['chesnaught', 'mimikyu', 'cramorant'], 'Color cup': ['chesnaught_mega', 'cramorant', 'toxtricity'], 'First pick': ['cramorant', 'quagsire', 'tinkaton'] }), battles: [] });
   const errors = await openApp(page, '#/battles');
   expect(await page.evaluate(() => Planner.matchParty(['chesnaught', 'cramorant', 'toxtricity']))).toBe('Color cup');
   expect(await page.evaluate(() => Planner.matchParty(['chesnaught', 'mimikyu']))).toBe('New idea');

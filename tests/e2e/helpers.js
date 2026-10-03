@@ -36,3 +36,13 @@ export const view = page => page.evaluate(() => ({
   hash: location.hash,
   bar: [...document.querySelectorAll('.navbar button.on')].map(b => b.id).join(','),
 }));
+
+/** Seed localStorage once per test (a reload keeps what the app wrote since): {key: value}, objects are JSON-encoded, null removes the key. */
+export async function seedOnce(page, store) {
+  await page.addInitScript(s => {
+    if (sessionStorage.getItem('__seeded')) return; sessionStorage.setItem('__seeded', '1');
+    for (const [k, v] of Object.entries(s)) { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); }
+  }, store);
+}
+/** A saved-roster object with these in-game parties and nothing else. */
+export const roster = (tagged = {}) => ({ tagged, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] });

@@ -1,18 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, seedOnce, roster } from './helpers.js';
 
-const ROSTER = parties => JSON.stringify({ tagged: parties, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] });
 const fight = (id, result, team, ids, lead, opp, ago) => ({ id, t: Date.now() - ago * 60000, league: 'great', result, src: 'share', team, ids, lead, opp });
 
 test('Game plan: meta rank, leads, record and the teams you met, from the battle log', async ({ page }) => {
-  await page.addInitScript(([r, b]) => { if (!sessionStorage.seeded) { localStorage.setItem('roster', r); localStorage.setItem('battles', b); sessionStorage.seeded = 1; } }, [
-    ROSTER({ Rain: ['azumarill', 'medicham', 'altaria'], Steel: ['registeel', 'swampert', 'lickilicky'] }),
-    JSON.stringify([
+  await seedOnce(page, {
+    roster: roster({ Rain: ['azumarill', 'medicham', 'altaria'], Steel: ['registeel', 'swampert', 'lickilicky'] }),
+    battles: [
       fight('g1', 'L', 'Rain', ['azumarill', 'medicham', 'altaria'], 'tinkaton', ['tinkaton', 'cramorant', 'clodsire'], 30),
       fight('g2', 'L', 'Rain', ['azumarill', 'medicham', 'altaria'], 'tinkaton', ['tinkaton', 'corviknight', 'florges'], 20),
       fight('g3', 'W', 'Steel', ['registeel', 'swampert', 'lickilicky'], 'tinkaton', ['tinkaton', 'mimikyu', 'thievul'], 10),
-    ]),
-  ]);
+    ],
+  });
   const errors = await openApp(page, '#/matchups');
   await expect(page.locator('#view-matchups .ptitle')).toContainText('Game plan');
   // the most played party is picked first
@@ -67,8 +66,7 @@ test('Game plan: meta rank, leads, record and the teams you met, from the battle
 });
 
 test('Game plan: no battles logged, and a party member the cup does not allow', async ({ page }) => {
-  await page.addInitScript(r => { if (!sessionStorage.seeded) { localStorage.setItem('roster', r); localStorage.setItem('battles', '[]'); sessionStorage.seeded = 1; } },
-    ROSTER({ Rain: ['azumarill', 'medicham', 'altaria'] }));
+  await seedOnce(page, { roster: roster({ Rain: ['azumarill', 'medicham', 'altaria'] }), battles: [] });
   const errors = await openApp(page, '#/matchups');
   await expect(page.locator('#matchups')).toContainText('No battles logged with this team yet');
   await expect(page.locator('#matchups')).toContainText('once their teams are logged');

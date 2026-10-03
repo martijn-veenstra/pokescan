@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, seedOnce, roster } from './helpers.js';
 
 // one scan per [species, level, a, d, s]
 const seed = list => {
@@ -11,7 +11,7 @@ const seed = list => {
 };
 const SEED = [['SWAMPERT', 15, 0, 14, 14], ['AZUMARILL', 20, 15, 0, 0], ['MEDICHAM', 20, 5, 15, 14], ['LUCARIO', 20, 15, 15, 15]];
 
-test.beforeEach(async ({ page }) => { await page.addInitScript(() => { if (!sessionStorage.seeded) { localStorage.removeItem('roster'); sessionStorage.seeded = 1; } }); });
+test.beforeEach(async ({ page }) => { await seedOnce(page, { roster: null }); });
 
 test('Invest: verdicts per league and for raids, with the cost and the why', async ({ page }) => {
   const errors = await openApp(page, '#/today');
@@ -20,7 +20,7 @@ test('Invest: verdicts per league and for raids, with the cost and the why', asy
   await expect(page.locator('#view-invest .ptitle')).toContainText('Invest');
   // the other leagues and the raid data load, then every purpose is there
   await expect.poll(() => page.evaluate(() => [...new Set(Planner.investRows().map(x => x.purpose))].sort().join()), { timeout: 20000 }).toBe('GL,Raids,UL');
-  const rows = await page.evaluate(() => Planner.investRows().map(x => ({ name: x.name, p: x.purpose, v: x.verdict, dust: x.cost.dust, xl: x.cost.xl, why: x.why.join(' · ') })));
+  const rows = await page.evaluate(() => Planner.investRows().map(x => ({ name: x.name, p: x.purpose, v: x.verdict, dust: x.cost && x.cost.dust, xl: x.cost && x.cost.xl, why: x.why.join(' · ') })));
   const row = (n, p) => rows.find(x => x.name === n && x.p === p);
   expect(['invest', 'cheap']).toContain(row('Swampert', 'GL').v);            // #78 in GL, rank-1 IVs, L15 → L19: no XL
   expect(row('Swampert', 'GL').why).toMatch(/your IVs rank #1 \(100\.0% of ideal\)/);

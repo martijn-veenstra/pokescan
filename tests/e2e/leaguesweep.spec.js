@@ -1,13 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './helpers.js';
+import { openApp, seedOnce, roster } from './helpers.js';
 
 // Switching league must never break a page: a Builder and a saved team holding Pokémon a cup does not allow
 // (Medicham and Altaria in Mega Color Cup) are marked, not crashed on. Every league the app has, the main pages.
 test('every league: Builder, Today, Game plan, Invest and the team page render without an error', async ({ page }) => {
   test.setTimeout(240000);
-  await page.addInitScript(() => { if (!sessionStorage.seeded) { sessionStorage.seeded = 1;
-    localStorage.setItem('build', JSON.stringify({ slots: ['medicham', 'azumarill', 'chesnaught_mega'], moves: {} }));
-    localStorage.setItem('roster', JSON.stringify({ tagged: { Rain: ['azumarill', 'medicham', 'altaria'] }, candidates: {}, pending: {}, exclude: [], moves: {}, log: [] })); } });
+  await seedOnce(page, { build: { slots: ['medicham', 'azumarill', 'chesnaught_mega'], moves: {} }, roster: roster({ Rain: ['azumarill', 'medicham', 'altaria'] }) });
   const errors = await openApp(page, '#/today');
   const slugs = await page.evaluate(async () => (await (await fetch('data/cups.json')).json()).leagues.map(l => l.slug));
   expect(slugs.length).toBeGreaterThan(3);

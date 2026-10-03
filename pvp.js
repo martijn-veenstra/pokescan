@@ -94,7 +94,11 @@
     }
     scenarioIndex(sc) { const mx = this.mx; if (!mx) return 1; if (sc === undefined) return mx.scen.get('1-1') ?? 0; return typeof sc === 'number' ? sc : (mx.scen.get(sc) ?? 0); }
     pool() { return this.mx ? this.mx.cols : this.meta; }   // the opponents a matrix knows (meta group ∪ top of the rankings), else the meta group
-    movesOf(id) { return (this.overrides[id] && this.overrides[id].length) ? this.overrides[id] : this.pokemon[id].moveset; }
+    movesOf(id) {
+      if (this.overrides[id] && this.overrides[id].length) return this.overrides[id];
+      if (!this.pokemon[id]) throw new Error(`${id} is not in this league: filter with League.has() first`);   // say what is wrong, not 'undefined.moveset'
+      return this.pokemon[id].moveset;
+    }
     moveTypes(id) { return this.movesOf(id).filter(m => this.moves[m]).map(m => this.moves[m].t); }
     rating(atk, dfn, scenario) {
       const si = this.scenarioIndex(scenario), key = atk + '|' + dfn + (si === this.scenarioIndex() ? '' : '|' + si);
