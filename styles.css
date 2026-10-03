@@ -662,3 +662,5 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .gbl-nm{flex:1;min-width:0;font-size:13.5px;line-height:1.3}
 .gbl-go{flex:none;font-size:12px;font-weight:600;color:var(--green);background:none;border:1px solid rgba(72,213,151,.45);border-radius:9px;padding:4px 10px;cursor:pointer}
 .gbl-on{flex:none;font-size:11.5px;color:var(--green)}.gbl-row.on .gbl-nm{font-weight:600}
+.bside .nm .bty{display:inline-flex;margin-left:3px;vertical-align:-.12em}.bside .nm .bty .ty{margin-right:1px;width:.95em;height:.95em}
+.chip .eff{font-size:11px;font-weight:700}.chip .eff.gd{color:var(--green)}.chip .eff.bd{color:#F59A8B}.chip .ty{margin-right:.25em}

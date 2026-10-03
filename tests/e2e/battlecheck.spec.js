@@ -60,6 +60,17 @@ test('the battle check names the move into a resist, the losing lead and the was
   const ctx = posts[0].context.battle;
   expect(ctx.appChecks.filter(x => x.kind === 'mistake').map(x => x.what).join('\n')).toMatch(/Ice Beam \(ice\) into Registeel/);
   expect(ctx.history.join('\n')).toMatch(/thrown into a resist/);
+  // the type facts the review explains with: each Pokémon's types and move types, each check's reason in types
+  expect(ctx.typeFacts.mine.find(x => x.name === 'Azumarill').types).toEqual(['Water', 'Fairy']);
+  expect(ctx.typeFacts.mine.find(x => x.name === 'Azumarill').moves.join()).toMatch(/Ice Beam \(Ice\)/);
+  expect(ctx.typeFacts.matchups.join('\n')).toMatch(/Medicham vs Registeel/);
+  expect(ctx.appChecks.find(x => /Ice Beam/.test(x.what)).whyTypes).toBe('Ice Beam (Ice) into Registeel (Steel) ×0.63');
+  expect(ctx.appChecks.find(x => /^Lead Azumarill/.test(x.what)).betterWhy).toMatch(/Medicham's .+ \(Fighting\) hits Registeel \(Steel\) ×1.6/);
+  // the review shows type badges next to type and move names
+  await expect(b.locator('.team.card.review .mvh .ty').first()).toBeVisible();
+  // and the moves used carry their type and how they landed
+  await expect(b.locator('.chip:has-text("Ice Beam") .ty')).not.toHaveCount(0);
+  await expect(b.locator('.chip:has-text("Ice Beam") .eff.bd').first()).toHaveText('×0.63');
   expect(errors).toEqual([]);
 });
 

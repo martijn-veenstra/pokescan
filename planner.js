@@ -981,8 +981,18 @@ function coachContext(m) {
   };
 }
 let NAMERX = null;
+let DECORX = null;
+function typeDecor(html) {                       // coach answers: a type badge before each type name ("Electric") and each move name ("Plasma Fists")
+  if (!APP) return html;
+  if (!DECORX || DECORX.app !== APP) { const mv = {}; for (const [k, m] of Object.entries(Object.assign({}, ALT_MOVES, APP.moves))) if (m && m.n && m.t && m.n.length > 2 && !TYPE_COL[m.n.toLowerCase()]) mv[m.n] = m.t;
+    const types = TYPES18.map(cap1), names = Object.keys(mv).sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    DECORX = {app: APP, mv, rx: new RegExp('(^|[^\\w])(' + names.concat(types).join('|') + ')(?![\\w])', 'g')}; }
+  return html.split(/(<[^>]+>)/).map((seg, i) => i % 2 ? seg : seg.replace(DECORX.rx, (m0, pre, w) => { const t = DECORX.mv[w] || (TYPE_COL[w.toLowerCase()] ? w.toLowerCase() : null);
+    return t ? `${pre}<span class="mvh">${ti(t)}${w}</span>` : m0; })).join('');
+}
 function linkNames(html) {                     // wrap Pokémon names in coach answers: tap adds to the builder (when it has an open slot) or opens the page
   if (!APP) return html;
+  html = typeDecor(html);
   if (!NAMERX) { const byName = {}; for (const [id, e] of Object.entries(APP.pokemon)) if (!byName[e.name] || APP.pokemon[byName[e.name]].rank > e.rank) byName[e.name] = id;
     NAMERX = {map: byName, rx: new RegExp('(^|[^\\w])(' + Object.keys(byName).sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![\\w])', 'g')}; }
   return html.split(/(<[^>]+>)/).map((seg, i) => i % 2 ? seg : seg.replace(NAMERX.rx, (m0, pre, name) => `${pre}<a href="#" class="pn" onclick="Planner.pickName('${NAMERX.map[name]}');return false">${name}</a>`)).join('');
@@ -1114,16 +1124,33 @@ const tchip = (t, cls) => `<span class="chip tc ${cls || 't-' + t}">${ti(t)}${es
 const mvType = m => (moveInfo(m) || {}).t;
 const tset = types => (types || []).map(ti).join('');                                                // a Pokémon's types as badges
 const xE = e => '×' + (+e.toFixed(2));                                                                 // ×1.6, ×2.56, ×0.63: as the battle check writes it
-function typeWhy(L, me, opp) {                  // why a matchup goes the way it does, in types: your best hit, what you resist, what hits you
-  const P = id => (L && L.pokemon[id]) || APP.pokemon[id] || APP.unranked[id]; const A = P(me), D = P(opp); if (!A || !D) return '';
+function typeFacts(L, me, opp) {                // the type side of a matchup: each side's best-landing move against the other's types
+  const P = id => (L && L.pokemon[id]) || APP.pokemon[id] || APP.unranked[id]; const A = P(me), D = P(opp); if (!A || !D) return null;
   const mv = id => ((L && L.pokemon[id] ? L.movesOf(id) : (P(id).moveset || [])) || []).filter(m => moveInfo(m));
   const best = (moves, def) => moves.map(m => ({m, e: PVP.eff(mvType(m), def)})).sort((a, b) => b.e - a.e)[0];
-  const mine = best(mv(me), D.types), theirs = best(mv(opp), A.types), out = [];
+  const charged = id => mv(id).filter(m => (moveInfo(m).e || 0) < 0);
+  return {A, D, mine: best(mv(me), D.types), theirs: best(mv(opp), A.types), mineC: best(charged(me), D.types), theirsC: best(charged(opp), A.types)};
+}
+function typeWhy(L, me, opp) {                  // why a matchup goes the way it does, in types: your best hit, what you resist, what hits you
+  const f = typeFacts(L, me, opp); if (!f) return ''; const {A, D, mine, theirs, mineC, theirsC} = f, out = [];
   if (mine && mine.e > 1) out.push(`<span class="gd">${mvH(mine.m)} ${xE(mine.e)} on ${tset(D.types)}</span>`);
+  else if (mineC && mineC.e < 1) out.push(`<span class="bd">charged moves resisted: best ${mvH(mineC.m)} ${xE(mineC.e)} on ${tset(D.types)}</span>`);
   if (theirs && theirs.e < 1) out.push(`<span class="gd">resists ${mvH(theirs.m)} ${xE(theirs.e)}</span>`);
+  else if (theirs && theirs.e <= 1 && theirsC && theirsC.e < 1) out.push(`<span class="gd">resists their charged moves: best ${mvH(theirsC.m)} ${xE(theirsC.e)}</span>`);
   if (theirs && theirs.e > 1) out.push(`<span class="bd">${mvH(theirs.m)} hits ${tset(A.types)} ${xE(theirs.e)}</span>`);
   if (mine && mine.e < 1) out.push(`<span class="bd">${mvH(mine.m)} resisted ${xE(mine.e)}</span>`);
   return out.length ? `<div class="why">${out.join('')}</div>` : `<div class="why">neutral on types: stats and energy decide</div>`;
+}
+const TY = types => types.map(cap1).join('/');
+function typeWhyText(L, me, opp) {              // the same reason in words, for Professor Cedar: "Superpower (Fighting) ×1.6 on Lapras (Water/Ice); ..."
+  const f = typeFacts(L, me, opp); if (!f) return ''; const {A, D, mine, theirs, mineC, theirsC} = f, out = [], mt = m => `${mvName(m)} (${cap1(mvType(m))})`;
+  if (mine && mine.e > 1) out.push(`${nm(me)}'s ${mt(mine.m)} hits ${nm(opp)} (${TY(D.types)}) ${xE(mine.e)}`);
+  else if (mine && mine.e >= 1 && mineC && mineC.e < 1) out.push(`${nm(opp)} (${TY(D.types)}) resists all of ${nm(me)}'s charged moves, best ${mt(mineC.m)} ${xE(mineC.e)}`);
+  if (theirs && theirs.e <= 1 && theirs.e >= 1 && theirsC && theirsC.e < 1) out.push(`${nm(me)} (${TY(A.types)}) resists all of ${nm(opp)}'s charged moves, best ${mt(theirsC.m)} ${xE(theirsC.e)}`);
+  if (mine && mine.e < 1) out.push(`${nm(me)}'s best move ${mt(mine.m)} is resisted by ${nm(opp)} (${TY(D.types)}) ${xE(mine.e)}`);
+  if (theirs && theirs.e > 1) out.push(`${nm(opp)}'s ${mt(theirs.m)} hits ${nm(me)} (${TY(A.types)}) ${xE(theirs.e)}`);
+  if (theirs && theirs.e < 1) out.push(`${nm(me)} (${TY(A.types)}) resists ${nm(opp)}'s best move ${mt(theirs.m)} ${xE(theirs.e)}`);
+  return out.length ? out.join('; ') : `neutral on types (${nm(me)} ${TY(A.types)} vs ${nm(opp)} ${TY(D.types)}): stats and energy decide`;
 }
 const mvH = m => `<span class="mvh">${ti(mvType(m))}${esc(mvName(m))}</span>`;                      // a move name with its type badge, for HTML
 
@@ -1237,7 +1264,18 @@ function battleContext(b) {
     seconds: b.filmData ? b.filmData.dur : undefined,
   };
   const f = battleFacts(b);
-  if (f) ctx.battle.appChecks = [...f.moves, ...f.matchups, ...f.shields].map(x => ({at: x.t != null ? tclock(x.t) : undefined, kind: x.bad ? 'mistake' : x.good ? 'good' : 'note', what: x.text, better: x.fix}));
+  const L = M().L;
+  if (f) ctx.battle.appChecks = [...f.moves, ...f.matchups, ...f.shields].map(x => ({at: x.t != null ? tclock(x.t) : undefined, kind: x.bad ? 'mistake' : x.good ? 'good' : 'note', what: x.text, better: x.fix,
+    whyTypes: x.type && x.def && APP.pokemon[x.def] ? `${x.move} (${cap1(x.type)}) into ${nm(x.def)} (${TY(APP.pokemon[x.def].types)}) ${xE(x.eff)}` : x.my && x.opp ? typeWhyText(L, x.my, x.opp) : undefined,
+    betterWhy: x.my && x.opp && x.bad ? (() => { const alt = (b.ids || b.myIds || []).filter(id => id !== x.my && APP.pokemon[id]).sort((p, q) => L.rating(q, x.opp) - L.rating(p, x.opp))[0]; return alt ? typeWhyText(L, alt, x.opp) : undefined; })() : undefined}));
+  {                                                // the types of every Pokémon in the match, with their moves' types: the coach explains in these
+    const ids = id => id && APP.pokemon[id] ? id : null, mine = (b.ids || b.myIds || []).map(ids).filter(Boolean), theirs = (b.opp || []).map(ids).filter(Boolean);
+    const seen = side => new Set(((b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [])).filter(m => m.by === side).map(m => moveIdByName(m.move)).filter(Boolean));
+    const mon = (id, side) => { const mv = [...new Set((side === 'my' ? L.movesOf(id) : APP.pokemon[id].moveset).concat([...seen(side)].filter(k => (APP.pokemon[id].fast || []).concat(APP.pokemon[id].charged || []).includes(k))))].filter(k => moveInfo(k));
+      return {name: nm(id), types: APP.pokemon[id].types.map(cap1), moves: mv.map(k => `${mvName(k)} (${cap1(mvType(k))}${(moveInfo(k).e || 0) > 0 ? ', fast' : ''})`), weakTo: weakToTypes(APP.pokemon[id].types).map(cap1), resists: TYPES18.filter(t => PVP.eff(t, APP.pokemon[id].types) < 1).map(cap1)}; };
+    ctx.battle.typeFacts = {mine: mine.map(id => mon(id, 'my')), theirs: theirs.map(id => mon(id, 'opp')),
+      matchups: mine.flatMap(a => theirs.map(o => `${nm(a)} vs ${nm(o)} (${Math.round(L.rating(a, o))}): ${typeWhyText(L, a, o)}`))};
+  }
   ctx.battle.history = battleHabits(4).lines;                // what keeps happening across this player's recent battles
   delete ctx.builder;
   return ctx;
@@ -1312,7 +1350,8 @@ function builderContext(m, L, filled) {
   const mine = Object.keys(m.ri.owned).concat(Object.keys(m.ri.pending)).filter(distinct);
   const party = filled.length === 3 ? savedName(filled, null) : null, lineupIds = party ? ROSTER.tagged[party] : filled;
   ctx.builder = {
-    slots: filled.map(id => `${nm(id)} (#${rankOf(id)}, ${((APP.pokemon[id] || {}).types || []).join('/')}, ${L.movesOf(id).map(mvName).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
+    slots: filled.map(id => `${nm(id)} (#${rankOf(id)}, ${((APP.pokemon[id] || {}).types || []).map(cap1).join('/')}, ${L.movesOf(id).map(k => `${mvName(k)} [${cap1(mvType(k) || '?')}]`).join('/')}${ownership(m, id) ? ', ' + ownership(m, id) : ', not owned'})`),
+    weakSpotsWhy: filled.length === 3 ? ev.holes.slice(0, 6).map(o => `${nm(o)}: ` + filled.map(a => typeWhyText(L, a, o)).join(' | ')) : undefined,
     lineup: filled.length === 3 ? lineupIds.map((id, i) => ({slot: SLOTS[i], name: nm(id), types: APP.pokemon[id].types})) : undefined,
     lineupKnown: filled.length === 3 ? !!(party || onView() === 'builder') : undefined,
     appRoles: filled.length === 3 ? roles(L, filled).map(r => ({role: r.role, name: nm(r.id), why: r.why || ''})) : undefined,
@@ -2050,7 +2089,7 @@ function battleInner() {
   // once a party is attributed its three names are the truth; a partial read only speaks for itself
   const side = (ids, names, label) => { const mine = label === 'you';
     const use = ids && ids.length === 3 ? ids.map(id => [id, nm(id)]) : (names && names.length ? names.map(n => [battleMonId(b, n), n]) : (ids || []).map(id => [id, nm(id)]));
-    return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${use.length ? use.map(([id, n]) => monA(id, mine, n)).join(' / ') : 'not read'}</div></div>`; };
+    return `<div class="bside"><div class="lb">${label}</div>${ids && ids.length ? trio(ids.slice(0, 3)) : ''}<div class="nm">${use.length ? use.map(([id, n]) => monA(id, mine, n) + (id && APP.pokemon[id] ? `<span class="bty">${tset(APP.pokemon[id].types)}</span>` : '')).join(' / ') : 'not read'}</div></div>`; };
   let h = `<div class="back" onclick="Planner.nav('#/battles')">‹ ${esc(PAGE_LABEL.battles)}</div>`;
   h += `<div class="team card" style="cursor:default"><div class="sec" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center">
     <span style="color:${col}">${res}</span><span style="display:flex;align-items:center;gap:6px"><span class="dim" style="font-size:12px;font-weight:400">${whenT(b.t)}</span>${ctxMenu([['Delete this battle', `Planner.delBattleGo(${attr(b.id)})`, true]])}</span></div>
@@ -2061,13 +2100,16 @@ function battleInner() {
   const mv = b.moves && b.moves.length ? b.moves : (b.filmData && b.filmData.moves) || [];
   if (mv.length) {
     const side = who => mv.filter(m => m.by === who);
-    const chip = m => `<span class="chip ${m.blocked ? 'warn' : ''}">${m.species ? monA(battleMonId(b, m.species), m.by === 'my', m.species) + ' · ' : ''}${esc(m.move)}${m.blocked ? ' ✕' : ''}</span>`;
+    const reads = ((b.filmData && b.filmData.reads) || []).slice().sort((x, y) => x.t - y.t);
+    const facing = (side, t) => { let cur = null; for (const r of reads) if (r.side === side && r.t <= t + 0.5) cur = r; const id = cur && battleMonId(b, cur.species); return id && APP.pokemon[id] ? id : null; };
+    const chip = m => { const k = moveIdByName(m.move), ty = k && mvType(k), def = m.t != null && (m.by === 'my' || m.by === 'opp') ? facing(m.by === 'my' ? 'opp' : 'my', m.t) : null, e = ty && def ? PVP.eff(ty, APP.pokemon[def].types) : 1;
+      return `<span class="chip ${m.blocked ? 'warn' : ''}">${m.species ? monA(battleMonId(b, m.species), m.by === 'my', m.species) + ' · ' : ''}${ti(ty)}${esc(m.move)}${e !== 1 ? ` <span class="eff ${e > 1 ? 'gd' : 'bd'}" title="on ${esc(nm(def))}">${xE(e)}</span>` : ''}${m.blocked ? ' ✕' : ''}</span>`; };
     const list = rows => rows.length ? rows.map(chip).join('') : '<span class="dim">none read</span>';
     const loose = mv.filter(m => m.by !== 'my' && m.by !== 'opp');   // read before the side could be worked out
     h += `<div class="sec">Moves used <small>${mv.length} read off the recording</small></div><div class="team card" style="cursor:default">${kv([
       ['Yours', `<div class="chips">${list(side('my'))}</div>`],
       ['Theirs', `<div class="chips">${list(side('opp'))}</div>`],
-    ].concat(loose.length ? [['Side not read', `<div class="chips">${loose.map(chip).join('')}</div>`]] : []))}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
+    ].concat(loose.length ? [['Side not read', `<div class="chips">${loose.map(chip).join('')}</div>`]] : []))}<div class="dt" style="margin-top:6px">✕ means the charged move was shielded; ×1.6 (green) or ×0.63 (red) is how it landed on the Pokémon in front of it. Read from the banners the game shows, so a move it never announced is not here.</div></div>`;
   }
   if (b.film && b.film.length) h += `<div class="sec">How it went <small>${b.filmData && b.filmData.dur ? b.filmData.dur + ' s' : ''}</small></div><div class="filmt page">${linkFilm(b, b.film).map(l => `<div>${l}</div>`).join('')}</div>`;
   h += battleCheckCard(b) + battleReviewCard(b);

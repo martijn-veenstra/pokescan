@@ -10,17 +10,19 @@ beat two of the three, the player's roster and the current top meta. The league 
 with the fewest hard losses; Closer wins the last fight, often with shields down. "appRoles" is the order the app's matchup numbers
 suggest, with the reason per member. When "lineupKnown" is false the order is not the player's choice.
 
-Review the team in markdown with exactly these six sections, under 280 words in total, no other text:
+Review the team in markdown with exactly these six sections, under 320 words in total, no other text:
 **Verdict** one sentence: how good this team is and its main idea.
 **Game plan** how to play this team, as exactly three short bullets a player can keep in mind mid-battle:
 "Open: …" what the lead does and whether to spend or bait shields early; "Mid-game: …" when to switch and who takes the
 awkward matchups; "Close: …" who finishes and what the shields should look like by then. Concrete, in this team's own
 Pokémon and moves, no general PvP advice.
 **Strengths** up to 3 bullets: what it handles well, who leads / swaps / closes.
-**Weak spots** up to 3 bullets: the meta Pokémon or patterns it fears, and what to do when you meet them.
-**Swaps** up to 2 bullets, each "X → Y: why", preferring Pokémon the player OWNS (mark others "to catch or build"). Write "none" if the team should stay as it is.
+**Weak spots** up to 3 bullets: the meta Pokémon or patterns it fears, why in types (their move and its type against your members' types, from weakSpotsWhy, with the multiplier), and what to do when you meet them.
+**Swaps** up to 2 bullets, each "X → Y: why" with the type reason (what Y resists or hits that X does not), preferring Pokémon the player OWNS (mark others "to catch or build"). Write "none" if the team should stay as it is.
 **Order** first line exactly "Lead: X · Swap: Y · Closer: Z", then one or two sentences: keep the player's lineup when it is right and say why it works; otherwise this is the better order and why, from the members' types (what the lead pressures or baits, who switches in safely, who wins with shields down) and the appRoles numbers. When lineupKnown is false, propose the order.
 Only name Pokémon that appear in the summary. Do not invent stats, moves or matchups; lean on the app's numbers.
+Write type names capitalised (Normal, Fire, Water, Grass, Electric, Ice, Fighting, Poison, Ground, Flying, Psychic, Bug, Rock,
+Ghost, Dragon, Dark, Steel, Fairy) and move names exactly as the summary writes them: the app puts their type badges next to them.
 When the summary carries real GO Battle League results ("battles" or "history": wins and losses per team, the opposing leads that
 cause trouble, the rating trend), weigh them above theory and say which advice follows from them.`;
 
@@ -34,18 +36,25 @@ each charged move against the Pokémon it hit, each lead and switch-in against t
 "mistake", "good" or "note", with the better option in "better". Build on appChecks: they are computed, not guessed. "history" is what
 keeps going wrong across this player's recent battles; mention it only when this match repeats it. The league and CP cap are in the
 summary. The read is mechanical and can be incomplete: a name it could not read is missing, never a Pokémon that was not there.
+"typeFacts" lists every Pokémon in the match with its types, its moves and their types, what it is weak to and resists, and per
+pairing the type reason (each side's best-landing move and its multiplier). Each appCheck carries "whyTypes" (the type reason behind
+it) and, for a lost matchup, "betterWhy" (why the better pick wins it).
+Always say WHY in types: every loss, losing matchup, resisted move and mistake you name comes with its type reason, as move (Type)
+on the defender (Types) and the multiplier from typeFacts or appChecks, e.g. "Plasma Fists (Electric) hits Cramorant (Water/Flying)
+×2.56". When a pairing is neutral on types, say stats and energy decided it. Write type names capitalised (Normal, Fire, Water, Grass, Electric, Ice, Fighting, Poison, Ground, Flying, Psychic, Bug, Rock,
+Ghost, Dragon, Dark, Steel, Fairy) and move names exactly as the summary writes them: the app puts their type badges next to them.
 
-Write markdown with exactly these sections, in this order, under 260 words in total, no other text:
+Write markdown with exactly these sections, in this order, under 340 words in total, no other text:
 **Grade** one letter A to F (A = played it well, F = threw it away; judge the decisions, not the result), then " — " and one sentence why.
 **What happened** two sentences telling the match from the timeline: the lead, the switch, the shield trade, how it ended.
-**Mistakes** up to 3 bullets, worst first, each starting with its time as m:ss and naming the Pokémon: what went wrong and what it cost.
+**Mistakes** up to 3 bullets, worst first, each starting with its time as m:ss and naming the Pokémon: what went wrong, why in types, and what it cost.
 Take them from appChecks marked "mistake" and from the timeline; write "None worth fixing" when there are none.
 **Moves** one or two sentences on the charged moves: any thrown into a resist (from appChecks) and what to throw instead.
-**Matchups** one or two sentences on the lead and each switch: which held, which lost, and who should have been in instead.
+**Matchups** two or three sentences on the lead and each switch: which held and which lost, each with its type reason, and who should have been in instead and why (betterWhy).
 **Shields** one sentence on the shield trade: wasted, well spent, or kept too long.
-**Try this next time** exactly 3 bullets, each one concrete action for the next match with this team, starting with a verb.
+**Try this next time** exactly 3 bullets, each one concrete action for the next match with this team, starting with a verb, then " — " and why it works: the type reason or the app's numbers behind it.
 **Team tip** one sentence: a change to this team or its order that fixes the problem this match showed, from the player's roster in
-the summary, or "Keep the team" when it was the play, not the team.
+the summary, and the type reason it fixes it; or "Keep the team" when it was the play, not the team.
 Only name Pokémon that appear in the summary. Do not invent moves, damage numbers or matchups the summary does not give you.
 When the result is missing, say what the timeline shows and do not guess who won.`;
 
