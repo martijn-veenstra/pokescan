@@ -460,6 +460,7 @@ function renderTodayInner(el) {
   h += startCard(m, best);
   h += changesCard(m);
   h += eventsCard(m);
+  h += investCard();
   if (!best) {
     h += `<div class="empty"><b>No team yet.</b><br>${ONBOARD.dismissed ? `Scan at least three Pokémon at or under ${LEAGUE.cp} CP, add them by name in Roster, or load the saved roster from its ⋮ menu.` : 'The checklist above says what to scan next.'}</div>`;
     el.innerHTML = h; return;
@@ -716,8 +717,8 @@ function renderTeamsInner(el) {
   el.innerHTML = h;
 }
 function toggleTeamsAll() { UI.teamsAll = !UI.teamsAll; renderTeams(); }
-const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'battle', 'pro'];
-const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Roster', matchups: 'Game plan', battles: 'Battle log', battle: 'Battle'};
+const PAGES = ['today', 'builder', 'teams', 'team', 'roster', 'meta', 'rank', 'raids', 'scans', 'mon', 'matchups', 'battles', 'battle', 'pro', 'invest'];
+const PAGE_LABEL = {pro: 'Pro', today: 'Today', builder: 'Builder', teams: 'Saved teams', team: 'Team', roster: 'Roster', meta: 'Meta teams', rank: 'Rankings', raids: 'Raids', scans: 'Roster', matchups: 'Game plan', battles: 'Battle log', battle: 'Battle', invest: 'Invest'};
 const onView = () => PAGES.find(k => $('view-' + k) && $('view-' + k).classList.contains('on'));
 function openTeam(ids, name) {
   if (!APP || !ids || ids.length !== 3 || !ids.every(id => APP.pokemon[id])) return;
@@ -969,6 +970,7 @@ function coachContext(m) {
   const team = t => `${t.members.map(x => x.name).join(' / ')} — score ${t.teamScore.toFixed(0)}${t.unansweredMeta.length ? `, no answer to ${t.unansweredMeta.join(', ')}` : ''}${t.sharedWeaknesses.length ? `, two lose to ${t.sharedWeaknesses.join(', ')}` : ''}`;
   const scanned = {}; for (const r of results) { const s = scanId(r); if (!s || !s.id || r.bench || r.superseded) continue; const lv = lvl(r); if (lv && (!scanned[s.id] || scanned[s.id] < lv)) scanned[s.id] = lv; }
   return {
+    investTop: (() => { try { return investRows().filter(x => x.verdict !== 'skip').slice(0, 8).map(x => `${x.name} for ${x.plabel}: ${INV_V[x.verdict][0]} · ${x.cost.dust} dust, ${x.cost.candy} candy${x.cost.xl ? `, ${x.cost.xl} XL` : ''} · ${x.why.join(', ')}`); } catch { return undefined; } })(),
     league: APP.league.title, rules: (APP.league.rules || []).length ? APP.league.rules : undefined, cupConditions: cupConditions().lines.map(l => l.text), gamemaster: APP.gamemasterTimestamp.slice(0, 10), trainerLevel: localStorage.getItem('trainer') || null,
     owned: Object.keys(own).filter(id => APP.pokemon[id]).map(id => mon(id) + (scanned[id] ? ` at L${scanned[id]}` : '')),
     pending: Object.keys(ri.pending).filter(id => APP.pokemon[id] && !own[id]).map(mon),
@@ -2494,7 +2496,7 @@ function renderPro() {
 }
 const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Game plan', '⚑'], ['battles', 'Battle log', '◔']]],
                 ['Meta', [['meta', 'Meta teams', '♛'], ['rank', 'Rankings', '#'], ['raids', 'Raids', '⚔']]],
-                ['Collection', [['roster', 'Roster', '◎']]]];
+                ['Collection', [['roster', 'Roster', '◎'], ['invest', 'Invest', '✦']]]];
 function drawer(open) { const d = $('drawer'); if (!d) return; d.classList.toggle('open', !!open); if (open) paintDrawer(); }
 function paintDrawer() {
   const el = $('dr'), d = $('drawer'); if (!el || !d || !d.classList.contains('open')) return;
@@ -3336,6 +3338,160 @@ const raidCols = () => colHead([
   {k: 'c1', label: '#', help: 'Ranked by DPS³ × TDO, the usual raid metric: it favours fast damage but still asks the attacker to survive.'},
   {k: 'cx', label: 'Attacker', help: 'The Pokémon, its attacking type and the moves used. "Yours" means you have scanned one — matched by species, so a normal copy also lights up a Shadow or Mega row.'},
   {k: 'ce', label: 'DPS · TDO', help: 'Damage per second, and total damage before fainting, both at level 40 against a typical tier-5 boss. The bars compare each against the best in the list.'}], 'rk');
+/* ---------- Invest: which of your Pokémon are worth Stardust and Candy, per league and for raids, with the price and the why ---------- */
+const INV_LEAGUES = [['great', 'Great League', 'GL'], ['ultra', 'Ultra League', 'UL']];
+let INVLOAD = {};
+function invData(slug) {                          // a league's ranking data: the active one is APP, the others load once into ALT_DATA
+  if (slug === LEAGUE.slug) return APP;
+  if (ALT_DATA[slug]) return ALT_DATA[slug];
+  if (!INVLOAD[slug]) INVLOAD[slug] = fetch(`data/app-${slug}.json?v=` + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '')).then(r => r.ok ? r.json() : null)
+    .then(d => { if (d) { ALT_DATA[slug] = d; for (const [k, v] of Object.entries(d.moves || {})) if (!ALT_MOVES[k]) ALT_MOVES[k] = v; } }).catch(() => {})
+    .finally(() => { if (onView() === 'invest') whenIdle(renderInvest); if (onView() === 'today') whenIdle(renderToday); });
+  return null;
+}
+function idIn(d, species, form, shadow) {         // a scanned species (+ base-stat form, shadow) → that league's id, as pvpokeIdFor does for APP
+  const s = species.toLowerCase(), all = Object.keys(d.pokemon).filter(k => k === s || k.startsWith(s + '_'));
+  let ids = all.filter(k => k.includes('shadow') === !!shadow); if (!ids.length) ids = all.filter(k => !k.includes('shadow'));
+  ids = ids.filter(k => !/_mega/.test(k)); if (!ids.length) return null;
+  if (form && ids.length > 1) { const ft = [form[3], form[4]].filter(Boolean).map(t => t.toLowerCase()).sort().join('/'); const m = ids.filter(k => d.pokemon[k].types.slice().sort().join('/') === ft); if (m.length) ids = m; }
+  return ids[0];
+}
+const invMetaW = rank => !rank ? 0 : rank <= 10 ? 1 : rank <= 25 ? 0.9 : rank <= 50 ? 0.75 : rank <= 100 ? 0.5 : rank <= 200 ? 0.25 : 0.05;
+const invFitW = p => p >= 99 ? 1 : p >= 97 ? 0.9 : p >= 95 ? 0.75 : p >= 93 ? 0.55 : p >= 90 ? 0.3 : 0.1;
+const invRaidW = n => n <= 5 ? 1 : n <= 12 ? 0.8 : n <= 25 ? 0.6 : 0.45;
+function invEvos(species) {                       // the scanned species and what it evolves into (up to two steps), with the candy per step
+  const out = [{sp: species, evoCandy: 0, from: null}], ev = EVO && EVO.evolve;
+  if (!ev) return out;
+  const walk = (sp, candy, depth) => { for (const x of ev[sp.toLowerCase()] || []) { const to = x.to.split('_')[0].toUpperCase(); if (!DATA.stats[to] || out.some(o => o.sp === to)) continue;
+    out.push({sp: to, evoCandy: candy + (x.candy || 0), from: species}); if (depth < 2) walk(to, candy + (x.candy || 0), depth + 1); } };
+  walk(species, 0, 1);
+  return out;
+}
+function invCost(cur, to, extra) {               // dust, candy and XL from level cur to level to, plus extras (2nd move, evolution)
+  const c = to > cur ? costTo(cur, to) : {dust: 0, candy: 0, xl: 0};
+  return {dust: c.dust + (extra.dust || 0), candy: c.candy + (extra.candy || 0), xl: c.xl, to, from: cur};
+}
+function invVerdict(row, have) {                 // invest / cheap win / save for it / skip / ready, from value, cost and what you have
+  const c = row.cost, h = have.fam, dh = have.dust;
+  row.shortDust = dh != null && c.dust > dh; row.shortCandy = h && h.candy != null && c.candy > h.candy; row.shortXl = c.xl > 0 && !(h && h.xl != null && h.xl >= c.xl);
+  if (row.value < 0.3) return 'skip';
+  if (!c.dust && !c.candy && !c.xl) return 'ready';
+  if (row.shortDust || row.shortCandy || row.shortXl) return 'save';
+  if (c.dust <= 15000 && !c.xl) return 'cheap';
+  return 'invest';
+}
+function investRows() {
+  const H = ROSTER.have || {}, dust = H.dust ? H.dust.v : null, rows = [];
+  const leagues = INV_LEAGUES.map(([slug, label, abbr]) => ({slug, label, abbr})); if (!leagues.some(l => l.slug === LEAGUE.slug)) leagues.push({slug: LEAGUE.slug, label: LEAGUE.title, abbr: LEAGUE.abbr, cup: true});
+  const inParty = new Set(Object.values(ROSTER.tagged).flat());
+  for (const r of results) {
+    if (r.superseded || r.bench || !r.cp || !r.combos || !r.combos.length || !DATA.stats[r.species]) continue;
+    const best = bestOf2(r), cur = r.level || best[0], [, a, df, s] = best, fam = familyKey((scanId(r) || {}).id || unrankedId(r) || r.species.toLowerCase());
+    const have = {dust, fam: haveOf(fam)}, base = {key: r.key, species: r.species, shadow: !!r.shadow, level: cur, ivs: `${a}/${df}/${s}`, fam};
+    // PvP: every league the app has data for, for this species and what it evolves into
+    for (const L0 of leagues) {
+      const d = invData(L0.slug); if (!d) continue;
+      for (const ev of invEvos(r.species)) {
+        const forms = DATA.stats[ev.sp], id = idIn(d, ev.sp, ev.sp === r.species ? best[4] : null, r.shadow); if (!id) continue;
+        const e = d.pokemon[id], b = forms.find(f => [f[3], f[4]].filter(t => t && t !== 'none').map(t => t.toLowerCase()).sort().join('/') === e.types.slice().sort().join('/')) || (ev.sp === r.species && best[4]) || forms[0];
+        const cap = d.league.cp, rk = pvpRank(b, a, df, s, cap); if (!rk) continue;
+        if (calcCP(b, a, df, s, cpmAt(cur)) > cap) continue;              // already over this cap
+        const second = r.secondMove === false && ev.sp === r.species ? (e.thirdMove || [75000, 75]) : null;
+        const cost = invCost(cur, rk.lv, {dust: second ? second[0] : 0, candy: (second ? second[1] : 0) + ev.evoCandy});
+        const team = inParty.has(id) && L0.slug === LEAGUE.slug, meta = (d.metaTeams || []).some(t => t.members.includes(id));
+        const value = invMetaW(e.rank) * invFitW(rk.pct) * (team ? 1.3 : 1) * (meta ? 1.1 : 1);
+        const why = [`#${e.rank} in ${L0.label}`, `your IVs rank #${rk.n} (${rk.pct.toFixed(1)}% of ideal)`];
+        if (team) why.push('in a saved team'); else if (meta) why.push('in meta teams');
+        if (ev.from) why.unshift(`evolve your ${nice(r.species)} into ${nm(id)}`);
+        why.push(`reaches ${rk.cp} CP at L${rk.lv}`); if (second) why.push('2nd move locked');
+        const row = Object.assign({}, base, {purpose: L0.abbr, plabel: L0.label, slug: L0.slug, id, name: e.name, types: e.types, rank: e.rank, value, cost, why, evolve: ev.from ? nm(id) : null, second: !!second});
+        row.verdict = invVerdict(row, have); rows.push(row);
+      }
+    }
+    // raids: the species' place among the best attackers of a type, its Attack IV, and the next level step
+    if (PVE) {
+      let hit = null;
+      for (const [t, list] of Object.entries(PVE.types || {})) list.forEach((x, i) => { if (x.species === r.species && !!x.shadow === !!r.shadow && !x.mega && (!hit || i < hit.n)) hit = {t, n: i + 1, x}; });
+      if (hit) {
+        const b = best[4] || DATA.stats[r.species][0], atkF = (b[0] + a) / (b[0] + 15), to = cur < 30 ? 30 : cur < 35 ? 35 : cur < 40 ? 40 : cur;
+        const cost = invCost(cur, to, {}), value = invRaidW(hit.n) * atkF * atkF;
+        const why = [`#${hit.n} ${cap1(hit.t)} raid attacker`, `Attack IV ${a}`, to > cur ? `L${cur} → L${to}: about ${Math.round((cpmAt(to) / cpmAt(cur) - 1) * 100)}% more damage` : 'already at L40'];
+        const row = Object.assign({}, base, {purpose: 'Raids', plabel: 'Raids', slug: 'raids', rtype: hit.t, id: hit.x.id, name: hit.x.name, types: hit.x.types, rank: hit.n, value, cost, why});
+        row.verdict = invVerdict(row, have); rows.push(row);
+      }
+    }
+  }
+  // one row per species and purpose: your best copy for it, noting how many others there are
+  const best = new Map();
+  for (const x of rows) { const k = x.purpose + '|' + x.id, cur = best.get(k);
+    if (!cur) { best.set(k, Object.assign(x, {others: 0})); continue; }
+    cur.others++; const better = x.value > cur.value + 0.01 || (Math.abs(x.value - cur.value) <= 0.01 && x.cost.dust < cur.cost.dust);
+    if (better) { x.others = cur.others; best.set(k, x); } }
+  const out = [...best.values()];
+  for (const x of out) x.perDust = x.value / (1 + x.cost.dust / 10000 + x.cost.candy / 50 + x.cost.xl / 10);
+  const ORD = {invest: 0, cheap: 1, save: 2, ready: 3, skip: 4};
+  return out.sort((p, q) => ORD[p.verdict] - ORD[q.verdict] || q.perDust - p.perDust);
+}
+function spendPlan(rows) {                        // the best value per dust that fits your stardust, one spend per copy, candy per family counted down
+  const H = ROSTER.have || {}, budget = H.dust ? H.dust.v : null, candy = {}, used = new Set(), plan = [];
+  let left = budget;
+  for (const x of rows.filter(x => x.verdict === 'invest' || x.verdict === 'cheap').sort((p, q) => q.perDust - p.perDust)) {
+    if (used.has(x.key)) continue;
+    if (left != null && x.cost.dust > left) continue;
+    const h = haveOf(x.fam); if (h && h.candy != null) { const c = candy[x.fam] ?? h.candy; if (x.cost.candy > c) continue; candy[x.fam] = c - x.cost.candy; }
+    plan.push(x); used.add(x.key); if (left != null) left -= x.cost.dust;
+    if (plan.length >= 5) break;
+  }
+  return {plan, budget, left, spent: plan.reduce((n, x) => n + x.cost.dust, 0)};
+}
+const INV_V = {invest: ['Invest now', 'ok'], cheap: ['Cheap win', 'ok'], save: ['Save for it', 'gl'], ready: ['Ready', ''], skip: ['Skip', 'dim']};
+function invCostHtml(x) {
+  const h = haveOf(x.fam), mark = bad => bad ? '<span class="bad">✗</span>' : '';
+  const parts = [];
+  if (x.cost.dust) parts.push(`${kdust(x.cost.dust)} dust${mark(x.shortDust)}`);
+  if (x.cost.candy) parts.push(`${x.cost.candy} candy${h && h.candy != null ? (x.shortCandy ? `<span class="bad"> ✗ ${h.candy}</span>` : '<span class="okc"> ✓</span>') : ''}`);
+  if (x.cost.xl) parts.push(`${x.cost.xl} XL${x.shortXl ? '<span class="bad"> ✗</span>' : ''}`);
+  return parts.length ? parts.join(' · ') : 'nothing to spend';
+}
+function invRow(x) {
+  const v = INV_V[x.verdict], step = x.cost.to > x.cost.from ? `L${x.cost.from} → L${x.cost.to}` : '', what = [x.evolve ? `evolve → ${esc(x.evolve)}` : '', step, x.second ? '2nd move' : ''].filter(Boolean).join(' · ');
+  return `<div class="inv v-${x.verdict}" onclick="Planner.openScan(${attr(x.key)})">${icon(scanIcon(results.find(r => r.key === x.key) || {species: x.species}), 'm')}<span class="tx">
+    <span class="t1"><b>${esc(x.name)}</b>${tset(x.types)}<span class="chip pp">${x.purpose === 'Raids' ? ti(x.rtype) + 'Raids' : esc(x.purpose)}</span><span class="chip ${v[1]}">${v[0]}</span></span>
+    <span class="t2">${what ? `${what} · ` : ''}${invCostHtml(x)}</span>
+    <span class="t3">${esc(x.why.join(' · '))}${x.others ? ` · <span class="dim">best of your ${x.others + 1} copies</span>` : ''}</span></span></div>`;
+}
+function renderInvest() {
+  const el = $('invest'); if (!el) return;
+  try { el.innerHTML = investInner(); } catch (e) { el.innerHTML = errorCard('Invest', e); }
+}
+function investInner() {
+  if (!APP || !window.PVP) return '<div class="note">Loading battle data…</div>';
+  loadPve(); for (const [slug] of INV_LEAGUES) invData(slug);
+  const rows = investRows(), H = ROSTER.have || {}, sp = spendPlan(rows), f = UI.invF || 'all';
+  let h = `<div class="note have">Stardust <input id="idust" inputmode="numeric" placeholder="type it" value="${H.dust ? H.dust.v : ''}" onchange="Planner.setHave(null,'dust',this.value)"> · candy is read off your status screenshots per family${H.dust && !H.dust.hand ? `, dust last read ${when(H.dust.t)}` : ''}</div>`;
+  // the spend plan
+  h += `<div class="sec">Spend plan <small>${sp.budget != null ? `best value per dust within your ${kdust(sp.budget)}` : 'best value per dust'}</small></div>`;
+  if (!sp.plan.length) h += `<div class="note">${rows.length ? 'Nothing worth spending on right now: the rows below say what you are saving for and what to skip.' : 'Scan your Pokémon (status screen) to see what is worth powering up.'}</div>`;
+  else h += `<div class="team card invplan" style="cursor:default">${sp.plan.map((x, i) => `<div class="ip" onclick="Planner.openScan(${attr(x.key)})"><span class="n">${i + 1}</span><span class="tx"><b>${esc(x.name)}</b> <span class="dim">${esc(x.purpose === 'Raids' ? 'raids' : x.plabel)}</span> · ${x.cost.to > x.cost.from ? `L${x.cost.from} → L${x.cost.to}` : x.second ? '2nd move' : ''}${x.evolve ? ' · evolve' : ''}<div class="dt">${invCostHtml(x)}</div></span></div>`).join('')}
+    <div class="dt" style="margin-top:6px">${sp.budget != null ? `${kdust(sp.spent)} of your ${kdust(sp.budget)} stardust · ${kdust(sp.left)} left over` : 'Type your stardust above and the plan keeps to it.'}</div></div>`;
+  // the ranked list
+  const purposes = [...new Set(rows.map(x => x.purpose))];
+  const show = rows.filter(x => (f === 'all' || x.purpose === f) && (!UI.invHide || x.verdict !== 'skip'));
+  h += `<div class="sec">Your Pokémon <small>${rows.filter(x => x.verdict === 'invest' || x.verdict === 'cheap').length} worth investing in · ${rows.filter(x => x.verdict === 'save').length} to save for</small></div>`;
+  h += `<div class="tchips mf">${['all'].concat(purposes).map(k => `<span class="chip ${f === k ? 'sel' : ''}" onclick="Planner.investFilter('${k}')">${k === 'all' ? 'All' : esc(k)}</span>`).join('')}<span class="chip ${UI.invHide ? 'sel' : ''}" onclick="Planner.investHide()">Hide skip</span></div>`;
+  const loading = INV_LEAGUES.some(([slug]) => !invData(slug)) || !PVE;
+  h += show.length ? fold(show.map(invRow), 12, {label: n => `${n} more`}) : `<div class="note">Nothing here${f !== 'all' ? ' for this filter' : ''}.</div>`;
+  h += `<div class="dt" style="margin-top:8px">${loading ? 'Still loading the other leagues and the raid data… ' : ''}Worth it = how good the species is there (its rank) × how close your IVs are to ideal for that cap, against the dust, candy and XL it takes. Raids: its place among the best attackers of its type and its Attack IV. One row per species and purpose: your best copy.</div>`;
+  return h;
+}
+function investFilter(k) { UI.invF = k; renderInvest(); }
+function investHide() { UI.invHide = !UI.invHide; renderInvest(); }
+function investCard() {                           // Today: the top of the spend plan
+  if (!results.some(r => r.cp && !r.superseded)) return '';
+  const rows = investRows(), sp = spendPlan(rows); if (!sp.plan.length) return '';
+  return `<div class="sec">Where your dust goes <small>${sp.budget != null ? `within your ${kdust(sp.budget)} stardust` : 'best value per dust'}</small></div><div class="team row" onclick="Planner.nav('#/invest')"><span class="tx">${sp.plan.slice(0, 3).map((x, i) => `<div class="dt" style="color:var(--ink)">${i + 1}. <b style="color:var(--ink)">${esc(x.name)}</b> <span class="dim">${esc(x.purpose === 'Raids' ? 'raids' : x.plabel)}</span> · ${invCostHtml(x)}</div>`).join('')}<div class="dt" style="margin-top:4px">the full list: what to invest in, save for or skip ›</div></span><span class="go">›</span></div>`;
+}
+
 function renderRaids(m) {
   if (!PVE) { loadPve(); return `<div class="note">${pveError ? 'Raid data not available: ' + esc(pveError) : 'Loading the raid attacker rankings…'}</div>`; }
   const type = UI.pveType || 'overall', basic = !!UI.pveBasic;
@@ -3414,7 +3570,7 @@ function refresh() {                           // roster state changed: recomput
   const v = onView();
   if (v === 'today') renderToday(); else if (v === 'teams') renderTeams(); else if (v === 'roster') renderRoster();
   else if (v === 'builder' || v === 'meta' || v === 'rank' || v === 'raids') renderMeta();
-  else if (v === 'matchups') renderMatchups(); else if (v === 'battles') renderBattles(); else if (v === 'pro') renderPro();
+  else if (v === 'matchups') renderMatchups(); else if (v === 'invest') renderInvest(); else if (v === 'battles') renderBattles(); else if (v === 'pro') renderPro();
   else if (v === 'mon' && (UI.mon || UI.scan)) renderMon(); else if (v === 'team' && UI.team) renderTeam(); else if (v === 'battle' && UI.battle) renderBattle();
   paintDrawer();
 }
@@ -3466,7 +3622,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {gblMatch, cupConditions, scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {renderInvest, investFilter, investHide, investRows, spendPlan, gblMatch, cupConditions, scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};

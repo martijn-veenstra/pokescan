@@ -664,3 +664,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .gbl-on{flex:none;font-size:11.5px;color:var(--green)}.gbl-row.on .gbl-nm{font-weight:600}
 .bside .nm .bty{display:inline-flex;margin-left:3px;vertical-align:-.12em}.bside .nm .bty .ty{margin-right:1px;width:.95em;height:.95em}
 .chip .eff{font-size:11px;font-weight:700}.chip .eff.gd{color:var(--green)}.chip .eff.bd{color:#F59A8B}.chip .ty{margin-right:.25em}
+/* Invest */
+.inv{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 8px;background:var(--card);border:1px solid var(--line);border-radius:14px;cursor:pointer}
+.inv .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.inv .t1{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.inv .t1 b{font-size:14.5px;margin-right:2px}.inv .t1 .ty{margin-right:0}
+.inv .t1 .chip{font-size:11px;padding:1px 7px;margin-left:2px}.inv .t1 .chip.pp{background:rgba(91,141,239,.16);color:#A9C0F7}.inv .t1 .chip.pp .ty{margin-right:3px}
+.inv .t2{font-size:12.5px}.inv .t3{font-size:11.5px;color:var(--dim);line-height:1.35}
+.inv .bad{color:#F59A8B}.inv.v-skip{opacity:.6}
+.invplan .ip{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}.invplan .ip:first-child{border-top:none;padding-top:0}
+.invplan .n{flex:none;width:22px;height:22px;border-radius:11px;background:rgba(72,213,151,.18);color:var(--green);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+.invplan .tx{flex:1;min-width:0;font-size:13.5px}.invplan .bad{color:#F59A8B}
+#idust{width:90px}
