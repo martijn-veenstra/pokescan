@@ -358,9 +358,9 @@ function renderBox() {
           ${importMsg ? `<div class="note" ${/^⚠/.test(importMsg) ? 'style="color:#F59A8B"' : ''}>${importMsg}</div>` : ''}</details>` : ''}
         <p class="dim" style="font-size:12px;margin-top:10px">Scans, roster, parties, battles and the completion log follow your account to every device. Local storage stays the working copy, so the app keeps working offline.</p>
         <p class="dim" style="font-size:12px;margin-top:6px"><a href="#" onclick="Sync.deleteData();return false" style="color:#F59A8B">Delete my synced data</a> · removes everything stored under this account on the server. This device keeps its local copy.</p>
-        <p class="dim" style="font-size:11px;margin-top:8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>`
+        <p class="dim" style="font-size:12px;margin-top:8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>`
       : mode === 'offline' ? `<p class="dim">Could not reach the sign-in service. You can keep using the app; sync resumes when you are back online.</p>`
-      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}<p class="dim" style="font-size:11px;margin-top:8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>`}</div>`;
+      : `<p class="dim">Sign in with Google or an email and password. Your scans and teams then follow you to every device.</p><div id="clerk-signin"></div>${lastError && lastError !== 'signed out' ? `<div class="note" style="color:#F59A8B">⚠ ${lastError}</div>` : ''}<p class="dim" style="font-size:12px;margin-top:8px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>`}</div>`;
     if (!signedIn() && mode === 'clerk') Auth.mountSignIn($('clerk-signin'));
     return;
   }
