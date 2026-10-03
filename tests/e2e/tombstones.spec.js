@@ -6,6 +6,9 @@ import { openApp } from './helpers.js';
 const SCAN = (key, extra) => Object.assign({ key, species: 'AZUMARILL', cp: 1487, combos: [[100, 15, 15, 15]] }, extra);   // used in Node context only
 
 test('a delete sticks against a stale push, a newer edit wins, an older one loses', async ({ page }) => {
+  // no real server in the way, and no sync until the test turns it on: every answer below is the test's own, and no background
+  // retry can take a one-time answer meant for syncNow()
+  await page.route('**/api/health', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, sync: false, version: 'test' }) }));
   await openApp(page, '#/scans');
   // seed one scan and let the ledger baseline it (updatedAt 0: pre-ledger data)
   await page.evaluate(rec => { results.push(rec); save(); }, SCAN('AZUMARILL|1487'));
@@ -37,6 +40,7 @@ test('a delete sticks against a stale push, a newer edit wins, an older one lose
 });
 
 test('an edit made offline survives a reload and is pushed once online', async ({ page }) => {
+  await page.route('**/api/**', r => r.abort('internetdisconnected'));   // really unreachable: the local test server must not take the push first
   await openApp(page, '#/scans');
   // the app started with the server unreachable: touch() still records the change
   await page.evaluate(rec => { results.push(rec); save(); }, SCAN('MEDICHAM|1499'));

@@ -83,7 +83,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.52';
+const APP_VERSION='10.53';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -928,7 +928,7 @@ async function runImportInner(files){
     const t0=Date.now(), isVid=f.type.startsWith('video')||/\.(mp4|mov|m4v|webm)$/i.test(f.name); gainStart();
     evt(`reading ${f.name}`);
     try{
-      if(isVid) await scanVideo(f,trainer);
+      if(isVid){ try{ await scanVideo(f,trainer); } finally{ wakeOff(); } }
       else batchKey=await scanImage(f,trainer,batchKey);
       ok++;
       noteImport({file:f.name, kind:isVid?'video':'image', size:f.size, ms:Date.now()-t0, ok:true, msg:gainSummary(GAIN)});
@@ -1109,7 +1109,16 @@ function frameVec(cv){                                           // 16x16 grey t
 }
 const vecDiff=(a,b)=>{ let s2=0; for(let i=0;i<256;i++) s2+=Math.abs(a[i]-b[i]); return s2/256; };
 
+/* A recording takes minutes to read and iPhone freezes a web app the moment it leaves the screen (another app, or the screen
+   locking). The screen is kept awake while one is read, so it does not lock by itself halfway; switching away still pauses
+   the read, and it picks up where it stopped when PokeScan is back on screen. */
+let WAKE=null, WAKE_ON=false;
+async function wakeOn(){ WAKE_ON=true; try{ if('wakeLock' in navigator&&!document.hidden&&!WAKE){ WAKE=await navigator.wakeLock.request('screen'); WAKE.addEventListener('release',()=>{ WAKE=null; }); } }catch(e){} }
+function wakeOff(){ WAKE_ON=false; try{ if(WAKE) WAKE.release(); }catch(e){} WAKE=null; }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&WAKE_ON) wakeOn(); });   // the lock is dropped whenever the page is hidden
+const whileHidden=()=>new Promise(r=>{ if(!document.hidden) return r(); const f=()=>{ if(!document.hidden){ document.removeEventListener('visibilitychange',f); r(); } }; document.addEventListener('visibilitychange',f); });
 async function scanVideo(file,trainer){
+  wakeOn();
   const vid=$('vid'), url=URL.createObjectURL(file);
   vid.muted=true; vid.defaultMuted=true; vid.playsInline=true; vid.setAttribute('playsinline',''); vid.setAttribute('webkit-playsinline','');
   vid.preload='auto'; vid.src=url;
@@ -1195,12 +1204,27 @@ async function scanVideo(file,trainer){
   let aborted=false;
   if(played){
     try{ await new Promise((resolve,reject)=>{
-      let lastT=-1, busy=false, done=false, lastProgressAt=Date.now(), lastSeen=-1, nudged=0, lastShown=-1;
-      const finish=err=>{ if(done) return; done=true; clearInterval(iv); vid.onended=null; vid.onerror=null; err?reject(err):resolve(); };
+      let lastT=-1, busy=false, done=false, lastProgressAt=Date.now(), lastSeen=-1, nudged=0, lastShown=-1, resuming=false, paused=0, tapBtn=null;
+      const finish=err=>{ if(done) return; done=true; clearInterval(iv); document.removeEventListener('visibilitychange',onVis); if(tapBtn) tapBtn.remove(); vid.onended=null; vid.onerror=null;
+        if(paused) gain('note',`paused ${paused}× while PokeScan was off screen; each time it continued where it stopped`); err?reject(err):resolve(); };
+      // iPhone pauses the video (and this whole page) when PokeScan leaves the screen: that is not a stall; play on from the same spot
+      const resume=async()=>{ if(done||resuming||!vid.paused||vid.ended) return; resuming=true; paused++; lastProgressAt=Date.now();
+        status(`Video ${Math.round(vid.currentTime)}s / ${Math.round(dur)}s · paused while PokeScan was off screen · continuing…`);
+        try{ await vid.play(); }catch(e){}
+        if(vid.paused&&!done&&!tapBtn){                     // iOS wants a tap to start media again: one button, the read goes on from there
+          const st=cardStat(); tapBtn=document.createElement('button'); tapBtn.className='btn'; tapBtn.style.margin='8px 0 0'; tapBtn.textContent='▶ Continue reading the recording';
+          tapBtn.onclick=async()=>{ try{ await vid.play(); }catch(e){} if(!vid.paused&&tapBtn){ tapBtn.remove(); tapBtn=null; lastProgressAt=Date.now(); } };
+          if(st) st.appendChild(tapBtn); status('Tap ▶ below to continue reading the recording'); }
+        lastProgressAt=Date.now(); resuming=false; };
+      const onVis=()=>{ if(!document.hidden){ lastProgressAt=Date.now(); nudged=0; resume(); } };
+      document.addEventListener('visibilitychange',onVis);
       vid.onended=()=>finish(); vid.onerror=()=>finish(fail('the video stopped playing (decode error)'));
       const iv=setInterval(async()=>{
         if(done||busy) return;
         if(CANCEL) return finish(abort());
+        if(document.hidden){ lastProgressAt=Date.now(); return; }       // off screen: nothing plays, nothing stalls
+        if(vid.paused&&!vid.ended){ if(!tapBtn) resume(); lastProgressAt=Date.now(); return; }   // paused by the system, not by us (we pause only while busy)
+        if(tapBtn&&!vid.paused){ tapBtn.remove(); tapBtn=null; }
         const t=vid.currentTime;
         if(t!==lastSeen){ lastSeen=t; lastProgressAt=Date.now(); }
         else if(Date.now()-lastProgressAt>6000){
@@ -1216,7 +1240,7 @@ async function scanVideo(file,trainer){
         try{
           if(battleMode){ ctx.drawImage(vid,0,0); frames++; snapshot(t); if(window.Film) Film.frame(ctx,cv.width,cv.height,t); progress(Math.min(1,t/dur));   // no pause/play churn: the big file plays through smoothly
             // the line under the ball kept saying the second battle mode began at ("Video 24s / 166s") for the whole read
-            if(Math.round(t)!==lastShown){ lastShown=Math.round(t); status(`Video ${lastShown}s / ${Math.round(dur)}s · watching the battle…`); } }
+            if(Math.round(t)!==lastShown){ lastShown=Math.round(t); status(`Video ${lastShown}s / ${Math.round(dur)}s · watching the battle… keep PokeScan on screen`); } }
           else { vid.pause();                                      // hold the frame still while we look at it
             await analyse(t);
             if(!done){ await vid.play().catch(()=>{}); } }
@@ -1227,6 +1251,7 @@ async function scanVideo(file,trainer){
   } else {
     mode='seek'; const step=1/3; let skipped=0;
     for(let t=0.2; t<dur && !CANCEL; t+=step){
+      await whileHidden();
       const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{clearTimeout(to);r(true);}; vid.currentTime=t; });
       if(!seeked){ skipped++; if(skipped>15) throw fail(`the video could neither play (${playErr||'refused'}) nor seek in this browser`); continue; }
       await analyse(t);
@@ -1236,7 +1261,7 @@ async function scanVideo(file,trainer){
   if(!aborted && !CANCEL && snapI<snapAt.length && (stalledAt!==null || snaps.length>=3)){
     vid.pause(); let got=0;
     for(const t of snapAt.slice(snapI)){
-      const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),3000); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
+      await whileHidden(); const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),3000); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
       if(!seeked) break;
       ctx.drawImage(vid,0,0); frames++; snapI=snapAt.indexOf(t); snapshot(t+0.01); got++;
     }
@@ -1247,7 +1272,7 @@ async function scanVideo(file,trainer){
   if(!aborted && !CANCEL && stalledAt!==null && window.Film && Film.seen()){
     const STEP=0.6, CAP=400; let n=0, fail2=0;
     for(let t=stalledAt+STEP; t<dur && n<CAP && !CANCEL; t+=STEP){
-      const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
+      await whileHidden(); const seeked=await new Promise(r=>{ const to=setTimeout(()=>r(false),2500); vid.onseeked=()=>{ clearTimeout(to); r(true); }; try{ vid.currentTime=t; }catch(e){ clearTimeout(to); r(false); } });
       if(!seeked){ if(++fail2>=3) break; continue; }
       fail2=0; ctx.drawImage(vid,0,0); frames++; n++;
       Film.frame(ctx,cv.width,cv.height,t);
