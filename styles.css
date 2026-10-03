@@ -654,3 +654,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 .cbar .cb{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}.cbar .cb i{display:block;height:100%;background:var(--green);border-radius:3px}.cbar .cn{width:18px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
 .cl{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4;padding:6px 0;border-top:1px solid var(--line)}.cl:first-of-type{border-top:none}.cl .ty{margin:2px 0 0;flex:none}.cl .ty+.ty{margin-left:-4px}.cl span{flex:1}
 .cupline .ty{margin:0 2px 0 0}
+/* GO Battle League on Today */
+.evleague .gbl-h{font-size:14px;margin-bottom:2px}
+.evleague .gbl-when{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:8px 0 2px}
+.gbl-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid rgba(91,141,239,.18)}.gbl-when+.gbl-row{border-top:none}
+.gbl-cap{flex:none;min-width:62px;font-size:11px;font-weight:700;font-family:Sora,sans-serif;color:#A9C0F7;background:rgba(91,141,239,.16);border-radius:8px;padding:3px 7px;text-align:center}
+.gbl-nm{flex:1;min-width:0;font-size:13.5px;line-height:1.3}
+.gbl-go{flex:none;font-size:12px;font-weight:600;color:var(--green);background:none;border:1px solid rgba(72,213,151,.45);border-radius:9px;padding:4px 10px;cursor:pointer}
+.gbl-on{flex:none;font-size:11.5px;color:var(--green)}.gbl-row.on .gbl-nm{font-weight:600}

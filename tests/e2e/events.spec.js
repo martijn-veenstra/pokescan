@@ -13,6 +13,7 @@ const SOURCES = { t: Date.now(), raids: [], eggs: [], research: [], rocket: { t:
   { eventID: 'r5', name: 'Xurkitree in 5-star Raid Battles', eventType: 'raid-battles', heading: 'Raid Battles', start: iso(-30), end: iso(60), extraData: { raidbattles: { bosses: [{ name: 'Xurkitree', canBeShiny: false }] } } },
   { eventID: 'rm', name: 'Mega Malamar in Mega Raids', eventType: 'raid-battles', heading: 'Raid Battles', start: iso(-30), end: iso(60), extraData: { raidbattles: { bosses: [{ name: 'Mega Malamar', canBeShiny: true }] } } },
   { eventID: 'gbl', name: 'Ultra League and Retro Cup | Twilight Trails', eventType: 'go-battle-league', start: iso(-30), end: iso(60), extraData: { generic: {} } },
+  { eventID: 'gbl2', name: 'Great League: Mega Edition, Ultra League: Mega Edition, and Master League: Mega Edition', eventType: 'go-battle-league', start: iso(96), end: iso(240), extraData: { generic: {} } },
   { eventID: 'safari', name: 'Munich, Germany - Pokémon GO City Safari', eventType: 'city-safari', start: iso(-5), end: iso(20), extraData: { generic: {} } },
   { eventID: 'spot', name: 'Marill Spotlight Hour', eventType: 'pokemon-spotlight-hour', heading: 'Pokémon Spotlight Hour', start: iso(72), end: iso(73), extraData: { spotlight: { name: 'Marill', canBeShiny: true, bonus: '2× Transfer Candy', list: [{ name: 'Marill', canBeShiny: true }] } } },
   { eventID: 'cd', name: 'Zorua Community Day', eventType: 'community-day', heading: 'Community Day', start: iso(120), end: iso(123),
@@ -30,7 +31,15 @@ test('Today shows live and upcoming events with their bonuses, Pokémon and what
   await page.evaluate(() => Planner.renderToday());
   const today = page.locator('#today');
   await expect(today.locator('.sec:has-text("Events")')).toHaveCount(1);
-  await expect(today.locator('.evleague')).toContainText('GO Battle League Ultra League and Retro Cup');
+  // GO Battle League: now and next, one row per league with its cap; a cup the app has can be planned for in one tap
+  const gbl = today.locator('.evleague');
+  await expect(gbl.locator('.gbl-when')).toHaveCount(2);
+  await expect(gbl.locator('.gbl-when').first()).toContainText('Now');
+  await expect(gbl.locator('.gbl-when').nth(1)).toContainText('Next · from');
+  await expect(gbl.locator('.gbl-row .gbl-nm')).toHaveText(['Ultra League', 'Retro Cup', 'Great League: Mega Edition', 'Ultra League: Mega Edition', 'Master League: Mega Edition']);
+  await expect(gbl.locator('.gbl-row .gbl-cap')).toHaveText(['2500 CP', '1500 CP', '1500 CP', '2500 CP', 'no cap']);
+  await expect(gbl.locator('.gbl-row:has-text("Master") .gbl-go')).toHaveCount(0);
+  expect(await page.evaluate(() => ['Mega Color Cup: Great League Edition', 'Great League: Mega Edition', 'Ultra League', 'Retro Cup'].map(p => (Planner.gblMatch(p) || {}).slug))).toEqual(['colormega-1500', 'mega-1500', 'ultra', 'retro-1500']);
   const live = today.locator('details.ev.live');
   await expect(live).toHaveCount(3);                                            // Choose Your Path, the Harvest Festival and one entry for all live raid rotations
   // long bonuses are a wrapped list, the part before the colon in bold, nothing wider than the card

@@ -861,6 +861,34 @@ function forYou(m) {                            // name of an event Pokémon →
     return {cls: '', t: '', id};
   };
 }
+
+/* GO Battle League: what is on now and next, one row per league with its cap, and a tap to plan for a cup the app has */
+function gblParts(name) { return String(name || '').split(/,\s*(?:and\s+)?|\s+and\s+/i).map(x => x.trim()).filter(Boolean); }
+function gblMatch(part) {                        // the app's league for "Mega Color Cup: Great League Edition", "Great League: Mega Edition", ...
+  const p = part.toLowerCase(), words = t => t.toLowerCase().replace(/[()]/g, ' ').split(/\s+/).filter(w => w && w !== 'the');
+  let best = null;
+  for (const c of CUPS || DEFAULT_CUPS) {
+    const ws = words(c.title); if (!ws.length || !ws.every(w => p.includes(w))) continue;
+    const sc = ws.length * 10 + (p.includes(c.title.toLowerCase()) ? 5 : 0);
+    if (!best || sc > best.sc) best = {c, sc};
+  }
+  return best ? best.c : null;
+}
+function gblCap(part, c) {
+  if (c && c.cp) return c.cp >= 10000 ? 'no cap' : c.cp;
+  return /master/i.test(part) ? 'no cap' : /ultra/i.test(part) ? 2500 : /little/i.test(part) ? 500 : /great/i.test(part) ? 1500 : '';
+}
+function gblRow(part) {
+  const c = gblMatch(part), cap = gblCap(part, c), on = c && c.slug === LEAGUE.slug;
+  const act = on ? '<span class="gbl-on">planning ✓</span>' : c ? `<button class="gbl-go" onclick="Planner.setLeague('${c.slug}')">Plan</button>` : '';
+  return `<div class="gbl-row${on ? ' on' : ''}"><span class="gbl-cap">${cap === 'no cap' ? 'no cap' : cap ? cap + ' CP' : ''}</span><span class="gbl-nm">${esc(part)}</span>${act}</div>`;
+}
+function gblCard(now, next) {
+  let h = `<div class="evleague"><div class="gbl-h">⚔️ <b>GO Battle League</b></div>`;
+  for (const l of now) h += `<div class="gbl-when">Now · ${esc(l.when.replace(/^now,\s*/, ''))}</div>` + gblParts(l.name).map(gblRow).join('');
+  if (next) h += `<div class="gbl-when">Next · from ${esc(next.when.split(' – ')[0])}</div>` + gblParts(next.name).map(gblRow).join('');
+  return h + `</div>`;
+}
 function eventsCard(m) {
   const src = window.Sources; if (!src || !src.events) return '';
   let h = `<div class="sec">Events <small>live now and the next two weeks</small></div>`;
@@ -868,7 +896,7 @@ function eventsCard(m) {
   if (!E) return h + `<div class="note">${src.error() ? 'Event schedule not available: ' + esc(src.error()) : 'Event schedule not loaded yet…'}</div>`;
   const tag = forYou(m), open = UI.evOpen || (UI.evOpen = {});
   const lg = E.leagues.filter(l => l.now), nx = E.leagues.find(l => !l.now);
-  if (lg.length || nx) h += `<div class="evleague">⚔️ <b>GO Battle League</b> ${lg.length ? esc(lg.map(l => l.name).join(' · ')) : ''}${nx ? `<span class="dim">${lg.length ? ' · next: ' : ''}${esc(nx.name)} from ${esc(nx.when.split(' – ')[0])}</span>` : ''}</div>`;
+  if (lg.length || nx) h += gblCard(lg, nx);
   const monChip = p => { const t = tag(p.name) || {}; return `<span class="evmon ${t.cls || ''}"${t.id ? ` onclick="event.preventDefault();Planner.openMon('${t.id}')"` : ''}>${t.id ? icon(t.id, 's') : ''}${esc(p.name)}${p.shiny ? ' ✨' : ''}${t.t ? `<em>${esc(t.t)}</em>` : ''}</span>`; };
   const groups = list => { const g = new Map(); for (const p of list) { const k = p.group || ''; if (!g.has(k)) g.set(k, []); g.get(k).push(p); } return [...g.entries()]; };
   const block = (title, list) => list.length ? `<div class="evsub">${title}</div>${groups(list).map(([g, ps]) => `${g ? `<div class="evgrp">${esc(g)}</div>` : ''}<div class="evmons">${ps.map(monChip).join('')}</div>`).join('')}` : '';
@@ -3396,7 +3424,7 @@ function setScanMove(idx, slot, val) {
 }
 function speciesOptions() { return Object.keys(APP.pokemon).map(id => `<option value="${id}">`).join(''); }
 
-window.Planner = {cupConditions, scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
+window.Planner = {gblMatch, cupConditions, scanIcon, evolvesInto, nav, route, back, evToggle, setNickStyle, setNickCustom, pickFor, pickInto, cancelPick, gridAll, builderFilter, openBattleMon, evoStats: id => evoStatsFor(id), drawer, showMore, colHelp, renderPro, monTab, pveType, hideStart, showStart, paintMilestones, msCheck, nextHint, buildNameInput, saveBuildNamed, idByName, partyFor, addBattle, importFilm, openBattle, askBattleReview, renderBattle, setBattleTeam, matchParty, pickTeam, delBattleGo, rocketVerdict, proTeaser, icon, evoBranch, evoShort, reorderTeam, reorderSlots, moveSlot, ivToggle, ivFloor, ivMore, metaTrios, metaAdd, metaPick, metaDrop, metaOwned, metaClear, nameOf: id => nm(id), leagueAbbr: () => LEAGUE.abbr, paintDrawer, setLeague, cardExtras, rosterStatus, shareTeam, teamLink, dismissChanges, refreshReview, reviewFor, renderMatchups, muTeam, muLead, muPick, pickBoss, bossSearch, renderBattles, logRating, delBattle, undoDelete, delBattleImport, importBattle, logBattleImport, clearBattleLog, draftBattles, draftTeam, saveDrafts, discardDrafts, mergeBattles, get BATTLES() { return BATTLES; }, lineageMerge, lineageDismiss, refresh, markDirty, copyText, renderToday, renderTeams, renderTeam, openTeam, closeTeam, saveTeam, renameTeam, deleteTeam, toggleTeamsAll, renderRoster, renderMeta, renderMon, openMon, openScan, closeMon, dropMon, addAs, resolveScan, deleteScan, beforeImport, onMovesScan, editScan, toggleMenu, toggleGloss, noteHave, setHave, setTeamFilter, coverage, coverageWith, closeSheet,
                   metaPanel, buildPool, goBuilder, rosterSearch, pveType, pveBasic, meterDown, rankSearch, rankType, rankMore, setSlot, fillSlot, addSlotFromInput, clearSlots, tryTeam, setBuildMove, want, wantMissing, saveBuildAsTeam, toggleAdd, add, drop, bench, unbench,
                   onNewScan, afterImport, updateScan, updateDone, onUpdated, updateKey: () => UI.updateKey || null, scanFor, scanTarget: () => UI.scanFor || null, scanProof, markDone, snooze, unsnooze, undoDone, toggleMore, showScanKey,
                   pickName, setMove, setScanMove, exportRoster, loadRepoRoster, showScan, rosterSort, movesRowForScan, speciesOptions, rosterInput, ROSTER, scanId, movesFor};
