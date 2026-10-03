@@ -424,3 +424,26 @@ console.log('accounts-mode tests passed');
   await sick.close();
   console.log('health-503 and client-error tests passed');
 }
+
+// DELETE /api/state wipes the account's rows (GDPR), guarded by the confirm phrase
+{
+  const app4 = await buildServer({ passcode: 'pc', logger: false, coach: null, sourcesFetch: async () => ({ ok: false, status: 404, text: async () => '', json: async () => ({}) }) });
+  const H = { authorization: 'Bearer pc', 'content-type': 'application/json' };
+  await app4.inject({ method: 'PUT', url: '/api/state/scans', headers: H, payload: { data: [{ key: 'A', species: 'MEW', combos: [] }] } });
+  let r = await app4.inject({ method: 'DELETE', url: '/api/state', headers: H, payload: {} });
+  assert.equal(r.statusCode, 400, 'no confirm phrase: nothing happens');
+  assert.ok((await app4.db.get('default', 'scans')), 'data still there');
+  r = await app4.inject({ method: 'DELETE', url: '/api/state', headers: H, payload: { confirm: 'delete' } });
+  assert.equal(r.statusCode, 200);
+  assert.equal(await app4.db.get('default', 'scans'), null, 'the account rows are gone');
+  r = await app4.inject({ method: 'DELETE', url: '/api/state', payload: { confirm: 'delete' } });
+  assert.equal(r.statusCode, 401, 'auth required');
+  // the legal pages are served as static files, not swallowed by the SPA fallback
+  for (const p of ['/privacy.html', '/terms.html']) {
+    r = await app4.inject({ method: 'GET', url: p });
+    assert.equal(r.statusCode, 200, p + ' is served');
+    assert.ok(/42120153/.test(r.body), p + ' carries the KvK number');
+  }
+  await app4.close();
+  console.log('gdpr-delete and legal-pages tests passed');
+}

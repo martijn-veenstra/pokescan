@@ -2491,7 +2491,8 @@ function renderPro() {
   h += `<div class="sec">In Pro today</div>` + PRO_NOW.map(x => row(x, false)).join('');
   h += `<div class="sec">Coming to Pro <small>you get them the day they ship</small></div>` + PRO_NEXT.map(x => row(x, true)).join('');
   h += `<div class="sec">Always free</div><div class="prow"><span class="tick full">✓</span><div><b>Everything else</b><div class="dt">Scanning, IV ranks, the roster, Today, the builder, matchups, meta teams, rankings, raids, the battle log with its battle check (moves into a resist, losing matchups, wasted shields) and sync across devices stay free.</div></div></div>`;
-  h += `<div class="note">${hl.coach ? 'Professor Cedar is PokeScan\'s AI coach. He runs on the PokeScan server; your roster summary is sent for the review and not kept.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
+  h += `<div class="note">${hl.coach ? 'Professor Cedar is PokeScan\'s AI coach. When you use an AI feature, what you submit — a team or battle summary, or the screenshot/recording frames you share — is sent through the PokeScan server to Anthropic (Claude) to produce the answer. Screenshots can show your trainer name. Nothing is stored on the server: an answer lives in memory for at most an hour, the images not at all.' : 'This server has no AI key configured yet, so Pro features are not active here.'}</div>`;
+  h += `<div class="dt dim" style="margin-top:8px;font-size:11px"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a>${hl.coach ? ' · subscriptions are billed by Stripe and renew monthly until cancelled' : ''}</div>`;
   el.innerHTML = h;
 }
 const DRAWER = [['Play', [['today', 'Today', '☀'], ['builder', 'Builder', '▦'], ['teams', 'Saved teams', '★'], ['matchups', 'Game plan', '⚑'], ['battles', 'Battle log', '◔']]],
@@ -2509,7 +2510,7 @@ function paintDrawer() {
   if (window.Sync && Sync.available()) h += `<a href="#" class="${cur === 'pro' ? 'on' : ''}" onclick="Planner.nav('#/pro');Planner.drawer(false);return false"><span class="ic">✦</span>PokeScan Pro<small>${Sync.isPro() ? 'active' : 'AI features'}</small></a>`;
   if (window.Sync && Sync.available()) { const hl = Sync.health() || {}; h += `<a href="#" onclick="Planner.drawer(false);Sync.toggle();return false"><span class="ic">☁</span>${hl.auth === 'clerk' ? 'Account' : 'Sync'}<small>${Sync.signedIn() ? (hl.auth === 'clerk' && window.Auth ? esc(Auth.email() || 'signed in') : 'connected') : hl.auth === 'clerk' ? 'sign in' : 'off'}</small></a>`; }
   h += `<a href="#" onclick="Planner.drawer(false);toggleHelp();return false"><span class="ic">?</span>Help &amp; glossary</a>`;
-  h += `<div class="ft">PokeScan v${typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''}${APP && APP.generatedAt ? ` · meta data ${esc(String(APP.generatedAt).slice(0, 10))}` : ''}</div>`;
+  h += `<div class="ft">PokeScan v${typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''}${APP && APP.generatedAt ? ` · meta data ${esc(String(APP.generatedAt).slice(0, 10))}` : ''}<br><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a> · not affiliated with Niantic or The Pokémon Company</div>`;
   el.innerHTML = h;
 }
 function renderMon() {
