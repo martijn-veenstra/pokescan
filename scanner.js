@@ -83,7 +83,7 @@ function pvpTop(b, cap, floor, n){              // the best spreads at the cap, 
 
 /* ---------- PvPoke data (bundled with the app, refreshed weekly by GitHub Actions) ---------- */
 let META=null, APP=null;
-const APP_VERSION='10.51';
+const APP_VERSION='10.52';
 /* which league the whole app is looking at: cap, names and where its data file lives (Great League unless the user picked another one in the menu) */
 const LEAGUE={slug:'great',cp:1500,title:'Great League',short:'Great',abbr:'GL'};
 const ABBR={great:'GL',ultra:'UL',little:'LC',master:'ML'};
@@ -1523,6 +1523,22 @@ function showView(t){                              // switch the visible page; n
 }
 function showTab(t){ if(window.Planner&&Planner.nav&&TOP_PAGES.includes(t)) Planner.nav('#/'+t); else showView(t); }
 if(!location.hash) showView(localStorage.getItem('tab')||'today');
+
+/* The bottom bar on iPhone. iOS 26 Safari misplaces position:fixed; bottom:0 while its toolbar collapses or grows, and the bar ends up
+   floating mid-screen with the page showing below it. So on iOS the bar is placed from the top of the visual viewport (the part of the
+   page you actually see), and it steps aside while the keyboard is up instead of sitting on the field being typed in. vv: for tests. */
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function pinNav(vv){
+  vv=vv||window.visualViewport; const nav=$('navbar'); if(!nav||!vv) return;
+  const kbd=window.innerHeight-vv.height>150;            // the on-screen keyboard (or a zoom) took the bottom of the screen
+  nav.classList.toggle('kbd',kbd); if(kbd) return;
+  nav.style.top=Math.round(vv.offsetTop+vv.height-nav.offsetHeight)+'px'; nav.style.bottom='auto';
+}
+if(IOS&&window.visualViewport){
+  for(const ev of ['resize','scroll']) visualViewport.addEventListener(ev,()=>pinNav());
+  addEventListener('scroll',()=>pinNav(),{passive:true}); addEventListener('orientationchange',()=>setTimeout(()=>pinNav(),300));
+  pinNav();
+}
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 function refixScan(r, vals){                       // used by the scan page: correct species/CP/HP/level and solve again

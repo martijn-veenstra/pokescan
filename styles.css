@@ -677,3 +677,4 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* iOS must not enla
 
 /* good / bad text, everywhere: the per-component copies below this line are gone */
 :is(span,b,small,em,a).good,.gd{color:var(--green)}:is(span,b,small,em,a).bad,.bd{color:var(--bad)}:is(span,b,small,em).gold{color:var(--gold)}
+.navbar.kbd{display:none}   /* iOS: the keyboard is up (scanner.js pinNav) */
